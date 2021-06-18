@@ -26,9 +26,15 @@ vignettes/*.pdf
 *.knit.md
 # R Environment Variables
 .Renviron
+
 ### my own
-Data/
-MS/
-Refs/
-*.gitignore
-*.Rproj
+Data/*
+# MS/*
+# Refs/*
+# !/data_TextMining/
+# !.gitignore
+# *.Rproj
+test_*.R
+
+!Data/data_TextMining/
+
