@@ -28,13 +28,17 @@ vignettes/*.pdf
 .Renviron
 
 ### my own
+!Data/
 Data/*
-# MS/*
-# Refs/*
-# !/data_TextMining/
-# !.gitignore
-# *.Rproj
-test_*.R
-
 !Data/data_TextMining/
+Data/data_TextMining/*.docx
+
+MS/*
+Refs/*
+!.gitignore
+#*.Rproj
+test_*
+*.zip
+
+
 
