@@ -35,7 +35,7 @@ Data/data_TextMining/*.docx
 
 MS/*
 Refs/*
-!.gitignore
+.gitignore
 #*.Rproj
 test_*
 *.zip
