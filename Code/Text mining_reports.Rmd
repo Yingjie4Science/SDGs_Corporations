@@ -1,0 +1,445 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Dirs and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+dir.reports <- './Data/data_TextMining/annual_reports/'
+dir.results <- './Data/data_results/'
+dir.figures <- './Data/figures/';      dir.figures
+
+
+source('./Code/_packages.R')
+
+```
+
+# Data imports
+
+## Test data
+
+```{r text}
+text_example <- c("Digital India is an initiative. It was launched on 1 July 2015 by Prime Minister Narendra Modi.")
+
+text_example <- paste0("The Boy lives in India and studies in the St. Martin School. ",
+                       "The boy has a heiht of 5.7 and weights 60 Kg's. ", 
+                       "He has intrest in the Arts and crafts; and plays basketball. ")
+
+text_example <- "Moreover, through our shared value projects, we continued to bring together our communities and local authorities to tackle critical social issues such as housing, land ownership, access to basic services, employment, and financial inclusion through micro credits. To date, we have worked together with more than 16 million community stakeholders globally, positively impacting their wellbeing and improving conditions in their communities and cities."
+
+text_example <- "For several decades, CEMEX has embraced CO2 emissions mitigation as a priority within our sustainability strategy, and this battle has become one our biggest responsibilities and challenges given the rising global population and urbanization phenomenon. This year, we are taking further steps by customizing a CO2 reduction roadmap by cement installation considering five main levers: (1) Energy Sourcing and Efficiency. (2) Fuel Mix and Raw Meal Composition; (3) Clinker Substitutes; (4) Novel Cements; (5) Carbon Capture, Storage and Utilization Technologies.
+
+Beyond this detailed plan, our stronger ambition for continued progress in Climate Change mitigation is reflected in our rigorous 2030 carbon-reduction target, calculated using Science-Based Targets (SBTs) methodology. …. To increase the reduction of net CO2 emissions per cementitious product in 2018 (vs. 1990 aligned to science-based targets methodology) from 21.6% to 29% in 2030. We aim to increase power consumption from renewable energy in cement from 26% in 2018 to 40% in 2030."
+
+text_example <- c(
+  "For several decades, CEMEX has embraced CO2 emissions mitigation as a priority within our sustainability strategy, and this battle has become one our biggest responsibilities and challenges given the rising global population and urbanization phenomenon. This year, we are taking further steps by customizing a CO2 reduction roadmap by cement installation considering five main levers: (1) Energy Sourcing and Efficiency. (2) Fuel Mix and Raw Meal Composition; (3) Clinker Substitutes; (4) Novel Cements; (5) Carbon Capture, Storage and Utilization Technologies.", 
+  "Beyond this detailed plan, our stronger ambition for continued progress in Climate Change mitigation is reflected in our rigorous 2030 carbon-reduction target, calculated using Science-Based Targets (SBTs) methodology. …. To increase the reduction of net CO2 emissions per cementitious product in 2018 (vs. 1990 aligned to science-based targets methodology) from 21.6% to 29% in 2030. We aim to increase power consumption from renewable energy in cement from 26% in 2018 to 40% in 2030.")
+
+
+```
+
+## Convert PDF to text format
+
+One way to do it
+
+```{r eval=FALSE, include=FALSE}
+library(tm)
+
+read <- readPDF(control = list(text = "-layout"))
+pdf <- paste0(dir.reports, 'CEMEX--IntegratedReport2018.pdf'); pdf
+document <- Corpus(URISource(pdf), readerControl = list(reader = read))
+doc <- content(document[[1]])
+head(doc)
+
+page_breaks <- grep("f", doc)
+doc[page_breaks[1]]
+
+
+doc_txt <- read.delim(file = paste0(dir.reports, 'CEMEX--IntegratedReport2018.txt'))
+doc2 <- Corpus(doc_txt)
+# doc_txt[1]
+```
+
+Another way to do it.
+
+Custom function to try. May need to try tabulizer package instead, but the simple cleanup protocol is probably still necessary.
+
+```{r}
+## Custom function
+  convertpdf2txt <- function(dirpath){
+    files <- list.files(dirpath, full.names = T) #directory of all files
+    x <- sapply(files, function(x){
+    x <- pdftools::pdf_text(x) %>%
+    paste(sep = " ") %>%
+    stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
+    stringr::str_replace_all(fixed("\r"), " ") %>% 
+    stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
+    stringr::str_replace_all(fixed("\""), " ") %>%
+    paste(sep = " ", collapse = " ") %>%
+    stringr::str_squish() %>%
+    stringr::str_replace_all("- ", "")  # incomplete words continuing to next line
+    return(x)
+      })
+  }
+
+# for-loop
+  #read each PDF (try tabulizer package for columns)
+  #basic conversion to text, and save .txt with name from list and move to another folder
+```
+
+### Organizing files; find, rename and copy and paste to another directory in batch
+
+```{r}
+####Lambdas Files####
+
+  # Required library that needs to be loaded for this function:
+      require(plyr)  
+  
+  # Create a directory where it will be stored
+      lambdas.dir <- dir.create(paste0(raster.outdir,'lambdas'), recursive=TRUE) 
+      target.dir <- c(paste0(raster.outdir,'lambdas'))
+    
+  # Renaming and moving Lambdas files from the MaxEnt model prediction  
+  
+      # For-loop:
+          for(run in 1:10){
+            # Select all files of ".lambdas" extension
+            filenames <- list.files(paste0(raster.outdir,run),pattern="*.lambdas",full.names=TRUE)
+            #list(filenames)  #See what files it gave you as output
+            
+            # Rename the file with run number added to it
+            renamed <- file.rename(from=filenames,
+                                   to=sub(pattern="species.lambdas",
+                                          replacement=paste0("species_",run,".lambdas"),
+                                          filenames))
+            
+            # Find the renamed files again
+            new.filenames <- list.files(paste0(raster.outdir,run),pattern="*.lambdas",full.names=TRUE)
+            
+            # Copy the ".lambdas" files and move to a new folder
+            file.copy(from=new.filenames, to=target.dir, 
+                      overwrite = TRUE, recursive = FALSE,   
+                      copy.mode = TRUE)
+          }
+  
+```
+
+### Text file formatting 
+
+Convert text to corpus for keyword matching
+
+```{r}
+# convert text to corpus
+
+# delete empty rows (or vectors within lists, however they're called)
+
+# Convert text into a large paragraph (goal: to bring incomplete sentence lines together)
+  # flatten list??? Corpus is in list format
+  # unlist() might be the function???
+```
+
+Optional: format corpus where each sentence is a row???
+
+```{r}
+#optional step if we want every sentence to have a row
+# data.frame()
+# this requires pattern searching where every sentence has to end with a period (.)
+  # --- limitations/problems for: figure text, bullet points, anything without a period.
+
+# WE'RE GONNA DO IT!
+```
+
+
+# SDG Target keywords
+
+Make a list of keywords for SDGs.
+
+|SDG_number|SDG_keywords|
+|1| keywords here|
+
+```{r}
+# make a vector of terms to concatenate with AND
+# each vector is for each SDG, and each item is a set of synonyms
+  SDG1 <- c('poverty|poor', #these are synonyms for underprivileged people
+            'eradicat*|end|reduc*|alleviat*',
+            'extreme')
+  # concatenate with AND
+    SDG1 <- paste(SDG1, collapse = "*&*")
+  # preview
+    #SDG1
+
+# each vector is for each SDG, and each item is a set of synonyms
+  SDG2 <- c('poverty|poor', #these are synonyms for underprivileged people
+        'eradicat*|end|reduc*|alleviat*',
+        'extreme')
+  # concatenate with AND
+  SDG2 <- paste(SDG1, collapse = "*&*")
+
+# bind these vectors and make it a dataframe to work from 
+  SDG_keys <- data.frame(SDG_number=seq(1:17),SDG_keywords=c(SDG1,SDG2....)
+```
+
+## match the keywords to each corpus
+
+Add columns to see how many have comments using these terms.
+Here are the options:
+1. for every row in the corpus (ideally only 1 sentence in each row), have a column 1-17 and 1/0 or y/n if matching the SDG.
+  - this would be a for-loop and i 1:17 is linked to the columns being filled
+2. for entire corpus, extract rows (ideally only 1 sentence at a time) that match only 1 SDG.
+  - this would be a for-loop and i 1:17 is a new vector to be added to a list (17 of them)
+
+```{r}
+# THIS CODE IS TO IDENTIFY MATCHING ROWS, BUT IT DOES NOT EXTRACT SENTENCES
+# in the original dataframe, if it matches, then in a new column, say yes; if not, say no.
+
+# Loop for each SDG
+  for i in (1:17){}
+  corpus$specific <- ifelse(grepl(paste(SDG_keywords[i], collapse = "*|*"), #change grep pattern to be a sentence
+                                    DOC_SI$comments, ignore.case = TRUE),
+                              "Y","N") #yes or no if they match
+  corpus$specific <- as.factor(DOC_SI$specific)
+  summary(corpus)
+```
+
+Option 1:
+
+|row number|sentence|SDG1|SDG2|....SDG17|
+|1|we need to eradicate poverty|1|0|.....0|
+.
+.
+.
+|1000|we are talking about getting rich|0|0|.....0|
+
+```{r}
+# inspect/extract rows where row sum is >1
+  filter()
+```
+
+Manual edits?? Go back to the SDG keyword strings and edit there first. The duplicate SDGs should be the ones that are inspected to make sure that keywords are being used correctly. But overlap is okay if the sentences actually do talk about >1 SDG.
+
+Final result:
+
+```{r}
+# get sums for each SDG
+  colSums(corpus$SDG1)
+```
+
+Format to match the dataset.
+
+|company name| SDG ID| n_statements|
+
+```{r}
+# table formatting
+```
+
+
+
+
+
+#### More code for you
+
+matching keywords and putting a word in a column.
+
+```{r}
+# make list of search terms
+  cat_list <- c("management","managed","protected_areas",
+                "reintroduction_","wilderness_areas","fallow_land",
+                "forest_distance","forest_presence","habitat_filter",
+                "Native_American","nature_reserves","non-hunting",
+                "urban_forest","regulated_areas","introduction_locus",
+                "advisories"
+                )
+
+# search and append
+  vars.list.shorter$category <- ifelse(grepl(paste0(cat_list, collapse = "|"),
+                                             vars.list.shorter$variable),
+                                      'management/interventions',
+                                      vars.list.shorter$category)
+  
+# inspect
+  summary(as.factor(vars.list.shorter$category))
+  
+# get count of NAs remaining
+  sum(is.na(vars.list.shorter$category))
+```
+
+
+
+
+
+### experimental stuff###
+
+Example of a near/2 where we just want 2 words before and 2 words after the keyword.
+We can use this for later. For example, trying to find specific mention of SDG1 and the terms mentioned around it.
+Extract two words around the key words in both directions
+
+```{r}
+### USE THIS TO CLEAN UP SENTENCES 
+# remove stopwords (on, the, at, etc.) from comments
+  # grab stopword list from tm package
+      stopwords_regex = paste(stopwords('en'), collapse = '\\b|\\b')
+      stopwords_regex = paste0('\\b', stopwords_regex, '\\b')
+      
+  # remove stopwords
+    #DOC_SI$shorter = str_replace_all(DOC_SI$keywords,stopwords_regex,'') #error
+    DOC_SI$comments <- sapply(DOC_SI$comments,
+                                function(x) {gsub(stopwords_regex,"",x)})
+    
+# empty vector
+ls <- list()
+
+# for-loop to create search pattern list
+  for (i in 1:length(matching)){
+    
+    # number of words left and right of keyword
+    lookaround <- 2
+    # pattern to search
+      pattern <- paste0("([[a-z']]+ ){0,", lookaround, "}",
+                      paste(matching[i], collapse = '|'), 
+                    "( [[a-z']]+){0,", lookaround, "}")
+    # add to list
+      ls[[i]] <- pattern
+  }
+# combine
+  patterns <- do.call(rbind,ls)
+
+# assign to object
+  pattern <- paste0(patterns,collapse = "|")
+
+# add to dataframe
+  DOC_SI$keywords <- str_extract_all(DOC_SI$comments,
+                                pattern=regex(pattern,
+                                              ignore_case = TRUE,
+                                              skip_word_none=TRUE #ignore punctuation
+                                ),
+                                "\\w+" #match any word character
+                                )
+```
+
+Subset for cleaning
+
+```{r}
+# unlist object and thin out the stopwords (on, the, at, etc.)
+  ls <- data.frame(unlist(DOC_SI$keywords))
+```
+
+Initial cleanup and inspection
+
+```{r}
+# remove double spaces
+  ls <- data.frame(lapply(ls, function(x) {gsub("  "," ",x)}))
+
+# remove lines that are descriptions and not names
+  others <- c('^beach$',
+              '^point$',
+              '^spit$',
+              '^island$',
+              '^bay$')
+  ls <- data.frame(lapply(ls, function(x) {gsub(paste0(others,collapse = "|"),NA,x,
+                                           ignore.case = TRUE)}))
+  
+# remove all NA's and make into blanks
+  ls <- data.frame(lapply(ls, function(x) {gsub('NA',"",x)}))
+```
+
+Inspect clean-up so far
+
+```{r}
+# check unique names
+  unique(ls)
+```
+
+
+
+
+
+
+
+
+
+
+# Keywords and corpus
+```{r keywords}
+library(SnowballC) ## wordStem function
+## We use the wordStem function of the SnowballC package that has support for the English language. This function reduces a word or a vector of words to its radical (common base form). 
+stemmed_keyword1 <- wordStem("basic service", language = "english"); stemmed_keyword1
+stemmed_keyword2 <- wordStem("housing", language = "english");       stemmed_keyword2
+keywords <- paste(stemmed_keyword1, stemmed_keyword2, sep = '|'); keywords
+
+
+
+text_example <- c("i am member of the XYZ association",
+    "apply for our open associate position", 
+    "xyz memorial lecture takes place on wednesday", 
+    "vote for the most popular lecturer")
+
+library(tm)
+# Step 1: Create corpus
+t <- data.frame(text_example) %>%
+  mutate(doc_id = row.names(.), 
+         text = text_example) %>%
+  select(-1)
+corpus.copy <- corpus <- tm::Corpus(DataframeSource(t))
+
+
+# Step 3: Stem words in the corpus
+corpus.temp <- tm_map(corpus, stemDocument, language = "english")  
+
+inspect(corpus.temp)
+
+# Step 4: Complete the stems to their original form
+corpus.final <- tm_map(corpus.temp, stemCompletion, dictionary = corpus.copy)  
+
+inspect(corpus.final)
+```
+
+
+```{r mining sentences}
+### example #1 -------------------------------------------------------------------------------------
+text <- unlist(strsplit(text_example, split = "\\.|\\,|;")) %>% trimws(); text
+text[grep(pattern = keywords, x = text, ignore.case = T)]
+```
+
+
+
+
+
+```{r NLP}
+### example #2 -------------------------------------------------------------------------------------
+library(NLP)
+library(openNLP)
+library(SnowballC) ## wordStem function
+## convert the text to a string. This is necessary because the openNLP package works with the String type.
+text_example <- as.String(text_example)
+text_example
+## Next, we use the openNLP package to generate a sentence annotator that computes the annotations through a sentence detector
+sent_annotator <- Maxent_Sent_Token_Annotator(); sent_annotator
+annotation <- annotate(text_example, sent_annotator)
+## Next, through the notes made in the text, we can extract the sentences. 
+splited_text <- text_example[annotation]
+splited_text
+
+## Next, we use the grep function of the base package R to find the sentences that contain the keywords we are looking for. 
+sentence_index <- grep(pattern = keywords, x = splited_text, ignore.case = T)
+#output
+splited_text[sentence_index]
+```
+
