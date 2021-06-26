@@ -528,11 +528,11 @@ txt_sentence_df <- data.frame(statement = txt_sentence) %>%
   dplyr::mutate(statement = as.character(statement),
                 match     = '',
                 sdgs      = '') %>%
-  dplyr::filter(nchar(statement) > 10) %>% # remove non-sentences
+  dplyr::filter(nchar(statement) > 10) %>%
   as.data.frame()
   
-#for (i in 1:length(SDG_ls_str)){ # all SDG indicators
-for (i in 25:29){ #climate indicators only (trial run)
+#for (i in 1:length(SDG_ls_str)){ #activate to use all indicators
+for (i in 25:29){ #practice run with climate indicators only
     sdg_i_str <- SDG_ls_str[i]
     sdg_i_obj <- get(sdg_i_str)
     print(sdg_i_str)
@@ -548,7 +548,7 @@ for (i in 25:29){ #climate indicators only (trial run)
     
 }
 
-# sort from most SDG hits to least (or, none)
+
 
 coded <- txt_sentence_df %>%
   # dplyr::filter(nchar(sdgs) > 12) %>%
@@ -590,7 +590,7 @@ coded <- txt_sentence_df %>%
 ```{r}
 # inspect/extract rows where row sum is >1
 coded_check <- coded %>%
-  dplyr::filter(nchar(sdgs) > 12) %>% # inspect >2 SDGs
+  dplyr::filter(nchar(sdgs) > 12) %>% # inspect cases of >2 SDGs (~ 6 char. each)
   as.data.frame()
 
 ```
