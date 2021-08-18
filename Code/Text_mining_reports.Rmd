@@ -4,7 +4,7 @@ author: "Yingjie"
 date: "6/17/2021"
 output: html_document
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 
@@ -12,7 +12,7 @@ editor_options:
 
 ```{r include=FALSE}
 ### To clear your environment 
-remove(list = ls())
+# remove(list = ls())
 
 ## set work dir
 path <- rstudioapi::getSourceEditorContext()$path
@@ -24,14 +24,14 @@ setwd(dirname(dir))
 getwd()
 
 # directories for Yingjie
-  # dir.reports <- './Data/data_TextMining/annual_reports/'
-  # dir.results <- './Data/data_results/'                  
-  # dir.figures <- './Data/figures/';      dir.figures    
+  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.results <- './Data/data_results/'
+  dir.figures <- './Data/figures/';      dir.figures
 
 # directories for Veronica
-  dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
-  dir.results <- '../Data/data_results/'                   # VF added another '.'
-  dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
+  # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
+  # dir.results <- '../Data/data_results/'                   # VF added another '.'
+  # dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
 
 # load packages
   source('./Code/_packages.R')
@@ -45,13 +45,22 @@ getwd()
 
 # Data imports
 
-## Convert PDF to text format
+## Convert a PDF to text format
 
-One way to do it
+### Read in files
+
+  Option #1: using `tm::readPDF`
 
 ```{r}
 
 pdf <- paste0(dir.reports, 'CEMEX--IntegratedReport2018.pdf'); pdf
+pdf <- paste0(dir.reports, 'Apple--10-K-2018-(As-Filed).pdf'); pdf
+pdf <- paste0(dir.reports, 'Pfizer--2018-Financial-Report.pdf'); pdf # not readable or editable
+pdf <- paste0(dir.reports, 'Pfizer--Financial-Report-2017.pdf'); pdf
+pdf <- paste0(dir.reports, 'Pfizer--Proxy2019__2018 Financial Report.pdf'); pdf
+
+
+
 
 # read <- tm::readPDF(control = list(text = "-layout"))
 # document <- tm::Corpus(URISource(pdf), readerControl = list(reader = read))
@@ -67,32 +76,11 @@ pdf <- paste0(dir.reports, 'CEMEX--IntegratedReport2018.pdf'); pdf
 # doc_txt[1]
 ```
 
-Another way to do it.
 
-Custom function to try. May need to try tabulizer package instead, but the simple cleanup protocol is probably still necessary.
+  Option #2: using `pdftools::pdf_text()`
+  We will **not** be using this, since it finds less words and also doesn't work well with columns. 
 
-```{r}
-## Custom function
-  # convertpdf2txt <- function(dirpath){
-  #   files <- list.files(dirpath, full.names = T) #directory of all files
-  #   x <- sapply(files, function(x){
-  #     x <- pdftools::pdf_text(x) %>%
-  #       paste(sep = " ") %>%
-  #       stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
-  #       stringr::str_replace_all(fixed("\r"), " ") %>%
-  #       stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
-  #       stringr::str_replace_all(fixed("\""), " ") %>%
-  #       paste(sep = " ", collapse = " ") %>%
-  #       stringr::str_squish() %>%
-  #       stringr::str_replace_all("- ", "")  # incomplete words continuing to next line
-  #     return(x)
-  #       })
-  # }
-```
-
-Here is test coding using `pdf_text()`. We will **not** be using this, since it finds less words and also doesn't work well with columns. 
-
-```{r}
+```{r eval=FALSE, include=FALSE}
 ### test code 
 # get encoding 
   # txt1 <- pdftools::pdf_text(pdf)
@@ -113,15 +101,15 @@ Here is test coding using `pdf_text()`. We will **not** be using this, since it 
   cat('Total words from `pdftools`:',sapply(strsplit(txt1, " "), length))
 ```
 
+
+  Option #3: The 3rd way to read pdf using `tabulizer::extract_text()`.
+  This package can better deal with PDF format with multiple columns. 
+
 ```{r}
-# for-loop
-  #read each PDF (try tabulizer package for columns)
-  #basic conversion to text, and save .txt with name from list and move to another folder
 
 # if (!require("remotes")) {
 #     install.packages("remotes")
 # }
-# on 64-bit Windows
 # remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), INSTALL_opts = "--no-multiarch")
 
 # get encoding 
@@ -129,33 +117,32 @@ Here is test coding using `pdf_text()`. We will **not** be using this, since it 
   # readr::guess_encoding(txt2) #It's UTF-8
 
 txt2 <- tabulizer::extract_text(file = pdf) %>%
-        iconv("UTF8", "ASCII", "") %>% # change encoding
-        gsub("\\n", " ", .) %>%
-        gsub("\\r", " ", .) %>%
-        gsub("\\t", " ", .) %>% # erase tabs
-        gsub("\"", " ", .) %>%
-        gsub("  ", " ", .) %>%
-        gsub("- ", "", .) %>%
-        paste(sep = " ", collapse = " ")
+  iconv("UTF8", "ASCII", "") %>% # change encoding
   
-  # stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
-  # stringr::str_replace_all(fixed("\r"), " ") %>%
-  # stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
-  # stringr::str_replace_all(fixed("\""), " ") %>%
-  # paste(sep = " ", collapse = " ") %>%
-  # stringr::str_squish() %>%
-  # stringr::str_replace_all("- ", "")  # incomplete words continuing to next line
+  # gsub("\\n", " ", .) %>% # erase new lines
+  # gsub("\\r", " ", .) %>% # erase carriage return
+  # gsub("\\t", " ", .) %>% # erase tabs
+  # gsub("\"", " ", .) %>%  # erase "
+  # gsub("  ", " ", .) %>%  # erase repeated whitespace
+  # gsub("- ", "", .) %>%   # fix incomplete words continuing to next line
+  # paste(sep = " ", collapse = " ")
+  
+  stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
+  stringr::str_replace_all(fixed("\r"), " ") %>% # erase carriage return
+  stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
+  stringr::str_replace_all(fixed("\""), " ") %>% # erase "
+  paste(sep = " ", collapse = " ") %>%
+  stringr::str_squish() %>%             # remove leading & trailing whitespace, and repeated whitespace inside a string
+  stringr::str_replace_all("- ", "")    # fix incomplete words continuing to next line
+  
 
-### ??? --> cause encoding problems for punctuation in a sentence --> 'This transformational plan is designed to fortify our company<U+9225><U+6A9A> position as a leading global building materials company.'
+### ??? --> cause encoding problems for punctuation in a sentence --> 'This plan is designed to fortify our company<U+9225><U+6A9A> position as a leading global building materials company.'
 
 # get count of words
-  cat('Total words from `tabulizer`:',sapply(strsplit(txt2, " "), length))
+  cat('Total words from `tabulizer`:', sapply(strsplit(txt2, " "), length))
 ```
 
-```{r}
-# check text
-  #txt2
-```
+
 
 We will us `tabulizer` since it gives us more words and is cleaner!
 
@@ -164,53 +151,59 @@ We will us `tabulizer` since it gives us more words and is cleaner!
   txt <- txt2
 ```
 
-### Organizing files; find, rename and copy and paste to another directory in batch
+
+### Organizing files: find, rename and copy and paste to another directory in batch
 
 ```{r eval=FALSE, include=FALSE}
 # renaming company PDF file to company name only
-  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>%
-                  unlist()
-  filename <- paste0(dir.reports, 'txt_cleaned/', company_name[1], '.txt'); filename
+  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
+  TXTname <- paste0(dir.reports, 'txt_cleaned/', company_name[1], '.txt'); TXTname
    
-  writeLines(txt, filename)
-            
-            
-####Lambdas Files####
-# # Required library that needs to be loaded for this function:
-#     require(plyr)  
-# 
-# # Create a directory where it will be stored
-#     lambdas.dir <- dir.create(paste0(raster.outdir,'lambdas'), recursive=TRUE)
-#     target.dir <- c(paste0(raster.outdir,'lambdas'))
-# 
-# # Renaming and moving Lambdas files from the MaxEnt model prediction
-# 
-#     # For-loop:
-#         for(run in 1:10){
-#           # Select all files of ".lambdas" extension
-#           filenames <- list.files(paste0(raster.outdir,run),pattern="*.lambdas",full.names=TRUE)
-#           #list(filenames)  #See what files it gave you as output
-#           
-#           # Rename the file with run number added to it
-#           renamed <- file.rename(from=filenames,
-#                                  to=sub(pattern="species.lambdas",
-#                                         replacement=paste0("species_",run,".lambdas"),
-#                                         filenames))
-#           
-#           # Find the renamed files again
-#           new.filenames <- list.files(paste0(raster.outdir,run),pattern="*.lambdas",full.names=TRUE)
-#           
-#           # Copy the ".lambdas" files and move to a new folder
-#           file.copy(from=new.filenames, to=target.dir, 
-#                     overwrite = TRUE, recursive = FALSE,   
-#                     copy.mode = TRUE)
-#         }
-  
+  writeLines(txt, TXTname)
 ```
 
-### Text file formatting 
 
-Convert text to corpus for keyword matching
+
+## For-loop all PDFs
+  Conversion to text --> and save .txt with name from list and move to another folder. 
+  
+```{r}
+### test code
+# dirpath <- dir.reports
+
+
+# Custom function
+convertpdf2txt <- function(dirpath){
+  files <- list.files(dirpath, pattern = '*.pdf$', ignore.case = T, full.names = T); files
+  for (pdf in files) {
+    txt <- tabulizer::extract_text(file = pdf) %>%
+      iconv("UTF8", "ASCII", "") %>% # change encoding
+      paste(sep = " ") %>%
+      stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
+      stringr::str_replace_all(fixed("\r"), " ") %>% # erase carriage return
+      stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
+      stringr::str_replace_all(fixed("\""), " ") %>% # erase "
+      paste(sep = " ", collapse = " ") %>%
+      stringr::str_squish() %>%             # remove leading & trailing whitespace, and repeated whitespace inside a string
+      stringr::str_replace_all("- ", "")    # fix incomplete words continuing to next line
+
+    ### renaming company PDF file to company name only
+    ### save .txt files to another folder. 
+    company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
+    TXTname <- paste0(dir.reports, 'txt_cleaned/', company_name[1], '.txt'); print(TXTname)
+    writeLines(txt, TXTname)
+    }
+}
+
+### test code
+# convertpdf2txt(dirpath = dir.reports)
+```
+
+
+# Text mining
+## Text file formatting 
+
+  Option #1: Convert text to corpus for keyword matching.
 
 ```{r}
 # convert text to corpus
@@ -222,34 +215,56 @@ Convert text to corpus for keyword matching
   # unlist() might be the function?
 ```
 
-Optional: format corpus where each sentence is a row??
+  Option #2: format corpus where each sentence is a row. 
 
 ```{r}
-#optional step if we want every sentence to have a row
-# data.frame()
-# this requires pattern searching where every sentence has to end with a period (.)
+
+# this requires pattern searching where every sentence has to end with a period (.) ----------------
   # --- limitations/problems for: figure text, bullet points, anything without a period.
 
-# WE'RE GONNA DO IT!
 
-txt_sentence <- unlist(strsplit(txt, split = "\\.")) %>% trimws(); 
-txt_sentence[100]
-# txt_sentence_sdg <- text[grep(pattern = keywords, x = text, ignore.case = T)]
-```
+## remove words that repeatedly appear in the text.  
+noise_text <- paste('1 Company Overview 2 How We Create Value 3 Our Performance 4 Governance 5 Results in Detail 6 About this ReportContents',
+                    '2018 CEMEX INTEGRATED REPORT',
+                    sep = '|')
+txt <- txt %>%
+  stringr::str_replace_all(noise_text, ".")
 
-```{r}
+## separate the large character chunk to short sentences by '.' (period), ';' (semicolon), '/ ' (slash with space)
+txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ ")) %>% trimws() 
+  
+
+
 # get structure
-  str(txt_sentence)
+str(txt_sentence)
+
+## to inspect row 100
+txt_sentence[100]
+
+  
+## work in df --------------------------------------------------------------------------------------
+txt_sentence_df <- data.frame(statement = txt_sentence) %>%
+  dplyr::mutate(id = row.names(.) %>% as.numeric(),
+                statement = as.character(statement),
+                match     = '',      ## for later use, to append data to this column
+                sdgs      = '') %>%
+  # dplyr::filter(nchar(statement) > 5) %>% # remove non-sentences or sentence with few words
+  as.data.frame()
+
+## write to xlsx for inspection 
+fname <- paste0(dir.reports, 'txt_sentence_df_inspection.xlsx'); fname
+writexl::write_xlsx(txt_sentence_df, fname, )
+
 ```
 
 
 
-# SDG Target keywords
+## SDG search terms
 
 Make a list of keywords for SDGs.
 
-|SDG_number   |SDG_keywords     |
-|1            |keywords here    |
+|SDG_id       |SDG_keywords     |
+|SDG1_1       |keywords here    |
 
 ```{r}
 ## make a vector of terms to concatenate with AND
@@ -266,21 +281,33 @@ func_OR_vector <- function(v){
   return(pat)
 }
 
-```
 
-```{r}
+
+
+reduce_ls <- c('eradicat|eliminat|end|reduc|alleviat|decreas|no|zero|prevent|prohibit|hinder|cut down')
+
+developing_country_ls =  func_AND_vector(v = c(
+  'developing|least develop|less develop|underdevel|poor countr|poor|small island|africa|impover|pover',
+  'countr|nation')
+)
+
+developing_country_ls =  func_OR_vector(v = c(
+  developing_country_ls,
+  'global south'))
+developing_country_ls
+
+
+
+# each vector is for each SDG, and each item is a set of synonyms
 
 # SDG 1 --------------------------------------------------------------------------------------------
 
-# each vector is for each SDG, and each item is a set of synonyms
-pat_sdg <- c('poverty|poor', #these are synonyms for underprivileged people
-          # 'eradicat*|end|reduc*|alleviat*',
-          'eradicat|end|reduc|alleviat',
-          'extreme')
 # concatenate with AND
 # SDG1_1 <- paste(SDG1, collapse = "*&*")        ## this is wrong
-pat    <- func_AND_vector(v = pat_sdg)
-SDG1_1 <- paste0("^", pat, ".+")
+SDG1_1 <- func_AND_vector(v = c('poverty|poor',
+                                reduce_ls,
+                                'extreme'))
+SDG1_1 <- paste0("^", SDG1_1, ".+")
 # preview
 SDG1_1
 
@@ -288,7 +315,7 @@ SDG1_1
 # each vector is for each SDG, and each item is a set of synonyms
 pat    <- func_AND_vector(v = c(
   'poverty|poor', 
-  'eradicat|end|reduc|alleviat'))
+  reduce_ls))
 SDG1_2 <- paste0("^", pat, ".+")
   
   
@@ -301,25 +328,25 @@ SDG1_3 <- func_AND_vector(v = c(
 
 SDG1_4 <- func_AND_vector(v = c(
   'access|rights', 
-  'resources|basic service|property|ownership|property|land|financial service|microfinanc|micro-financ'))
+  'resource|basic service|property|ownership|property|land|financial service|microfinanc|micro-financ'))
   
   
 
 SDG1_5 = func_AND_vector(v = c(
   "poverty|poor|vulnerable", 
   "shock|disaster", 
-  "eradicat|end|reduc|alleviat"))
+  reduce_ls))
 
 
 SDG1_a = func_AND_vector(v = c(
   "poverty|poor", 
-  "economic|financial|finance|development", 
-  "aid|empowerment|assistance|development"))
+  "economic|financ|development", 
+  "aid|empowerment|assist"))
 
 
 SDG1_b = func_AND_vector(v = c(
   "poverty|poor",
-  "eradicat|end|reduc|alleviat", 
+  reduce_ls, 
   "polic|strateg"))
 
 
@@ -437,35 +464,48 @@ SDG8_b = func_AND_vector(v = c(
 
 
 # SDG 13 -------------------------------------------------------------------------------------------
+climate_ls = c('climat|warming|extreme weather|sea level|temperatu|SDG 13|goal 13|target 13|indicator 13')
+
+
 SDG13_1 = func_AND_vector(v = c(
-  "climate|warming|extreme weather|sea level ris", 
+  climate_ls, 
   "hazard|disaster|risk", 
-  "resilience|adapt|reduc"))
+  "resilien|adapt|reduc"))
+SDG13_1 <- paste0("^", SDG13_1, ".+")
 
 
 SDG13_2 = func_AND_vector(v = c(
-  "climate|emission", 
-  "polic|strateg|plan"))
+  paste(climate_ls, 'emission|co2|carbon|green house|greenhouse', sep = '|'), 
+  "polic|strateg|plan|protocol|action|proced|program|initiative|sequest|reduc|captur|mitigat|manag"))
+SDG13_2 <- paste0("^", SDG13_2, ".+")
 
 
-SDG13_3 = func_OR_vector(v = c(
-  func_AND_vector(v = c(
-    "climate change", 
-    "educat|aware")),
-  func_AND_vector(v = c(
-    "co2|carbon|green house|greenhouse", 
-    "sequestration|reduc|capture|mitigate")))); SDG13_3
+SDG13_3 = func_AND_vector(v = c(
+  paste(climate_ls, "kyoto protocol|co2|carbon|green house|greenhouse", sep = '|'), 
+  "sequest|reduc|captur|mitigat|manag",
+  'educat|aware|engag|outreach|communica'
+  )); 
+SDG13_3
+SDG13_3 <- paste0("^", SDG13_3, ".+")
 
 
 SDG13_a = func_AND_vector(v = c(
-  "climate", 
-  "fund|mobilization|aid|assistance|invest|financ|unfccc|convention"))
+  paste(climate_ls, "kyoto protocol", sep = '|'), 
+  "fund|mobili|aid|assist|invest|financ|unfccc|mobili|convention"))
+SDG13_a <- paste0("^", SDG13_a, ".+")
 
 
 SDG13_b = func_AND_vector(v = c(
-  "climate", 
-  "capacity|polic|strateg|plan", 
-  "least developed|developing"))
+  climate_ls, 
+  "capacity|polic|strateg|plan|protocol|action|proced|program|initiative", 
+  developing_country_ls))
+SDG13_b <- paste0("^", SDG13_b, ".+")
+
+
+SDG13_general = func_OR_vector(v = c(
+  climate_ls,
+  'kyoto protocol|emission|co2|carbon|green house|greenhouse'))
+SDG13_general ## no need "^" and ".+"
 
   
 # TO ADD MORE SDGS HERE
@@ -477,13 +517,13 @@ SDG_ls_str <- c(
   'SDG1_1', 'SDG1_2', 'SDG1_3', 'SDG1_4', 'SDG1_5', 'SDG1_a', 'SDG1_b',
   'SDG7_1', 'SDG7_2', 'SDG7_3', 'SDG7_a', 'SDG7_b', 
   'SDG8_1', 'SDG8_2', 'SDG8_3', 'SDG8_4', 'SDG8_5', 'SDG8_6', 'SDG8_7', 'SDG8_8', 'SDG8_9', 'SDG8_10', 'SDG8_a', 'SDG8_b',
-  'SDG13_1', 'SDG13_2', 'SDG13_3', 'SDG13_a', 'SDG13_b'
+  'SDG13_1', 'SDG13_2', 'SDG13_3', 'SDG13_a', 'SDG13_b', 'SDG13_general'
 )
 
 
 SDG_keys <- data.frame()  
 for (i in 1:length(SDG_ls_str) ) {
-  print(i)
+  # print(i)
   sdg_i_str <- SDG_ls_str[i]
   sdg_i_obj <- get(sdg_i_str)
   df_i <- data.frame(SDG_id       = sdg_i_str, 
@@ -498,71 +538,16 @@ for (i in 1:length(SDG_ls_str) ) {
 
 
 
-## Match the keywords to each corpus
+## Match the keywords to each corpus and format results
 
-Add columns to see how many have comments using these terms.
-Here are the options:
-1. for every row in the corpus (ideally only 1 sentence in each row), have a column 1-17 and 1/0 or y/n if matching the SDG.
-  - this would be a for-loop and i 1:17 is linked to the columns being filled
-2. for entire corpus, extract rows (ideally only 1 sentence at a time) that match only 1 SDG.
-  - this would be a for-loop and i 1:17 is a new vector to be added to a list (17 of them)
-
-```{r}
-# THIS CODE IS TO IDENTIFY MATCHING ROWS, BUT IT DOES NOT EXTRACT SENTENCES
-# in the original dataframe, if it matches, then in a new column, say yes; if not, say no.
-
-# Loop for each SDG
-  # for (i in 1:length(SDG_ls_str)){
-  # corpus$specific <- ifelse(grepl(paste(SDG_keywords[i], collapse = "*|*"), #change grep pattern to be a sentence
-  #                                   DOC_SI$comments, ignore.case = TRUE),
-  #                             "Y","N") #yes or no if they match
-  # corpus$specific <- as.factor(DOC_SI$specific)
-  # }
-  # summary(corpus)
-  
-  
-  
-  
-## work in df --------------------------------------------------------------------------------------
-txt_sentence_df <- data.frame(statement = txt_sentence) %>%
-  dplyr::mutate(statement = as.character(statement),
-                match     = '',
-                sdgs      = '') %>%
-  dplyr::filter(nchar(statement) > 10) %>% # remove non-sentences
-  as.data.frame()
-  
-#for (i in 1:length(SDG_ls_str)){ # all SDG indicators
-for (i in 25:29){ #climate indicators only (trial run)
-    sdg_i_str <- SDG_ls_str[i]
-    sdg_i_obj <- get(sdg_i_str)
-    print(sdg_i_str)
-    print(sdg_i_obj)
-    
-    txt_sentence_df <-  txt_sentence_df %>%
-      as.data.frame() %>%
-      dplyr::mutate(
-        match = ifelse(
-          grepl(pattern = sdg_i_obj, x = statement, ignore.case = TRUE, perl = T), 1, 0))  %>% #yes or no if they match
-      dplyr::mutate(
-        sdgs = ifelse(match == 1, paste0(sdgs, ',', sdg_i_str), sdgs)) ## ??? --> this cause errors, with many SDG strings --> paste0(sdgs, sdg_i_str, collapse = ',') 
-    
-}
-
-# sort from most SDG hits to least (or, none)
-
-coded <- txt_sentence_df %>%
-  # dplyr::filter(nchar(sdgs) > 12) %>%
-  arrange(desc(nchar(sdgs)))
-```
-
-
-
-
-## Format results
-
+  Add columns to see how many have comments using these terms.
+  Here are the options:
+  1. for every row in the corpus (ideally only 1 sentence in each row), have a column 1-17 and 1/0 or y/n if matching the SDG.
+    - this would be a for-loop and i 1:17 is linked to the columns being filled
+  2. for entire corpus, extract rows (ideally only 1 sentence at a time) that match only 1 SDG.
+    - this would be a for-loop and i 1:17 is a new vector to be added to a list (17 of them)
 
 **Format 1**
-
 |row number|sentence                    |SDGs_detected       |
 |1         |we need to eradicate poverty|SDG1, SDG2          | 
 .
@@ -571,16 +556,54 @@ coded <- txt_sentence_df %>%
 |1000      |we are talking getting rich |SDG1, SDG17         |
 
 
-
-
 **Format 2**
-
 |row number|sentence                    |SDG1       |SDG2       |...        |SDG17    |
 |1         |we need to eradicate poverty|1          |0          |...        |         |
 .
 .
 .
 |1000      |we are talking getting rich |0          |0          |...        |0        |
+  
+
+```{r}
+# THIS CODE IS TO IDENTIFY MATCHING ROWS, BUT IT DOES NOT EXTRACT SENTENCES
+# in the original dataframe, if it matches, then in a new column, say yes; if not, say no.
+
+
+code <- txt_sentence_df
+#for (i in 1:length(SDG_ls_str)){ # all SDG indicators
+for (i in 25:30){                ## climate indicators only (trial run)
+    sdg_i_str <- SDG_ls_str[i]   ## the SDG id name
+    sdg_i_obj <- get(sdg_i_str)  ## the corresponding SDG search term list
+    print(sdg_i_str)
+    # print(sdg_i_obj)
+    
+    code <-  code %>%
+      as.data.frame() %>%
+      
+      ## at the sentence level - count once -------------
+      dplyr::mutate(
+        match = ifelse(
+          grepl(pattern = sdg_i_obj, x = statement, ignore.case = T, perl = T), 1, 0))  %>% ## yes-1 or no-0 if they match
+      dplyr::mutate(sdgs = ifelse(match == 1, paste0(sdgs, ',', sdg_i_str), sdgs)) %>%
+      
+      ## at the sentence level - count all matches ------
+      # dplyr::mutate(
+      #   n = str_count(string = statement, pattern = sdg_i_obj),
+      #   sdgs = ifelse(n > 0, paste0(sdgs, ',', sdg_i_str, '-', n), sdgs)
+      #   ) %>%
+      as.data.frame()
+}
+
+
+
+coded <- code %>%
+  # sort from most SDG hits to least (or, none)
+  arrange(desc(nchar(sdgs)), id)
+
+```
+
+
 
 
 
@@ -588,7 +611,12 @@ coded <- txt_sentence_df %>%
   Manual edits?? Go back to the SDG keyword strings and edit there first. The duplicate SDGs should be the ones that are inspected to make sure that keywords are being used correctly. But overlap is okay if the sentences actually do talk about >1 SDG.
 
 ```{r}
-# inspect/extract rows where row sum is >1
+### save all the hits to xlsx for easier inspection. 
+writexl::write_xlsx(x = coded, path = './Data/data_TextMining/coded.xlsx')
+
+
+
+### inspect/extract rows where there are more than one SDG hits. 
 coded_check <- coded %>%
   dplyr::filter(nchar(sdgs) > 12) %>% # inspect >2 SDGs
   as.data.frame()
@@ -632,6 +660,14 @@ coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
   dplyr::select(1:2, goal_id, everything()) %>%
   dplyr::rename(n_statements = Freq)
 
+
+coded_sdgs_df %>%
+  ggplot() +
+  geom_col(aes(x = coded_sdgs, y = n_statements)) +
+  geom_text(aes(x = coded_sdgs, y = n_statements + 8, label = n_statements), size = 8, color = 'red') +
+  theme_bw() +
+  facet_wrap(~goal) +
+  coord_flip()
 ```
 
 
@@ -681,7 +717,7 @@ Example of a near/2 where we just want 2 words before and 2 words after the keyw
 We can use this for later. For example, trying to find specific mention of SDG1 and the terms mentioned around it.
 Extract two words around the key words in both directions
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 ### USE THIS TO CLEAN UP SENTENCES 
 # remove stopwords (on, the, at, etc.) from comments
   # grab stopword list from tm package
@@ -693,83 +729,86 @@ Extract two words around the key words in both directions
     DOC_SI$comments <- sapply(DOC_SI$comments,
                                 function(x) {gsub(stopwords_regex,"",x)})
     
+    
+
+matching <- c('li', 'yi', 'ji') 
+    
 # empty vector
-ls <- list()
+ls <- list();
 
 # for-loop to create search pattern list
-  for (i in 1:length(matching)){
-    
-    # number of words left and right of keyword
-    lookaround <- 2
-    # pattern to search
-      pattern <- paste0("([[a-z']]+ ){0,", lookaround, "}",
-                      paste(matching[i], collapse = '|'), 
-                    "( [[a-z']]+){0,", lookaround, "}")
-    # add to list
-      ls[[i]] <- pattern
-  }
+for (i in 1:length(matching)){
+  
+  # number of words left and right of keyword
+  lookaround <- 2
+  # pattern to search
+    pattern <- paste0("([[a-z']]+ ){0,", lookaround, "}",
+                    paste(matching[i], collapse = '|'), 
+                  "( [[a-z']]+){0,", lookaround, "}")
+    print(pattern)
+  # add to list
+    ls[[i]] <- pattern
+}
 # combine
-  patterns <- do.call(rbind,ls)
+patterns <- do.call(rbind,ls)
+
+
 
 # assign to object
-  pattern <- paste0(patterns,collapse = "|")
+pattern <- paste0(patterns,collapse = "|")
+pattern
 
 # add to dataframe
-  DOC_SI$keywords <- str_extract_all(DOC_SI$comments,
-                                pattern=regex(pattern,
-                                              ignore_case = TRUE,
-                                              skip_word_none=TRUE #ignore punctuation
-                                ),
-                                "\\w+" #match any word character
-                                )
+DOC_SI$keywords <- str_extract_all(DOC_SI$comments,
+                              pattern=regex(pattern,
+                                            ignore_case = TRUE,
+                                            skip_word_none=TRUE #ignore punctuation
+                              ),
+                              "\\w+" #match any word character
+                              )
 ```
 
 
+```{r TEST look around, eval=FALSE, include=FALSE}
+t <- 'SDG 13.1 is one of the targets under SDG'
+word1 <- 'SDG'
+word2 <- '13'
+str <- as.character('\\W+(?:\\w+\\W+)')
+# p <- '\bword1\W+(?:\w+\W+){1,6}?word2\b'
+pat <- paste0('\b', word1, str, '{0,6}', word2, '\b') ## at least 1 word between “word1” and “word2”, and allow at most 3 words.
+# pat <- '(?i)(?:\b(SDG))\\W+(?:\\w+\\W+){0,5}?\b(13)\b.*'
+pat <- '(?<=SDG)\\s(?:\\w+\\s){0,2}(?=13)'
+pat <- '(?<=SDG)\\W+(?:\\w+\\s\\S){0,2}(?=13)'
 
-## Subset for cleaning
+# (?i)(?:\b(tree)\b)(?:(?!\n)\W)+(?:\w+\W+){0,5}?\b(house)\b.*
+pat
+regex(pat)
 
-```{r}
-# unlist object and thin out the stopwords (on, the, at, etc.)
-  ls <- data.frame(unlist(DOC_SI$keywords))
+
+grepl(pattern = regex(pat, ignore.case = TRUE), x = t, ignore.case = T, perl = T)
+
+
+library(dplyr)
+library(stringr)
+dataframe <- data_frame(mytext = c('SD is pretty SDG my only 13',
+                                   'SD is pretty SDG my only one 13',
+                                   'but sometimes SDG13 is bad as well',
+                                   'but sometimes sdg 13 is',
+                                   'SDG one two three, SDG 13.1',
+                                   'sdg13',
+                                   'this is SDG13',
+                                   'SDG 13'))
+
+# dataframe
+dataframe %>%  mutate(mycount = str_count(mytext, pattern = regex(pattern = pat, ignore_case = TRUE)))
+
 ```
-
-Initial cleanup and inspection
-
-```{r}
-# remove double spaces
-  ls <- data.frame(lapply(ls, function(x) {gsub("  "," ",x)}))
-
-# remove lines that are descriptions and not names
-  others <- c('^beach$',
-              '^point$',
-              '^spit$',
-              '^island$',
-              '^bay$')
-  ls <- data.frame(lapply(ls, function(x) {gsub(paste0(others,collapse = "|"),NA,x,
-                                           ignore.case = TRUE)}))
-  
-# remove all NA's and make into blanks
-  ls <- data.frame(lapply(ls, function(x) {gsub('NA',"",x)}))
-```
-
-Inspect clean-up so far
-
-```{r}
-# check unique names
-  unique(ls)
-```
-
-
-
-
-
-
 
 
 
 
 ## Keywords and corpus
-```{r keywords}
+```{r keywords, eval=FALSE, include=FALSE}
 library(SnowballC) ## wordStem function
 ## We use the wordStem function of the SnowballC package that has support for the English language. This function reduces a word or a vector of words to its radical (common base form). 
 stemmed_keyword1 <- wordStem("basic service", language = "english"); stemmed_keyword1
@@ -804,7 +843,7 @@ inspect(corpus.final)
 ```
 
 
-```{r mining sentences}
+```{r mining sentences, eval=FALSE, include=FALSE}
 ### example #1 -------------------------------------------------------------------------------------
 text <- unlist(strsplit(text_example, split = "\\.|\\,|;")) %>% trimws(); text
 text[grep(pattern = keywords, x = text, ignore.case = T)]
@@ -814,7 +853,7 @@ text[grep(pattern = keywords, x = text, ignore.case = T)]
 
 
 
-```{r NLP}
+```{r NLP, eval=FALSE, include=FALSE}
 ### example #2 -------------------------------------------------------------------------------------
 library(NLP)
 library(openNLP)

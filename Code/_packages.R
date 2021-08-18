@@ -25,9 +25,7 @@ library(RColorBrewer)
 ## Color Brewer palette
 library(viridis)
 library(hrbrthemes)
-library(devtools)
 # install_github("jokergoo/ComplexHeatmap")
-# library(devtools)
 # library(utils)
 # remove.packages('ComplexHeatmap')
 
@@ -39,4 +37,4 @@ library(vegan) ## for evenness cal
 
 library(countrycode)
 library(knitr)           ## generate a fancy table
-library(kableExtra) ## generate a fancy table
+library(kableExtra)      ## generate a fancy table
