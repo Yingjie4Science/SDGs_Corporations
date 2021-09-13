@@ -12,7 +12,7 @@ editor_options:
 
 ```{r include=FALSE}
 ### To clear your environment 
-# remove(list = ls())
+remove(list = ls())
 
 ## set work dir
 path <- rstudioapi::getSourceEditorContext()$path
@@ -54,10 +54,10 @@ getwd()
 ```{r}
 
 pdf <- paste0(dir.reports, 'CEMEX--IntegratedReport2018.pdf'); pdf
-pdf <- paste0(dir.reports, 'Apple--10-K-2018-(As-Filed).pdf'); pdf
-pdf <- paste0(dir.reports, 'Pfizer--2018-Financial-Report.pdf'); pdf # not readable or editable
-pdf <- paste0(dir.reports, 'Pfizer--Financial-Report-2017.pdf'); pdf
-pdf <- paste0(dir.reports, 'Pfizer--Proxy2019__2018 Financial Report.pdf'); pdf
+# pdf <- paste0(dir.reports, 'Apple--10-K-2018-(As-Filed).pdf'); pdf
+# pdf <- paste0(dir.reports, 'Pfizer--2018-Financial-Report.pdf'); pdf # not readable or editable
+# pdf <- paste0(dir.reports, 'Pfizer--Financial-Report-2017.pdf'); pdf
+# pdf <- paste0(dir.reports, 'Pfizer--Proxy2019__2018 Financial Report.pdf'); pdf
 
 
 
@@ -201,6 +201,7 @@ convertpdf2txt <- function(dirpath){
 
 
 # Text mining
+
 ## Text file formatting 
 
   Option #1: Convert text to corpus for keyword matching.
@@ -231,8 +232,10 @@ txt <- txt %>%
   stringr::str_replace_all(noise_text, ".")
 
 ## separate the large character chunk to short sentences by '.' (period), ';' (semicolon), '/ ' (slash with space)
-txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ ")) %>% trimws() 
+txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: |\\, ")) %>% trimws() 
   
+
+txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: ")) %>% trimws() 
 
 
 # get structure
@@ -245,9 +248,7 @@ txt_sentence[100]
 ## work in df --------------------------------------------------------------------------------------
 txt_sentence_df <- data.frame(statement = txt_sentence) %>%
   dplyr::mutate(id = row.names(.) %>% as.numeric(),
-                statement = as.character(statement),
-                match     = '',      ## for later use, to append data to this column
-                sdgs      = '') %>%
+                statement = as.character(statement)) %>%
   # dplyr::filter(nchar(statement) > 5) %>% # remove non-sentences or sentence with few words
   as.data.frame()
 
@@ -284,7 +285,11 @@ func_OR_vector <- function(v){
 
 
 
-reduce_ls <- c('eradicat|eliminat|end|reduc|alleviat|decreas|no|zero|prevent|prohibit|hinder|cut down')
+reduce_ls <- c('alleviat|abate|avert|abolish|eradicat|eliminat|eras|ease|end|rid of|phase out|wipe out|reduc|cut|curb|curtail|declin|decreas|diminish|drop|dwindl|halt|hinder|hamper|impede|inhibit|lessen|lower|mitigat|slash|shrink|stop|trim|weaken|\\bno\\b|zero|prevent|prohibit')
+
+disaster_ls <- 'shock|disaster|catastrophe|hazard|flood|risk|exposure|harm'
+
+policy_ls <- 'polic|plan|action|activit|administ|approach|arrangement|blueprint|deal|guide|govern|method|manag|proced|program|project|practice|procedure|propos|protocol|rule|regulat|law|treat|right|constitution|agreement|initiative|scheme|strateg'
 
 developing_country_ls =  func_AND_vector(v = c(
   'developing|least develop|less develop|underdevel|poor countr|poor|small island|africa|impover|pover',
@@ -300,188 +305,35 @@ developing_country_ls
 
 # each vector is for each SDG, and each item is a set of synonyms
 
-# SDG 1 --------------------------------------------------------------------------------------------
 
-# concatenate with AND
-# SDG1_1 <- paste(SDG1, collapse = "*&*")        ## this is wrong
-SDG1_1 <- func_AND_vector(v = c('poverty|poor',
-                                reduce_ls,
-                                'extreme'))
-SDG1_1 <- paste0("^", SDG1_1, ".+")
-# preview
-SDG1_1
-
-    
-# each vector is for each SDG, and each item is a set of synonyms
-pat    <- func_AND_vector(v = c(
-  'poverty|poor', 
-  reduce_ls))
-SDG1_2 <- paste0("^", pat, ".+")
-  
-  
-SDG1_3 <- func_AND_vector(v = c(
-  'poverty|poor',
-  'vulnerable',
-  'social protection'))
-  
-
-
-SDG1_4 <- func_AND_vector(v = c(
-  'access|rights', 
-  'resource|basic service|property|ownership|property|land|financial service|microfinanc|micro-financ'))
-  
-  
-
-SDG1_5 = func_AND_vector(v = c(
-  "poverty|poor|vulnerable", 
-  "shock|disaster", 
-  reduce_ls))
-
-
-SDG1_a = func_AND_vector(v = c(
-  "poverty|poor", 
-  "economic|financ|development", 
-  "aid|empowerment|assist"))
-
-
-SDG1_b = func_AND_vector(v = c(
-  "poverty|poor",
-  reduce_ls, 
-  "polic|strateg"))
+```
 
 
 
 
-# SDG 7 --------------------------------------------------------------------------------------------
-
-RenewableList_1 = c("modern|clean|renewable|biomass",
-                    "energy|fuel")
-RenewableList_2 = c("renewable|biofuel|biodiesel|biogas|bioethanol|biorefinery|bioenergy|hydrogen|hydropower|ethanol|wind power|wind energy|solar power|photovoltaic|wind farm|alternative energy|offshore wind") 
-
-RenewableList <- func_OR_vector(v = c(
-  func_AND_vector(v = RenewableList_1), 
-  RenewableList_2))
-
-SDG7_1 = func_OR_vector(v = c(
-  RenewableList, 
-  "reliable electricity|reliable energy|affordable electricity"))
-  
-
-SDG7_2 <- func_OR_vector(v = c(
-  func_AND_vector(v = c(
-    RenewableList, 
-    'share')), 
-  "energy transition|smart micro-grid|smart grid|smart microgrid|smart micro-grids|smart meter"))
-
-
-SDG7_3 = c("energy efficiency|energy intensity")
-
-
-SDG7_a = func_AND_vector(v = c(
-  RenewableList, 
-  "research|technology|invest|finance")); 
-SDG7_a
-
-
-
-SDG7_b = func_AND_vector(v = c(
-  RenewableList, 
-  "least developed|developing|aid|assist")); 
-SDG7_b
-  
-  
-  
-  
-  
-# SDG 8 --------------------------------------------------------------------------------------------
-
-SDG8_1 <- func_AND_vector(v = c(
-  "economic", 
-  "growth|development", 
-  "national"))
-
-
-SDG8_2 = func_AND_vector(v = c(
-  "economic", 
-  "productivity", 
-  "technolo|innovation"))
-
-
-SDG8_3 = "economic development policy|employment policy|decent job|quality job|job creation|microenterprise|micro-enterprise|small enterprise|medium enterprise|small enterprises|medium enterprises|small entrepreneur|starting entrepreneur|medium entrepreneur|small entrepreneurs|medium entrepreneurs|starting entrepreneurs|entrepreneurship"
-
-
-SDG8_4 = func_AND_vector(v = c(
-  "sustainab|efficiency|environm|footprint", 
-  "resource|material|consumption|production|economic"))
-
-
-SDG8_5 = func_OR_vector(v = c(
-  "decent work|employment protection|unemployment|precarious job",
-  func_AND_vector(v = c(
-    "full|productive|informal", 
-    "employment|job"))
-  )); 
-SDG8_5
-
-                         
-SDG8_6 = func_AND_vector(v = c(
-  "child|youth", 
-  "education|employment|training"))
-
-
-SDG8_7 = "forced labo|modern slavery|human traffick|child labo|child soldier"
-# MAY ADD THIS LATER ON", AND "eradicate|prohibit|eliminat|end"
-
-
-SDG8_8 = func_OR_vector(v = c(
-  "labour right|labor right|safe working environment|secure working environment|precarious employment", 
-  func_AND_vector(v = c(
-    "fatal", 
-    "injur|job|work|employ")))); 
-SDG8_8
-
-
-SDG8_9 = "sustainable tourism|ecotourism|community-based tourism|tourism employment|sustainable tourism policy"
-
-
-SDG8_10 = func_OR_vector(v = c(
-  "financial inclusion", 
-  func_AND_vector(v = c(
-    "access", 
-    "finance|banking|insurance"))))
-  
-
-SDG8_a = func_AND_vector(v = c(
-  "aid|assist", 
-  "trade"))
-
-
-SDG8_b = func_AND_vector(v = c(
-  "youth employment", 
-  "strategy"))
-
-
-
-
+```{r - SDG 13, eval=FALSE, include=FALSE}
 # SDG 13 -------------------------------------------------------------------------------------------
-climate_ls = c('climat|warming|extreme weather|sea level|temperatu|SDG 13|goal 13|target 13|indicator 13')
+climate_ls <- 'climat|warming|extreme weather|sea level|temperature|heat|melt|SDG 13|goal 13|target 13|indicator 13'
+
+emission_ls <- 'emission|co2|carbon|green house|greenhouse|GHG|G.H.G.|chlorofluorocarbon|cfc|c.f.c.'
 
 
 SDG13_1 = func_AND_vector(v = c(
   climate_ls, 
-  "hazard|disaster|risk", 
-  "resilien|adapt|reduc"))
+  disaster_ls, 
+  paste('resilien|adapt|adjust', reduce_ls, sep = '|')
+  ))
 SDG13_1 <- paste0("^", SDG13_1, ".+")
 
 
 SDG13_2 = func_AND_vector(v = c(
-  paste(climate_ls, 'emission|co2|carbon|green house|greenhouse', sep = '|'), 
-  "polic|strateg|plan|protocol|action|proced|program|initiative|sequest|reduc|captur|mitigat|manag"))
+  paste(climate_ls, emission_ls, sep = '|'), 
+  paste('captur|sequest', reduce_ls, policy_ls, sep = '|')))
 SDG13_2 <- paste0("^", SDG13_2, ".+")
 
 
 SDG13_3 = func_AND_vector(v = c(
-  paste(climate_ls, "kyoto protocol|co2|carbon|green house|greenhouse", sep = '|'), 
+  paste(climate_ls, "kyoto protocol", emission_ls, sep = '|'), 
   "sequest|reduc|captur|mitigat|manag",
   'educat|aware|engag|outreach|communica'
   )); 
@@ -504,7 +356,8 @@ SDG13_b <- paste0("^", SDG13_b, ".+")
 
 SDG13_general = func_OR_vector(v = c(
   climate_ls,
-  'kyoto protocol|emission|co2|carbon|green house|greenhouse'))
+  'kyoto protocol',
+  emission_ls))
 SDG13_general ## no need "^" and ".+"
 
   
@@ -512,16 +365,36 @@ SDG13_general ## no need "^" and ".+"
   # ...
   
 
-# bind these vectors and make it a dataframe to work from 
-SDG_ls_str <- c(
-  'SDG1_1', 'SDG1_2', 'SDG1_3', 'SDG1_4', 'SDG1_5', 'SDG1_a', 'SDG1_b',
-  'SDG7_1', 'SDG7_2', 'SDG7_3', 'SDG7_a', 'SDG7_b', 
-  'SDG8_1', 'SDG8_2', 'SDG8_3', 'SDG8_4', 'SDG8_5', 'SDG8_6', 'SDG8_7', 'SDG8_8', 'SDG8_9', 'SDG8_10', 'SDG8_a', 'SDG8_b',
-  'SDG13_1', 'SDG13_2', 'SDG13_3', 'SDG13_a', 'SDG13_b', 'SDG13_general'
-)
+```
 
+
+
+  This collection includes terms that are directly related to SDGs, i.e., if companies specifically mention SDG ids (e.g., 'SDG 13'), or the target or indicator ids (e.g., SDG 13.1.a). 
+  
+```{r - Collection - direct commit}
+source('./Code/helper_SDG_search_terms.R')
+
+SDG_keys <- rbind(goal_keys, target_keys)
+
+SDG_ls_str <- SDG_keys$SDG_id %>% as.character(); SDG_ls_str
+
+```
+
+
+
+  This collection includes terms that are indirectly related to SDGs, i.e., the terms are constructed based on the alignment to the description and meanings of each SDG or Target. 
+  
+```{r - Collection - indrect commit}
+source('./Code/helper_SDG_search_terms.R')
+
+### bind these vectors and make it a dataframe to work from ----------------------------------------
+SDG_ls_str <- ls(pattern = "SDG[0-9].*") %>% sort(); SDG_ls_str
+
+SDG_ls_str <- grep("['xyzw]", SDG_ls_str, value = TRUE, invert = TRUE) # invert = TRUE means to return the values that were not matched.
+SDG_ls_str
 
 SDG_keys <- data.frame()  
+
 for (i in 1:length(SDG_ls_str) ) {
   # print(i)
   sdg_i_str <- SDG_ls_str[i]
@@ -529,16 +402,17 @@ for (i in 1:length(SDG_ls_str) ) {
   df_i <- data.frame(SDG_id       = sdg_i_str, 
                      SDG_keywords = sdg_i_obj)
   SDG_keys <- rbind(SDG_keys, df_i) %>%
-    dplyr::mutate(SDG_keywords = as.character(SDG_keywords))
+    dplyr::mutate(SDG_id       = as.character(SDG_id),
+                  SDG_keywords = as.character(SDG_keywords))
 }
-
 ```
 
 
 
 
+## To detect  
 
-## Match the keywords to each corpus and format results
+  To match the keywords to each corpus and format results
 
   Add columns to see how many have comments using these terms.
   Here are the options:
@@ -548,50 +422,61 @@ for (i in 1:length(SDG_ls_str) ) {
     - this would be a for-loop and i 1:17 is a new vector to be added to a list (17 of them)
 
 **Format 1**
+```
 |row number|sentence                    |SDGs_detected       |
 |1         |we need to eradicate poverty|SDG1, SDG2          | 
 .
 .
-.
 |1000      |we are talking getting rich |SDG1, SDG17         |
-
+```
 
 **Format 2**
+```
 |row number|sentence                    |SDG1       |SDG2       |...        |SDG17    |
 |1         |we need to eradicate poverty|1          |0          |...        |         |
 .
 .
-.
 |1000      |we are talking getting rich |0          |0          |...        |0        |
-  
+```  
 
-```{r}
+```{r - Coded}
 # THIS CODE IS TO IDENTIFY MATCHING ROWS, BUT IT DOES NOT EXTRACT SENTENCES
 # in the original dataframe, if it matches, then in a new column, say yes; if not, say no.
 
 
-code <- txt_sentence_df
-#for (i in 1:length(SDG_ls_str)){ # all SDG indicators
-for (i in 25:30){                ## climate indicators only (trial run)
-    sdg_i_str <- SDG_ls_str[i]   ## the SDG id name
-    sdg_i_obj <- get(sdg_i_str)  ## the corresponding SDG search term list
+code <- txt_sentence_df %>% 
+  dplyr::mutate(#match   = 0,      
+                sdgs    = '', ## for later use, to append data to this column
+                n_total = 0,
+                sdgs_n  = '')
+
+# for (i in 1:length(SDG_ls_str)){  ## all SDG indicators
+# # for (i in 8:13){                ## climate indicators only (trial run)
+#     sdg_i_str <- SDG_ls_str[i]    ## the SDG id name
+#     sdg_i_obj <- get(sdg_i_str)   ## the corresponding SDG search term list
+for (i in 1:nrow(SDG_keys)){  ## all SDG indicators
+# for (i in 8:13){                ## climate indicators only (trial run)
+    sdg_i_str <- SDG_keys$SDG_id[i]    ## the SDG id name
+    sdg_i_obj <- SDG_keys$SDG_keywords[i]   ## the corresponding SDG search term list
+    
     print(sdg_i_str)
     # print(sdg_i_obj)
     
     code <-  code %>%
       as.data.frame() %>%
       
-      ## at the sentence level - count once -------------
+      ## at the sentence level - count once --------------------------------------------------------
       dplyr::mutate(
         match = ifelse(
           grepl(pattern = sdg_i_obj, x = statement, ignore.case = T, perl = T), 1, 0))  %>% ## yes-1 or no-0 if they match
-      dplyr::mutate(sdgs = ifelse(match == 1, paste0(sdgs, ',', sdg_i_str), sdgs)) %>%
+      dplyr::mutate(sdgs = ifelse(match > 0, paste0(sdgs, ',', sdg_i_str), sdgs)) %>%
       
-      ## at the sentence level - count all matches ------
-      # dplyr::mutate(
-      #   n = str_count(string = statement, pattern = sdg_i_obj),
-      #   sdgs = ifelse(n > 0, paste0(sdgs, ',', sdg_i_str, '-', n), sdgs)
-      #   ) %>%
+      ## at the sentence level - count all matches -------------------------------------------------
+      dplyr::mutate(
+        n       = str_count(string = statement, regex(pattern = sdg_i_obj, ignore_case = T)),
+        n_total = n_total + n,
+        sdgs_n  = ifelse(n > 0, paste0(sdgs_n, ',', sdg_i_str, '-', n), sdgs_n)
+        ) %>%
       as.data.frame()
 }
 
@@ -601,26 +486,119 @@ coded <- code %>%
   # sort from most SDG hits to least (or, none)
   arrange(desc(nchar(sdgs)), id)
 
+
+sum(coded$n)
+sum(coded$n_total)
 ```
 
 
 
 
 
-## Inspect and tune mining results 
+
+
+
+
+```{r - Test Count matches}
+
+## text data
+coded_count <- txt_sentence_df %>%
+  dplyr::mutate(n = 0)
+
+
+## Keywords list in a vector
+## --> take this as an example 
+k_ls <- strsplit(x = SDG13_general, split = '\\|') %>% unlist(); k_ls
+
+
+## Loop and count matches for each keyword
+sdg_i_str <- 'SDG13_general'
+# k <- 'climat'
+
+for (k in k_ls){                
+    print(k)
+    
+    coded_count <- coded_count %>%
+      as.data.frame() %>%
+      dplyr::mutate(
+        n_k    = str_count(string = statement, regex(pattern = k, ignore_case = T)),
+        n      = n + n_k,
+        sdgs_n = ifelse(n > 0, paste0(sdg_i_str, '-', n), '')
+        ) %>%
+      arrange(desc(n)) %>%
+      as.data.frame()
+}
+
+
+
+sum(coded_count$n, na.rm = T)
+```
+
+
+
+
+
+
+## To Inspect 
+
+  Inspect and tune mining results
+  
   Manual edits?? Go back to the SDG keyword strings and edit there first. The duplicate SDGs should be the ones that are inspected to make sure that keywords are being used correctly. But overlap is okay if the sentences actually do talk about >1 SDG.
 
-```{r}
+```{r - formatted xlsx}
 ### save all the hits to xlsx for easier inspection. 
 writexl::write_xlsx(x = coded, path = './Data/data_TextMining/coded.xlsx')
 
 
-
 ### inspect/extract rows where there are more than one SDG hits. 
 coded_check <- coded %>%
-  dplyr::filter(nchar(sdgs) > 12) %>% # inspect >2 SDGs
+  dplyr::filter(nchar(sdgs) > 12) %>% # inspect > 2 SDGs
   as.data.frame()
 
+
+
+### format the data to inspect by SDG --------------------------------------------------------------
+coded_xls <- coded %>%
+  dplyr::select(statement, sdgs) %>%
+  dplyr::mutate(sdg = gsub(pattern = 'general', 'g', sdgs, perl = T),
+                sdg = gsub(pattern = '_[0-9a-z]{1,2}', '', sdg, perl = T), ## to get the SDG ids from target names
+                sdg = gsub(pattern = '^,', '', sdg)) ## remove the starting comma
+
+
+for (i in 1:nrow(coded_xls)) {  ##
+  ## to get a list of unique SDGs
+  s <- coded_xls$sdg[i] %>% strsplit(x = ., split = ',') %>% unlist() %>% unique()
+  print(s)
+  coded_xls$sdg_u[i] = paste(s, collapse = ',')
+  
+}
+
+coded_xls1 <- coded_xls %>%
+  dplyr::mutate(test = paste('SDG', seq(1,17), collapse = ',', sep = ''))
+
+
+### split one column to multiple ------------------
+library(splitstackshape)
+coded_xls2 <- cSplit(indt = coded_xls1, splitCols = 'test', sep = ",", direction = "wide", drop = T) %>%
+  dplyr::rename(id = sdg) %>%
+  dplyr::mutate(id = row_number()) ## v  = sdg_u %>% strsplit(., ',')
+
+
+## one `SDG` for a column, if match, return 1, otherwise 0 for each SDG ----------------------------
+names(coded_xls2)
+
+coded_xls3 <- coded_xls2 %>%
+  gather(key = 'sdg', value = 'sdg_v', test_01:test_17) %>%
+  dplyr::mutate(flag = ifelse(str_detect(string = sdg_u, pattern = paste0(sdg_v, '\\b')), 1, 0)) %>%
+  dplyr::select(-sdg_v) %>%
+  spread(key = 'sdg', value = 'flag') %>%
+  dplyr::rename(SDG_target = sdgs) %>%
+  dplyr::select(-sdg_u, -id) %>%
+  as.data.frame()
+
+names(coded_xls3) <- c("Statement", "SDG_target", paste0('SDG', seq(1,17)))
+
+writexl::write_xlsx(coded_xls3, path = paste0('./Data/data_TextMining/coded_Cemex_inspection.xlsx'))
 ```
 
 
@@ -632,11 +610,16 @@ coded_check <- coded %>%
 
 ## Final result
 
-Format to match the dataset.
-
+  Format to match the UNGSII dataset.
+  
+```
 |company name| SDG ID| n_statements|
 
-```{r}
+```
+
+```{r - Stats and plot}
+
+
 # get sums for each SDG
   # colSums(corpus$SDG1)
 
@@ -648,7 +631,7 @@ coded_sdgs <- as.vector(unlist(coded['sdgs'])) %>%
 # coded_sdgs
 
 
-# table formatting ---------------------------------------------------------------------------------
+### table formatting ---------------------------------------------------------------------------------
 coded_sdgs <- unlist(strsplit(coded_sdgs, split = "\\,")) %>% trimws();
   
 coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
@@ -662,12 +645,143 @@ coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
 
 
 coded_sdgs_df %>%
-  ggplot() +
-  geom_col(aes(x = coded_sdgs, y = n_statements)) +
-  geom_text(aes(x = coded_sdgs, y = n_statements + 8, label = n_statements), size = 8, color = 'red') +
+  ggplot(aes(x = fct_rev(coded_sdgs))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y') +
+  coord_flip() +
   theme_bw() +
-  facet_wrap(~goal) +
-  coord_flip()
+  ylab('Number of SDG statements') + xlab('')
+### --> this figure only presents what were detected, but some SDGs without match won't be shown. 
+
+
+### Force to list all 17 SDGs and 169 Targets ------------------------------------------------------
+source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
+
+goals_df <- ls_un_id %>%
+  dplyr::select(goalname, target_id_un, target_id_un2) %>%
+  # group_by(goalname) %>%
+  # arrange(goalname, target_id_un2) %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un),
+                target_id_un = paste0('SDG', target_id_un)) %>%
+  dplyr::mutate(id = row_number()) %>%
+  dplyr::mutate(target_id_un = factor(target_id_un, levels = unique(target_id_un)),
+                target_id_un = reorder(target_id_un, id)) %>%
+  as.data.frame()
+
+### merge data 
+coded_sdgs_df1 <- merge(coded_sdgs_df, goals_df, 
+                        by.x = c('goal', 'coded_sdgs'), by.y = c('goalname', 'target_id_un'), all = T) %>%
+  dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
+  arrange(goal, id) %>%
+  dplyr::mutate(id = row_number()) %>%
+  dplyr::mutate(coded_sdgs = gsub('general', 'g', coded_sdgs),
+                coded_sdgs = factor(coded_sdgs, levels = unique(coded_sdgs)),
+                coded_sdgs = reorder(coded_sdgs, id)) %>%
+  as.data.frame()
+
+str(coded_sdgs_df1)
+
+### plot
+coded_sdgs_df1 %>%
+  ggplot(aes(x = fct_rev(coded_sdgs))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y', ncol = 6) +
+  coord_flip() +
+  theme_bw() +
+  ylab('Number of SDG statements') + xlab('')
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', comp_name, '_coded_machine_update', '.jpg'); fname
+ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in', dpi = 300)
+```
+
+
+
+
+```{r - Compare with UNGSII}
+comp_name <- 'CEMEX'
+xls <- paste0('./Data/data_TextMining/df_', comp_name, '_reference.xlsx'); xls
+human <- readxl::read_excel(xls) 
+
+cols_selected <- names(human)[1:6]; cols_selected
+
+
+
+  
+human_format <- human %>%  
+  ### some duplicated Target ids ---
+  ungroup() %>%
+  group_by(Company, iso3, goal_id, Target_id, target_id, goal) %>%
+  dplyr::summarise(n_statements = sum(n_statement, na.rm = T)) %>%
+  dplyr::filter(goal_id != 'SDGs') %>%
+  dplyr::mutate(target = gsub('\\.', '_', Target_id),
+                target = paste0('SDG', target)) %>%
+  ### link with all SDG and targets
+  merge(., goals_df,
+        by.x = c('goal', 'target'), by.y = c('goalname', 'target_id_un'), all = T) %>%
+  dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
+  arrange(goal, id) %>%
+  dplyr::mutate(id = row_number()) %>%
+  # arrange(goal, id) %>%
+  dplyr::mutate(target = factor(target, levels = unique(target)),
+                target = reorder(target, id)) %>%
+  as.data.frame()
+
+human_format %>%
+  ggplot(aes(x = fct_rev(target))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y', ncol = 6) +
+  coord_flip() +
+  theme_bw() +
+  theme(strip.background = element_rect(fill="orange")) +
+  ylab('Number of SDG statements') + xlab('')
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', comp_name, '_coded_human', '.jpg'); fname
+ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in', dpi = 300)
+```
+
+
+
+```{r - ?}
+# get sums for each SDG
+  # colSums(corpus$SDG1)
+
+
+# coded_sdgs <- dplyr::pull(coded, sdgs)   ## the same as below one
+coded_sdgs <- as.vector(unlist(coded['sdgs_n'])) %>%
+  paste(sep = " ", collapse = " ")
+
+# coded_sdgs
+
+
+# table formatting ---------------------------------------------------------------------------------
+coded_sdgs <- unlist(strsplit(coded_sdgs, split = "\\,")) %>% trimws();
+  
+coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
+  dplyr::filter(coded_sdgs != '') %>%
+  separate(col = coded_sdgs, into = c('goal', 'target_id'), sep = '_', remove = F) %>%
+  dplyr::mutate(goal_id   = as.numeric(gsub("\\D", "", goal)),
+                target_id = gsub('^.{3}', "", coded_sdgs)) %>%
+  separate(col = target_id, into = c('target_id', 'target_n'), sep = '-', remove = F) %>%
+  dplyr::mutate(target_n = as.numeric(target_n),
+                n_total  = Freq * target_n) %>%
+  arrange(goal_id, target_id) %>%
+  group_by(goal, goal_id, target_id) %>%
+  dplyr::summarise(n_statements = sum(n_total, na.rm = T))  %>%
+
+  # dplyr::select(1:2, goal_id, everything()) %>%
+  # dplyr::rename(n_statements = n_total) %>%
+  as.data.frame()
+
+sum(coded_sdgs_df$n_statements)
+
+coded_sdgs_df %>%
+  ggplot(aes(x = fct_rev(target_id))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements + 2, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y') +
+  coord_flip() +
+  theme_bw()
 ```
 
 
@@ -677,9 +791,7 @@ coded_sdgs_df %>%
 
 
 
-
-
-
+# --------------------------------------------------------------------------------------------------
 # SI - helper code
 
 ## matching keywords and putting a word in a column.
