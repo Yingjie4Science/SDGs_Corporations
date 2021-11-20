@@ -23,41 +23,7 @@ dir.results <- paste0(dir, '/data_results')
 dir.figures <- paste0(dir, '/figures'); dir.figures
 
 
-### manipulate data #####
-library(dplyr)
-library(tidyverse)
-library(splitstackshape)
-library(reshape2)   ## colsplit
-library(reshape)
-# library(xlsx)
-library(readxl)
-library(writexl)
-## shapefiles
-library(rnaturalearthdata)
-library(rnaturalearth)
-library(sf)
-library(scales)     ## percent
-library(classInt)   ## breaks
-
-### plot #####
-library(cowplot)
-library(ggplot2)
-library(ggpubr)
-library(RColorBrewer)
-## Color Brewer palette
-library(viridis)
-library(hrbrthemes)
-library(devtools)
-# install_github("jokergoo/ComplexHeatmap")
-# library(devtools)
-# library(utils)
-# remove.packages('ComplexHeatmap')
-
-library(ComplexHeatmap)
-# packageVersion('ComplexHeatmap')
-# R.Version()
-
-library(vegan) ## for evenness cal
+source('./Code/_packages.R')
 ```
 
 
@@ -96,9 +62,9 @@ library(writexl)
 # writexl::write_xlsx(x = ls_industry, path = './data_raw/_ls_industry.xlsx')
 
 
-### read in again after clearning up Industry info ----------------------------
+### read in again after cleaning up Industry info ----------------------------
 df.industry <- 
-  readxl::read_excel(path = './data_raw/_ls_industry_manualTidy.xlsx') %>%
+  readxl::read_excel(path = paste0(dir.raw,'/_ls_industry_manualTidy.xlsx')) %>%
   dplyr::select(Industry, ind_agg) %>%
   dplyr::mutate(ind_agg = str_to_title(ind_agg))
 unique(df.industry$ind_agg)
@@ -119,7 +85,7 @@ print(paste0('There are total ', length(unique(df.co2$ind_agg)), ' industries.')
 ## 2.1 Company info by Zilong
 ```{r}
 ### read data from zilong (zl)
-xls <- paste0(dir.raw, '/zilong/zilong5_zhenghe_0612.xls')
+xls <- paste0(dir.raw, '/company_info_Zilong/zilong5_zhenghe_0612.xls')
 excel_sheets(xls)
 sheet <- "Companies"
 zl <- readxl::read_excel(path = xls, sheet = sheet) %>% as.data.frame()

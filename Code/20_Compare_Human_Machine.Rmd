@@ -1,0 +1,86 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "11/9/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+  This script aims to test the alignment of coding results between `machine` and `human`. 
+  
+  - 1st, use `goal` level 
+  
+  - 2nd, use `target` level
+
+
+
+# Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+# remove(list = ls())
+
+dir.raw     <- './Data/data_raw/'
+dir.results <- './Data/data_results/'
+dir.figures <- './Data/figures/';      dir.figures
+
+
+source('./Code/_packages.R')
+library(writexl)
+```
+
+
+# Data
+
+## Data by human
+```{r}
+### load cleaned human coded data
+fname <- paste0(dir.results, 'df.RData'); fname
+load(fname)
+names(df)
+
+
+### load the the of 500 companies selected by UNGSII
+fname <- paste0(dir.raw, '/com_final_500_scr.RData'); fname
+load(fname)
+
+
+### how many coded companies?
+unique(df$Company) %>% length() # --> 356
+
+
+### top 10 committed companies
+df %>%
+  group_by(Company) %>%
+  dplyr::summarise(total = sum(n_statement, na.rm = T)) %>%
+  arrange(desc(total))
+
+
+### save the coded company list to CSV
+com_list_HumanCoded <- df %>%
+  distinct(Company, .keep_all = T) %>%
+  select(Company, iso3, Industry, Region)
+fname <- paste0('./Data/data_TextMining/', 'com_list_HumanCoded.xlsx')
+writexl::write_xlsx(x = com_list_HumanCoded, path = fname)
+
+
+### select one for compare 
+comp_name <- 'Cemex'
+df_x <- df %>%
+  dplyr::filter(Company %in% c(comp_name))
+```
+
+
+## Data by machine
+```{r}
+
+```
+
+
+# Plot
+```{r}
+
+```
+

@@ -1,0 +1,585 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Directories and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+# directories for Yingjie
+  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.results <- './Data/data_results/'
+  dir.figures <- './Data/figures/';      dir.figures
+  dirpath <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+
+# directories for Veronica
+  # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
+  # dir.results <- '../Data/data_results/'                   # VF added another '.'
+  # dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
+
+# load packages
+  source('./Code/_packages.R')
+
+  library(tm)        # text mining: readPDF(), Corpus()
+  library(tidyverse) # piping and wrangling
+  library(tabulizer) # importing PDFs
+  #library(remotes)  # installing from remote repositories
+```
+
+
+## Helper data
+```{r - UN SGD target list}
+source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
+
+goals_df <- ls_un_id %>%
+  dplyr::select(goalname, target_id_un, target_id_un2) %>%
+  # group_by(goalname) %>%
+  # arrange(goalname, target_id_un2) %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un),
+                target_id_un = paste0('SDG', target_id_un)) %>%
+  dplyr::mutate(id = row_number()) %>%
+  dplyr::mutate(target_id_un = factor(target_id_un, levels = unique(target_id_un)),
+                target_id_un = reorder(target_id_un, id)) %>%
+  as.data.frame()
+```
+
+
+
+# Data imports
+
+## PDF to clean TXT
+  
+  Conversion to text --> and save .txt with name from list and move to another folder. 
+  
+```{r eval=FALSE, include=FALSE}
+
+### Custom function
+convertpdf2txt <- function(dirpath){
+  files <- list.files(dirpath, pattern = '*.pdf$', ignore.case = T, full.names = T); files
+  for (pdf in files) {
+    
+    ## --> read and clean the pdf ---------------------------------------------------------------- #
+    txt <- tabulizer::extract_text(file = pdf) %>%
+      iconv("UTF8", "ASCII", "") %>% # change encoding
+      paste(sep = " ") %>%
+      stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
+      stringr::str_replace_all(fixed("\r"), " ") %>% # erase carriage return
+      stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
+      stringr::str_replace_all(fixed("\""), " ") %>% # erase "
+      paste(sep = " ", collapse = " ") %>%
+      stringr::str_squish() %>%             # remove leading & trailing whitespace, and repeated whitespace inside a string
+      stringr::str_replace_all("- ", "")    # fix incomplete words continuing to next line
+    
+    ## --> get company name 
+    company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
+    
+    ## --> save as local TXT file 
+    # TXTname <- paste0(dirpath, company_name[1], '.txt'); print(TXTname)
+    # writeLines(txt, TXTname)
+    ## --> save as r data 
+    fname <- paste0(dirpath, 'TXT/', company_name[1], '.RData'); print(fname)
+    save(txt, file = fname)
+    
+    ## --> text to DF ---------------------------------------------------------------------------- #
+    # separate the large character chunk to short sentences by
+    #    '.' (period), ';' (semicolon), ':' (colon), and '/ ' (slash with space)
+    txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: ")) %>% trimws()      ## without ',' (comma)
+    txt_sentence_df <- data.frame(statement = txt_sentence) %>%
+      dplyr::mutate(id = row.names(.) %>% as.numeric(),
+                    statement = as.character(statement)) %>%
+      as.data.frame()
+    ## --> save as r data
+    fname <- paste0(dirpath, 'DF/',  company_name[1], '.RData'); print(fname)
+    save(txt_sentence_df, file = fname)
+    }
+}
+
+### test code
+convertpdf2txt(dirpath = dirpath)
+```
+
+
+
+
+# 1. Load cleaned data
+
+  This requires pattern searching where every sentence has to end with a period (.) 
+  Limitations/problems for: figure text, bullet points, anything without a period.
+
+```{r}
+dirpath <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+
+## 1. load the `txt` data
+# ls <- list.files(path = paste0(dirpath, 'TXT/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
+
+
+## 2. load the `txt to df` data
+ls <- list.files(path = paste0(dirpath, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
+
+# f <- ls[1]
+# load(f)
+
+```
+
+
+
+# 2. SDG search terms
+
+  This collection includes terms that are *directly* related to SDGs, i.e., if companies specifically mention SDG ids (e.g., 'SDG 13'), or the target or indicator ids (e.g., SDG 13.1.a). 
+  
+|SDG_id       |SDG_keywords     |
+|SDG1_1       |keywords here    |
+  
+```{r - Collection - direct commit}
+source('./Code/helper_SDG_search_terms.R')
+
+SDG_keys <- rbind(goal_keys, target_keys)
+
+SDG_ls_str <- SDG_keys$SDG_id %>% as.character(); SDG_ls_str
+
+```
+
+
+
+  This collection includes terms that are *indirectly* related to SDGs, i.e., the terms are constructed based on the alignment to the description and meanings of each SDG or Target. 
+  
+```{r - Collection - indrect commit}
+source('./Code/helper_SDG_search_terms.R')
+
+### bind these vectors and make it a dataframe to work from ----------------------------------------
+SDG_ls_str <- ls(pattern = "SDG[0-9].*") %>% sort(); SDG_ls_str
+
+SDG_ls_str <- grep("['xyzw]", SDG_ls_str, value = TRUE, invert = TRUE) # invert = TRUE means to return the values that were not matched.
+SDG_ls_str
+
+SDG_keys <- data.frame()  
+
+for (i in 1:length(SDG_ls_str) ) {
+  # print(i)
+  sdg_i_str <- SDG_ls_str[i]
+  sdg_i_obj <- get(sdg_i_str)
+  df_i <- data.frame(SDG_id       = sdg_i_str, 
+                     SDG_keywords = sdg_i_obj)
+  SDG_keys <- rbind(SDG_keys, df_i) %>%
+    dplyr::mutate(SDG_id       = as.character(SDG_id),
+                  SDG_keywords = as.character(SDG_keywords))
+}
+```
+
+
+
+
+# 3. Code TM  
+
+  To match the keywords to each corpus and format results
+
+  Add columns to see how many have comments using these terms.
+  Here are the options:
+  1. for every row in the corpus (ideally only 1 sentence in each row), have a column 1-17 and 1/0 or y/n if matching the SDG.
+    - this would be a for-loop and i 1:17 is linked to the columns being filled
+  2. for entire corpus, extract rows (ideally only 1 sentence at a time) that match only 1 SDG.
+    - this would be a for-loop and i 1:17 is a new vector to be added to a list (17 of them)
+
+## To code
+```{r - Function 1 - code}
+
+## 1. This function will be used to identify matches ############################################# #
+
+# THIS CODE IS TO IDENTIFY MATCHING ROWS, BUT IT DOES NOT EXTRACT SENTENCES
+# in the original dataframe, if it matches, then in a new column, say yes; if not, say no.
+
+func_tm_code <- function(txt_sentence_df) {
+  
+  code <- txt_sentence_df %>% 
+    dplyr::mutate(#match   = 0,      
+                  sdgs    = '', ## for later use, to append data to this column
+                  n_total = 0,
+                  sdgs_n  = '')
+  
+  for (i in 1:nrow(SDG_keys)){                ## all SDG indicators
+      sdg_i_str <- SDG_keys$SDG_id[i]         ## the SDG id name
+      sdg_i_obj <- SDG_keys$SDG_keywords[i]   ## the corresponding SDG search term list
+      
+      print(sdg_i_str)
+      # print(sdg_i_obj)
+      
+      code <- code %>% as.data.frame() %>%
+        ## at the sentence level - count once ----------------------
+        dplyr::mutate(
+          match = ifelse(
+            grepl(pattern = sdg_i_obj, x = statement, ignore.case = T, perl = T), 1, 0))  %>% ## yes-1 or no-0 if they match
+        dplyr::mutate(sdgs = ifelse(match > 0, paste0(sdgs, ',', sdg_i_str), sdgs)) %>%
+        
+        ## at the sentence level - count all matches ---------------
+        dplyr::mutate(
+          n       = str_count(string = statement, regex(pattern = sdg_i_obj, ignore_case = T)),
+          n_total = n_total + n,
+          sdgs_n  = ifelse(n > 0, paste0(sdgs_n, ',', sdg_i_str, '-', n), sdgs_n)) %>%
+        as.data.frame()
+  }
+  
+  
+  ### sort from most SDG hits to least (or, none)
+  coded <- code %>% arrange(desc(nchar(sdgs)), id)
+  
+  ### save all the hits to xlsx for easier inspection. 
+  # fname <- paste0(dirpath, 'DF_coded/', com_name, '_coded.xlsx'); fname
+  # writexl::write_xlsx(x = coded, path = fname)
+  fname <- paste0(dirpath, 'DF_coded/', com_name, '_coded.csv'); fname
+  readr::write_csv(x = coded, file = fname)
+  fname <- paste0(dirpath, 'DF_coded/', com_name, '_coded.RData'); fname
+  save(coded, file = fname)
+  
+  return(coded)
+
+}
+```
+
+
+
+
+  To Inspect 
+
+  Inspect and tune mining results
+  
+  Manual edits?? Go back to the SDG keyword strings and edit there first. The duplicate SDGs should be the ones that are inspected to make sure that keywords are being used correctly. But overlap is okay if the sentences actually do talk about >1 SDG.
+```{r}
+
+```
+
+
+
+
+```{r - Function 2 - format results}
+
+func_format <- function(coded) {
+  
+  ### --> pull out the column with coded results
+  # coded_sdgs <- dplyr::pull(coded, sdgs)   ## the same as below one
+  coded_sdgs <- as.vector(unlist(coded['sdgs'])) %>%
+    paste(sep = " ", collapse = " ")
+  # coded_sdgs
+  
+  
+  ### --> format it as a DF 
+  coded_sdgs <- unlist(strsplit(coded_sdgs, split = "\\,")) %>% trimws();
+    
+  coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
+    dplyr::filter(coded_sdgs != '') %>%
+    separate(col = coded_sdgs, into = c('goal', 'target_id'), sep = '_', remove = F) %>%
+    dplyr::mutate(goal_id   = as.numeric(gsub("\\D", "", goal)),
+                  target_id = gsub('^.{3}', "", coded_sdgs)) %>%
+    arrange(goal_id, target_id) %>%
+    dplyr::select(1:2, goal_id, everything()) %>%
+    dplyr::rename(n_statements = Freq)
+  
+  
+  
+  ### --> The above data only presents what were detected, but some SDGs without match won't be shown. 
+  ### --> Force to list all 17 SDGs and 169 Targets
+
+  
+  ### --> merge data 
+  coded_sdgs_df_format <- merge(coded_sdgs_df, goals_df, 
+                          by.x = c('goal', 'coded_sdgs'), by.y = c('goalname', 'target_id_un'), all = T) %>%
+    dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
+    arrange(goal, id) %>%
+    dplyr::mutate(id = row_number()) %>%
+    dplyr::mutate(coded_sdgs = gsub('general', 'g', coded_sdgs),
+                  coded_sdgs = factor(coded_sdgs, levels = unique(coded_sdgs)),
+                  coded_sdgs = reorder(coded_sdgs, id)) %>%
+    as.data.frame()
+  
+  # str(coded_sdgs_df_format)
+  return(coded_sdgs_df_format)
+
+}
+
+```
+
+
+
+## Batch run
+```{r}
+
+dfs <- data.frame()
+
+for (f in ls) {
+  # print(f)
+  com_name <- gsub('\\.RData', '', basename(f)); print(com_name)
+  load(f)
+
+  coded <- func_tm_code(txt_sentence_df = txt_sentence_df)
+
+  d <- func_format(coded = coded)
+  d$company = com_name
+
+  dfs <- rbind(dfs, d)
+
+}
+
+
+### save all the hits to xlsx for easier inspection. 
+fname <- paste0(dirpath, 'DF_coded_results/coded_dfs.xlsx');  fname
+writexl::write_xlsx(x = dfs, path = fname)
+fname <- paste0(dirpath, 'DF_coded_results/coded_dfs.RData'); fname
+save(dfs, file = fname)
+```
+
+
+
+
+
+# 4. Compare to Human
+
+## machine-coded 
+
+aggregate
+```{r}
+
+## load data
+fname <- paste0(dirpath, 'DF_coded_results/coded_dfs.RData'); fname
+load(fname)
+
+## machine-coded data
+dfs_m <- dfs %>%
+  dplyr::rename(target = coded_sdgs)
+
+
+## company list
+com_ls <- unique(dfs_m$company); com_ls
+
+```
+
+
+
+
+
+## human coded at UNGSII
+```{r }
+
+## human-coded data
+fname <- paste0(dir.results, 'df.RData'); fname
+load(fname)
+
+dfs_human <- df
+
+names(dfs_h)
+
+
+## a subset of data
+# company_name <- 'Cemex'
+# xls <- paste0('./Data/data_TextMining/df_', company_name, '_reference.xlsx'); xls
+# human <- readxl::read_excel(xls) 
+# cols_selected <- names(human)[1:6]; cols_selected
+
+
+dfs_h <- dfs_human %>%  
+  dplyr::filter(Company %in% com_ls) %>%
+  ### some duplicated Target ids ------------------------------
+  ungroup() %>%
+  group_by(Company, iso3, goal_id, Target_id, goal) %>%
+  dplyr::summarise(n_statements = sum(n_statement, na.rm = T)) %>%
+  dplyr::filter(goal_id != 'SDGs') %>%
+  dplyr::mutate(target = gsub('\\.', '_', Target_id),
+                target = paste0('SDG', target)) %>%
+  ### link with all SDG and targets ---------------------------
+  merge(., goals_df,
+        by.x = c('goal', 'target'), by.y = c('goalname', 'target_id_un'), all = T) %>%
+  dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
+  arrange(goal, id) %>%
+  dplyr::mutate(id = row_number()) %>%
+  # arrange(goal, id) %>%
+  dplyr::mutate(target = factor(target, levels = unique(target)),
+                target = reorder(target, id)) %>%
+  dplyr::rename_all(tolower) %>%
+  as.data.frame()
+```
+
+
+## compare
+```{r}
+names(dfs_m)
+names(dfs_h_format)
+
+
+dfs_m_format <- dfs_m %>% 
+  dplyr::select(company, goal, target, n_statements) %>%
+  group_by(company, goal, target) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T))%>%
+  dplyr::mutate(coder = 'machine')
+
+dfs_h_format <- dfs_h %>% 
+  dplyr::select(company, goal, target, n_statements) %>%
+  group_by(company, goal, target) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T)) %>%
+  dplyr::mutate(coder = 'human')
+
+dfs_2 <- rbind(dfs_m_format, dfs_h_format) %>%
+  dplyr::filter(!is.na(company))
+```
+
+
+
+
+
+```{r - target level}
+dfs_2_w <- dfs_2 %>%
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%  ## remove SDG general 
+  spread(key = 'coder', value = 'n')
+
+
+### plot correlation 
+dfs_2_w %>%
+  ggplot(aes(x = human, y = machine, color = company)) +
+  geom_point(show.legend = F) +
+  geom_smooth(method = 'loess', formula = y~x, show.legend = F) +
+  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  facet_wrap(~company, scales = 'free') +
+  theme_bw()
+
+
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'compare_human_machine_target1.png'); fname
+ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+
+```
+
+
+
+```{r - goal level}
+
+dfs_2_w_goal <- dfs_2 %>%
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%  ## remove SDG general 
+  ungroup() %>%
+  group_by(company, goal, coder) %>%
+  dplyr::summarise(n = sum(n, na.rm = T)) %>%
+  spread(key = 'coder', value = 'n') %>%
+  as.data.frame()
+
+
+### plot correlation 
+dfs_2_w_goal %>%
+  ggplot(aes(x = human, y = machine, color = company)) +
+  geom_point(show.legend = F) +
+  geom_smooth(method = 'loess', formula = y~x, show.legend = F) +
+  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  geom_abline(slope = 1, linetype = 'dashed', color = 'red', size = 1, show.legend = F) +
+  facet_wrap(~company, scales = 'free') +
+  theme_bw()
+
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'compare_human_machine_goal_log.png'); fname
+ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+```
+
+
+
+
+
+```{r - single company}
+company_name <- 'Cemex'
+
+### machine ----------------------------------------
+dfs_m %>%
+  dplyr::filter(company == company_name) %>%
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%  ## remove SDG general 
+  ggplot(aes(x = fct_rev(target))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y', ncol = 6) +
+  coord_flip() +
+  theme_bw() +
+  # ggtitle(company_name) +
+  ylab('Number of SDG statements') + xlab('')
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', company_name, '_coded_machine1.png'); fname
+ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in', dpi = 300)
+
+
+
+### human ------------------------------------------
+dfs_h %>%
+  dplyr::filter(company == company_name) %>%
+  ggplot(aes(x = fct_rev(target))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y', ncol = 6) +
+  coord_flip() +
+  theme_bw() +
+  # ggtitle(company_name) +
+  theme(strip.background = element_rect(fill="orange")) +
+  ylab('Number of SDG statements') + xlab('')
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', company_name, '_coded_human1.png'); fname
+# ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in', dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+```{r - ?}
+# get sums for each SDG
+  # colSums(corpus$SDG1)
+
+
+# coded_sdgs <- dplyr::pull(coded, sdgs)   ## the same as below one
+coded_sdgs <- as.vector(unlist(coded['sdgs_n'])) %>%
+  paste(sep = " ", collapse = " ")
+
+# coded_sdgs
+
+
+# table formatting ---------------------------------------------------------------------------------
+coded_sdgs <- unlist(strsplit(coded_sdgs, split = "\\,")) %>% trimws();
+  
+coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
+  dplyr::filter(coded_sdgs != '') %>%
+  separate(col = coded_sdgs, into = c('goal', 'target_id'), sep = '_', remove = F) %>%
+  dplyr::mutate(goal_id   = as.numeric(gsub("\\D", "", goal)),
+                target_id = gsub('^.{3}', "", coded_sdgs)) %>%
+  separate(col = target_id, into = c('target_id', 'target_n'), sep = '-', remove = F) %>%
+  dplyr::mutate(target_n = as.numeric(target_n),
+                n_total  = Freq * target_n) %>%
+  arrange(goal_id, target_id) %>%
+  group_by(goal, goal_id, target_id) %>%
+  dplyr::summarise(n_statements = sum(n_total, na.rm = T))  %>%
+
+  # dplyr::select(1:2, goal_id, everything()) %>%
+  # dplyr::rename(n_statements = n_total) %>%
+  as.data.frame()
+
+sum(coded_sdgs_df$n_statements)
+
+coded_sdgs_df %>%
+  ggplot(aes(x = fct_rev(target_id))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements + 2, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y') +
+  coord_flip() +
+  theme_bw()
+```

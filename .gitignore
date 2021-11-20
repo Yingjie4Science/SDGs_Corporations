@@ -33,13 +33,20 @@ Data/*
 !Data/data_TextMining/
 Data/data_TextMining/*.docx
 Data/data_TextMining/ref/*
+Data/data_TextMining/annual_reports/pdfs/
+Data/data_TextMining/annual_reports/txt_cleaned/
+WordNet/
+text2sdg/
+TXT/
 
 MS/*
 Refs/*
-.gitignore
+*gitignore
 #*.Rproj
 test_*
 *.zip
+*.lnk
+*.tmp
 
 
 
