@@ -30,49 +30,10 @@ dir.results <- './Data/data_results/'
 dir.figures <- './Data/figures/';      dir.figures
 
 
-### manipulate data #####
-library(dplyr)
-library(plyr)
-library(tidyverse)
-library(splitstackshape)
-library(reshape2)   ## colsplit
-library(reshape)
-# library(xlsx)
-library(readxl)
+source('./Code/_packages.R')
 library(writexl)
-## shapefiles
-library(rnaturalearthdata)
-library(rnaturalearth)
-library(sf)
-library(scales)     ## percent
-library(classInt)   ## breaks
-
-### plot #####
-library(cowplot)
-library(ggplot2)
-library(ggpubr)
-library(RColorBrewer)
-## Color Brewer palette
-library(viridis)
-library(hrbrthemes)
-library(devtools)
-# install_github("jokergoo/ComplexHeatmap")
-# library(devtools)
-# library(utils)
-# remove.packages('ComplexHeatmap')
-
-library(ComplexHeatmap)
-# packageVersion('ComplexHeatmap')
-# R.Version()
-
-library(vegan) ## for evenness cal
-
-library(countrycode)
-library(knitr)           ## generate a fancy table
-library(kableExtra) ## generate a fancy table
 
 ```
-
 
 
 ```{r Theme and font}
@@ -124,516 +85,65 @@ theme_map_legend2 <- theme_map +
   theme(legend.position = c(0.7, 0.11))
 ```
 
+
+
+```
 #  1.  Data
+
 ## 1.1 SDG info
-###  - Data cleaning
-#### - goal level
-```{r message=FALSE, warning=FALSE, include=FALSE}
-
-## main data read in
-getwd()
-xls   <- paste0(dir.raw, 'UNGSII/Yingjie_data_02242020_YL.xlsx'); xls
-excel_sheets(xls)
-sheet <- '2018 detailed data'
-df0 <- readxl::read_excel(path = xls, sheet = sheet) %>% as.data.frame()
-
-
-## data cleaning - goal level --------------------------------------------------
-names(df0)
-str(df0)
-names(df0) <- c("Company", "Region", "Target", "SDG", 'n_statement' )
-# unique(df0$Target)
-unique(df0$SDG)
-
-n_sdg    <- length(unique(df0$SDG)) -2; n_sdg
-n_target <- length(unique(df0$Target)); n_target
-print(paste0('There are total ', n_sdg,    ' goals.'))
-print(paste0('There are total ', n_target, ' SDG targets.'))
-
-
-### split the goal id and description into 2 cols
-# df_splt <- colsplit(df0$SDG, pattern = ' ', c('goal', 'goal_desc'))
-# df1 <- cbind(df0, df_splt) 
-
-
-df1 <- separate(data = df0, col = SDG, sep = " ", remove = F, 
-                    extra = 'merge',
-                    into = c('goal', 'goal_desc')) %>%
-  # dplyr::mutate(Target = gsub('\\(', '', Target),
-  #               Target = gsub('\\)', '', Target)) %>%
-  # dplyr::mutate(Target = trimws(Target)) %>%
-  as.data.frame()
-
-
-# sort(unique(df1$goal))
-df1$goal <- factor(df1$goal, levels = c(paste0('SDG', seq(1, 17)), 'SDG', 'noSDG'))
-levels(df1$goal)
-```
-
-
-#### - target level
-  Since there is no Target ID in the raw dataset. The author mannully coded the target ID based on the description from UN's SDG indicator list, and then left join the coded target ID to the raw dataset.
-  
-```{r message=FALSE, warning=FALSE, include=FALSE}
-
-### Tidy target and add numbered ID --------------------------------------------
-ls_target_df1 <- df1 %>% distinct(SDG, Target) %>% arrange(SDG, Target)
-# writexl::write_xlsx(x = ls_target_df1, path = './data_raw/_ls_goal_target.xlsx')
-ls_target <- readxl::read_xlsx(path = './Data/data_raw/_ls_goal_target_manualTidy.xlsx',
-                               sheet = 1) %>%
-  dplyr::select(Target_id, Target) %>%
-  # dplyr::mutate(Target = gsub('\\(', '', Target),
-  #               Target = gsub('\\)', '', Target)) %>%
-  # dplyr::mutate(Target = trimws(Target)) %>%
-  separate(col = Target_id, into = c('goal_id', 'target_id'), sep = '\\.', remove = F) %>%
-  as.data.frame()
-
-##### when read xls not works, turn to csv
-# ls_target <- read.csv('./data_raw/_ls_goal_target_manualTidy.csv', 
-#                       stringsAsFactors = F) %>%
-#   dplyr::select(Target_id, Target) %>%
-#   dplyr::mutate(Target = gsub('\\(', '', Target),
-#                 Target = gsub('\\)', '', Target)) %>%
-#   dplyr::mutate(Target = trimws(Target)) %>%
-#   separate(col = Target_id, into = c('goal_id', 'target_id'), sep = '\\.', remove = F) 
-str(ls_target)
-
-
-### UN Goal and Target list -----------------------------------------------------
-library(reshape2)
-ls_un <- read.csv('./Data/data_raw/_ls_un_goal_target.csv', 
-                      stringsAsFactors = F) %>%
-  filter(!is.na(GoalID)) %>%
-  tidyr::separate(Targets, c('target_id_un', 'target_desc_un'), 
-           sep = ' ', extra = 'merge', remove = T)
-str(ls_un)
-ls_un_id <- ls_un %>%
-  select(GoalID, target_id_un) %>%
-  separate(target_id_un, c('target_id_un1', 'target_id_un2'), 
-           sep = '\\.', remove = F) %>%
-  select(-target_id_un1) %>%
-  mutate(goalname = paste0('SDG', GoalID))
-str(ls_un_id)
-ls_un_id$goalname <- factor(
-  x = ls_un_id$goalname, levels = unique(ls_un_id$goalname))
-
-
-### merge data ------------------------------------------------------------------------
-names(df1)
-str(df1)
-df1.2 <- 
-  # left_join(x = df1, y = ls_target, by ='Target') %>%
-  merge(x = df1, y = ls_target, by.x = 'Target', by.y = 'Target', all.x = T) %>%
-  ungroup() %>%
-  arrange(!is.na(Target_id), goal, Target_id) #%>%
-  ### check on any duplicated records as I re-coded Target to Target_id
-  # dplyr::count(Company, Target_id) %>%
-head(df1.2, 10)
-### unique target description in the original data set --------------------------------
-target_desc <- df1.2 %>% dplyr::select(#Company, goal, 
-                                       Target_id, Target) %>%
-  distinct(Target_id, .keep_all = T)
-  
-
-###   Because I further coded the target ids (i.e., 'Target_id') based on the raw data (i.e., 'Target'), it is necessary to summarize the data and keep unique 'Target_id' and 'n_statement'. 
-df2 <- df1.2 %>%
-  dplyr::group_by(Company, Region, 
-                  Target,  ## this has been re-coded
-                  SDG, 
-                  # n_statement,
-                  goal, goal_desc, Target_id, goal_id, target_id) %>%
-  dplyr::summarise(n_statement = sum(n_statement, na.rm = T)) %>%
-  
-  # mutate(id = seq.int(nrow(.))) %>%
-  arrange(goal, Target_id)
-
-
-# unique(df2$n)
-names(df2)
-unique(df2$goal)
-
-df2_na <- df2 %>% dplyr::filter(is.na(Target_id)); df2_na
-##### find out the ones not match well with the target ids and then add to the manual coding xls - "_ls_goal_target_manualTidy.xlsx"
-# writexl::write_xlsx(x = df2_na, path = './data_raw/_ls_goal_target_na_notMatch.xlsx')
-
-hist(df2$n_statement)
-# boxplot(df2$n_statement)
-
-```
-
-
 
 ## 1.2 Company info cleaning
-### - company info
-```{r message=FALSE, warning=FALSE, include=FALSE}
-## company info - all 700+
-xls <- paste0(dir.raw, 'UNGSII/Yingjie_Companies_190930_updateYL.xlsx')
-excel_sheets(xls)
-sheet <- "Companies"
-com0 <- readxl::read_excel(path = xls, sheet = sheet)
-names(com0)
-head(com0, 2)
-
-### cleaning data --------------------------------------------------------------
-names(com0) <- c("Company", 'Industry', 'Industry2', 
-                  "Country", 'Continent', 'Location', 'name_long', 'ISIN')
-com1 <- com0 %>% ## create a new name col for the country
-  dplyr::mutate(Country = gsub(' in general', '', Country)) %>%
-  dplyr::select(-c(Industry2, Location, name_long, ISIN))
-
-### detect rows containing NA values in any column 
-com1 %>% filter_all(any_vars(is.na(.))) ## if no NA, then good
-```
-
-
-### - industry info
-```{r message=FALSE, warning=FALSE, include=FALSE}
-### check industry info
-n.industry <- unique(com0$Industry); #n.industry
-print(paste0('There are total ', length(n.industry), ' industries.'))
-
-### number of countries by industry --------------------------------------------
-ls_industry <- com1 %>%
-  group_by(Industry) %>% tally() %>% arrange(n)
-
-## write to local and tidy this list
-library(writexl)
-# writexl::write_xlsx(x = ls_industry, path = './Data/data_raw/_ls_industry.xlsx')
-
-
-### read in again after clearning up Industry info ----------------------------
-df.industry <- 
-  readxl::read_excel(path = paste0(dir.raw, '_ls_industry_manualTidy.xlsx')) %>%
-  # dplyr::select(Industry, ind) %>%
-  dplyr::mutate(ind_agg = str_to_sentence(ind_agg),
-                ind_7sys= str_to_sentence(ind_7sys))
-
-
-### change to factor and add levels
-unique(df.industry$ind_7sys)
-
-ind_levels <- c(
-  "Energy, natural resources, and basic materials", ## primary
-  "Industrial manufacturing",                       ## secondary
-  "Mobility and transportation",
-  "Healthcare and life sciences",                   ## Tertiary
-  "Telecommunications and technology",
-  "Financial services",
-  "Food, beverage, and consumer goods",             ## Quaternary         
-  "Media & entertainment"
-)
-
-ind_labels <- c(
-  'Resources and materials',
-  'Industrial manufacturing',
-  'Mobility and transportation',
-  'Healthcare',
-  'IT and Telecommunications',
-  'Financial services',
-  'Food and consumer goods',
-  'Media & entertainment'
-)
-
-df.industry <- df.industry  %>%
-  dplyr::mutate(
-    ## choose one classification sys for analysis
-    ind_7sys = factor(ind_7sys, levels = ind_levels), # , labels = ind_labels
-    ind = ind_7sys) %>%
-  dplyr::select(-n, -id)
-
-
-### add the updated industry info to the company dataframe
-com2 <- merge(com1, df.industry, by = 'Industry', all.x = T)
-str(com2)
-
-```
-
-### - nation name info
-```{r}
-names(com2)
-head(com2, 2)
-
-### save the nation info to local to coding the ISO3
-### 52 countries
-df.ctr <- com2 %>% dplyr::select(Continent, Country) %>%
-  distinct(Country, .keep_all = T) %>%
-  arrange(Country) 
-writexl::write_xlsx(x=df.ctr, path = paste0(dir.raw, '_country_info_raw.xlsx'))
-
-df.ctr.test <- com2 %>% dplyr::filter(Country=='South Africa (Rep.)')
-## change one row using "South Africa" to "South Africa (Rep.)". Raw data error. 
-
-### read in the updated and manually coded country info
-ctr <- readxl::read_excel(path = paste0(dir.raw, '_country_info_raw_iso3.xlsx'), 
-                          range = 'B1:C100') %>%
-  filter(!is.na(Country))
-
-com3 <- com2 %>%
-  merge(., ctr, 'Country', all.x = T) %>%
-  dplyr::mutate(
-    Company = trimws(Company),
-    Continent = ifelse(Company =='Emirates Group', 'Asia', Continent),
-                )
-str(com3)
-```
-
-
-### - final list of 500 + com for coding
-```{r}
-### this is the final list of 500 companies for SDG commitment coding
-com_final <- readxl::read_excel(path = paste0(dir.raw, 'UNGSII/Companies in SCR500.xlsx')) %>%
-  ## unify the company names
-  dplyr::mutate(
-    company_name = gsub('Advanced Card Systems', 'Advanced Card Systems Holdings (ACS)', company_name),
-    # company_name = gsub('Sompo Japan Nipponkoa', 'Sompo Holdings', company_name),
-    company_name = gsub('Standard Bank Group', 'Standard Bank Group Limited', company_name),
-    company_name = gsub('Emirates Airlines', 'Emirates Group', company_name),
-    company_name = gsub('Ab Inbev', 'Anheuser-Busch (AB InBev)', company_name),
-    company_name = gsub('Inditex', 'Industria de Diseno Textil', company_name),
-    company_name = gsub('Amazon', 'Amazon.co', company_name),
-    region = ifelse(company_name=='Emirates Group', 'Asia', region),
-    company_name = trimws(company_name),
-    region       = trimws(region)
-  ) %>% as.data.frame() %>%
-  ## left join with the all companies data table
-  left_join(., com3, by = c('company_name'='Company')) %>%
-  arrange(!is.na(Country), Country)
-  
-
-# sort(unique(com3$Company))
-# str(com3)
-# str(com_final)
-length(unique(com_final$company_name))
-unique(com_final$region)
-
-# if("dplyr" %in% (.packages())){
-#           detach("package:dplyr", unload=TRUE) 
-#           detach("package:plyr", unload=TRUE) 
-# } 
-
-
-
-com_final %>% group_by(company_name) %>% tally(wt = n()) %>% filter(n > 1)
-
-length(unique(com_final$Country))
-
-fname <- paste0(dir.raw, '/com_final_500_scr.RData'); fname
-# save(com_final, file = fname)
-# writexl::write_xlsx(x = com_final, path = paste0(dir.raw, '/com_final_500_scr.xlsx'))
-```
-
 
 ## 1.3 Merge table data
-```{r message=FALSE, warning=FALSE, include=FALSE}
-## bind df.dt and com3
-dfcom <- merge(df2, com3, 'Company', all.x = T) %>% 
-  arrange(Company, goal) #%>%
-  # dplyr::count(Company, Target_id) #%>%
-
-## check NA
-dfcom.na <- dfcom %>% filter_all(any_vars(is.na(.))) 
-df2.na   <- df2   %>% filter_all(any_vars(is.na(.))) 
-dfcom.na <- dfcom %>% 
-  dplyr::select(-target_id) %>%
-  dplyr::filter_all(any_vars(is.na(.))) 
-print(paste0('There are ', length(unique(dfcom.na$Company)), ' missing data!'))
-
-
-### the final dataset
-names(dfcom)
-df <- dfcom %>%
-  dplyr::select(Company, iso3, goal_id, Target_id, target_id, goal,
-                n_statement,
-                goal_desc, 
-                # Target, 
-                ind, Industry, ind_agg, ind_7sys, ind_3,
-                Region, Continent)
-str(df)
-
-### how to normalize the data ???
-ggplot(df, aes(x=n_statement)) + 
-  geom_histogram(binwidth=2) + 
-  ylim(0, 150) +
-  theme_bw()
-
-ggplot(df, aes(y=n_statement)) + 
-  geom_boxplot() + 
-  ylim(0, 50) + theme_bw()
-
-ggplot(df, aes(x=n_statement)) + 
-  geom_density() + theme_bw()
-
-
-### find the intervals for classifying the raw data
-### jenks - will be very slow; quantile - better
-nclass = 10
-# classint_jk <- classIntervals(df$n_statement,n=nclass, style= "jenks");classint_jk
-classint_qt <- classIntervals(df$n_statement,n=nclass, style="quantile");classint_qt
-pal <- c("red", "blue") #'yellow', 
-plot(classint_qt, pal=pal, main="Quantile")
-
-classint    <- classint_qt
-brks <- c(unique(as.integer(classint$brk))); brks
-seqs <- seq(1, length(brks)-1); seqs
-
-```
-
-
-
-### - data for MS
-```{r - Final data}
-### the final version of data input for analysis
-df <- df %>%
-  dplyr::mutate(
-    ns = cut(n_statement, breaks = brks, 
-             labels = NULL, include.lowest = T, 
-             right = F, dig.lab = 3))
-unique(df$ns)
-unique(df$Company) %>% length()
-str(df)
-
-getwd()
-fname <- paste0(dir.results, 'df.RData'); fname
-# save(df, file = fname)
-# load(fname)
-```
-
-
-
-  The world’s 500 largest companies generated USD 32.7 trillion *in revenues* and USD 2.15 trillion in profits in 2018. Together, this year’s Fortune Global 500 companies employ 69.3 million people worldwide and are represented by 34 countries.
-  Fortune Global 500 were ranked by **Revenues**. https://fortune.com/global500/2019/
-
-```{r - Check un-coded companies}
-### which companies do not have data? --------------------------------------------------------------
-com_final_naCheck <- 
-  merge(x = com_final %>% ungroup() %>% dplyr::select(1:6, iso3),  
-        y = df %>% 
-          ungroup() %>% dplyr::select(1:7) %>% dplyr::rename(iso3_2 = iso3) %>% 
-          dplyr::distinct(Company, .keep_all = TRUE), 
-        by.x = 'company_name', by.y = 'Company', all = T) %>%
-  arrange(is.na(goal_id), iso3, company_name, goal_id)
-### save to local for inspection 
-# writexl::write_xlsx(x = com_final_naCheck, path = paste0(dir.raw, '/com_final_naCheck_500SCR.xlsx'))
-
-
-### 
-xls <- paste0(dir.raw, '/company_info_Zilong/zilong5_zong_0612/fortune-Global500Companies-(2019).xlsx')
-com_g500 <- readxl::read_excel(path = xls) %>% 
-  ### fix company names
-  dplyr::mutate(
-    Name = gsub('Alibaba Group Holding', 'Alibaba', Name),
-    Name = gsub('Air France-KLM Group', 'Air France',Name),
-    Name = gsub('Airbus', 'Airbus Group',Name),
-    Name = gsub('Alphabet', 'Alphabet (Google)',Name),
-    Name = gsub('Amazon.com', 'Amazon.co',Name),
-    Name = gsub('América Móvil', 'America Movil',Name),
-    Name = gsub('Anheuser-Busch InBev', 'Anheuser-Busch (AB InBev)',Name),
-    Name = gsub('Banco Bilbao Vizcaya Argentaria', 'Banco Bilbao Vizcaya Argenaria', Name),
-    Name = gsub('Bank of America Corp.', 'Bank of America', Name),
-    Name = gsub('AEON', 'Aeon', Name),
-    
-  ) %>%
-  as.data.frame()
-
-com_final_naCheck_LinkG500 <- 
-  merge(x = com_final_naCheck,  
-        y = com_g500,
-        by.x = 'company_name', by.y = 'Name', all = T) %>%
-  arrange(#Rank,is.na(goal_id), iso3, 
-          company_name, goal_id) %>%
-  as.data.frame()
-
-# writexl::write_xlsx(x = com_final_naCheck_LinkG500, path = paste0(dir.raw, '/com_final_naCheck_LinkG500.xlsx'))
-```
-
-
-```{r - Text mining}
-df_test <- df %>%
-  dplyr::filter(Company %in% c('Apple', 'Amazon.co'))
-
-df_apple <- df %>%
-  dplyr::filter(Company %in% c('Apple'))
-
-
-
-
-
-### report pdf: 
-### - https://investor.apple.com/investor-relations/default.aspx#tabs_content--2019
-### - https://s2.q4cdn.com/470004039/files/doc_financials/2018/q4/10-K-2018-(As-Filed).pdf
-
-
-
-
-```
-
-
-
-
-```{r - Number for MS}
-### To look at the details for MS writing
-d1 <- df1.2 %>% filter(Target_id == '3.c') %>% 
-  left_join(., com3, 'Company') 
-
-d2 <- df1.2 %>% filter(Target_id == '16.6') %>% 
-  left_join(., com3, 'Company') 
-```
 
 ## 1.4 Shapefile data
-```{r include=FALSE}
-
-library(rnaturalearthdata)
-library(rnaturalearth)
-library(sf)
-shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
-  dplyr::select(name, type, iso_a3, economy, income_grp) %>%
-  dplyr::mutate(
-    iso_a3 = ifelse(name == 'Norway', 'NOR', iso_a3),
-    iso_a3 = ifelse(name == 'N. Cyprus', 'CYP', iso_a3),
-    iso_a3 = ifelse(name == 'France', 'FRA', iso_a3))
-# plot(shp['iso_a3'])
-shp_iso_na <- shp %>% 
-  st_drop_geometry() %>%
-  dplyr::filter(is.na(iso_a3))
+```
 
 
-### group info from the shp data
-sort(unique(shp$economy))
-sort(unique(shp$income_grp))
+```
 
-grp <- shp %>% 
-  st_drop_geometry() %>% 
-  ### re-code ctr group
-  mutate(eco_group = case_when(
-    str_detect(economy, "Developed") ~ "1. Developed",
-    str_detect(economy, "Emerging")  ~ "2. Developing",
-    str_detect(economy, "eveloping|Least") ~ "2. Developing",
-    TRUE ~ .$economy
-  ))  %>% 
-  ### re-code income group
-  mutate(inc_group = case_when(
-    str_detect(income_grp, "High")  ~ "1. High income",
-    str_detect(income_grp, "Upper") ~ "2. Upper middle income",
-    str_detect(income_grp, "Lower") ~ "3. Lower middle income",
-    str_detect(income_grp, "Low income") ~ "4. Low income",
-    TRUE ~ .$income_grp
-  )) %>%
-  arrange(!is.na(iso_a3)) %>% ### check missing info and fill the data gap
-  dplyr::mutate(iso_a3 = ifelse(name == 'Norway', 'NOR', iso_a3))
+  df1  (coded data at Goal level)
+   |
+   |   (coded data at target level)
+   |  /
+   v /
+  df2 -----------
+                |               (rename)
+                | ---> dfcom ---------------> `df` (443 coded companies)
+                |
+  com700 --------
+
+
+  `com_final` (508 companies)
+
+```
+
+# 2. Data summary
+
+## - Load data
+```{r}
+
+## 1. coded data: `df1`, `df2`, `df`
+load(file = paste0(dir.results, 'df1_df2.RData'))
+load(file = paste0(dir.results, 'df.RData'))
+
+## 2. company info data: `com_final`
+load(file = paste0(dir.results, 'com_final_500_scr.RData'))
+
+## 3. other helper data
+load(file = paste0(dir.results, 'grp.RData')) ## country income group
+load(file = paste0(dir.results, 'ls_un_id.RData'))
+
 ```
 
 
 
-#     2. Data summary
-##    - Com info
-###   * num of com by region
+## - Com info
+### * num of com by region
 ```{r}
-fname <- paste0(dir.raw, '/com_final_500_scr.RData'); fname
-load(fname)
 
 ## how many companies in total this data? - 356 --------------------------------
-n.com <- 
-  com_final %>%
+n.com <- com_final %>%
   distinct(company_name, .keep_all = T)
 
 ## how many companies in each region or Continent? -----------------------------
@@ -645,7 +155,7 @@ unique(df.test$check)
 
 n.com.region <- n.com %>%
   dplyr::group_by(region) %>% 
-  dplyr::tally(wt = n())
+  dplyr::tally()
 
 ## plot
 (p.n.byRegion <- n.com.region %>%
@@ -654,13 +164,13 @@ n.com.region <- n.com %>%
   geom_text(aes(label = n), hjust = 0.5, vjust = -0.5, size = 2) +
   theme_ns +
   theme(legend.position = "none") +
-  # theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1))+
+  theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1))+
   ylab('Number of companies') + xlab('Region')
   ) 
 
 getwd()
-fname <- paste0(dir.figures, '/number of comp by region_6regions.jpg'); fname
-# ggsave(filename = fname, plot = p.n.byRegion, width = 3, height = 3, units = 'in', dpi = 300)
+fname <- paste0(dir.figures, 'number of comp by region_6regions.jpg'); fname
+ggsave(filename = fname, plot = p.n.byRegion, width = 3, height = 3, units = 'in', dpi = 300)
 ```
 
 
@@ -668,7 +178,7 @@ fname <- paste0(dir.figures, '/number of comp by region_6regions.jpg'); fname
 ```{r}
 ## how many companies in each country ------------------------------------------
 n.com.country <- n.com %>%
-  group_by(iso3, region) %>% tally(wt = n()) %>% 
+  group_by(iso3, region) %>% tally() %>% 
   arrange(iso3, region, n) %>% as.data.frame() %>%
   ungroup() 
 hist(n.com.country$n)
@@ -686,7 +196,8 @@ str(n.com.country)
     # scale_fill_brewer(palette="RdYlBu", direction = -1) + ### best for 4 classes
     theme_ns +
     # theme(legend.position = "none") +
-    theme(legend.position = c(0.1, 0.9),
+    theme(legend.position = c(0.08, 0.85), 
+          legend.key.width = unit(0.5, "lines"), legend.key.height = unit(0.5, "lines"),
           legend.title = element_blank(),
           text = element_text(size=font_size),
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
@@ -701,7 +212,7 @@ ggsave(filename = fname, plot = p.n.byCountry,
 
 
 
-##    - Industry summary
+## - Industry summary
   Industry info in the final data list. 
   
 ### * num of com by ind  (si 2ab)
@@ -720,7 +231,7 @@ palette_ind <- 'YlGnBu'
 num_ind <- length(unique(com_dt$ind_7sys)); num_ind
 (p8 <- com_dt %>% 
   dplyr::group_by(ind) %>% 
-  dplyr::tally(wt = n()) %>% 
+  dplyr::tally() %>% 
   arrange(n) %>%
     ggplot() +
     geom_col(aes(x= reorder(ind, n), y = n, fill = ind), color = 'gray90', show.legend = F) +
@@ -729,7 +240,7 @@ num_ind <- length(unique(com_dt$ind_7sys)); num_ind
     theme_ns +
     ylab('Number of companies') + xlab('Industry')
 )
-print(paste0('There are total ', length(unique(com2$ind)), ' industries.'))
+print(paste0('There are total ', length(unique(com_final$ind)), ' industries.'))
 fname <- paste0(dir.figures, '/num of com by ', num_ind, ' industry_500coms.jpg'); fname
 # ggsave(fname, last_plot(), width = width_2col, height = width_2col/3, units = unit_ns, dpi = 300)
 
@@ -739,7 +250,7 @@ fname <- paste0(dir.figures, '/num of com by ', num_ind, ' industry_500coms.jpg'
 ### doughnut chart with ggplot2 -------------------------------------------------------------
 com_dt8 <- com_dt %>% 
   dplyr::group_by(ind) %>% 
-  dplyr::tally(wt = n()) %>% 
+  dplyr::tally() %>% 
   arrange(n) #%>%
 # Compute percentages
 com_dt8$fraction = com_dt8$n / sum(com_dt8$n)
@@ -805,7 +316,7 @@ fname <- paste0(dir.figures, 'num of com by ', i_ind, ' industry_500.jpg'); fnam
 ggarrange(p8, p24,
           nrow = 2, ncol = 1, align = 'hv', labels = panel_labels, heights = c(1,2.5),
           common.legend = F, legend = 'none')
-fname <- paste0(dir.figures, '/num of com by industry - combined_500__SI 2ab.jpg'); fname
+fname <- paste0(dir.figures, 'num of com by industry - combined_500__SI 2ab.jpg'); fname
 ggsave(fname, plot = last_plot(), 
        width = width_2col, height = width_2col, units = unit_ns, dpi = 300)
 
@@ -1049,14 +560,15 @@ ggsave('./Data/figures/goal_count_box_se.jpg', plot = last_plot(),
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 ### how many companies mentioned the target ############################
 targ_n_com <- df %>%
+  dplyr::mutate(Target_id = gsub('_', '.', Target_id)) %>%
   distinct(Company, goal, Target_id, target_id) %>%
   dplyr::group_by(goal, Target_id, target_id) %>% 
   tally() %>% as.data.frame() %>%
   ### add the full list of SDG targets by UN
-  right_join(., ls_un_id, by=c('Target_id'='target_id_un')) %>%
-  mutate(count = n, 
-         pct = n/total_com) %>% ## total_com = 500
-  select(goalname, goal, Target_id, target_id_un2, count, pct) %>%
+  right_join(., ls_un_id, by = c('Target_id' = 'target_id_un')) %>%
+  dplyr::mutate(count = n, 
+                pct = n/total_com) %>% ## total_com = 500
+  dplyr::select(goalname, goal, Target_id, target_id_un2, count, pct) %>%
   # mutate(count_val = ifelse(is.na(count), 0, count))
   arrange(goal, desc(pct))
 
@@ -1074,14 +586,14 @@ targ_n_com$target_id_un2 <-
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 ### used for making each bar the same width; otherwise, for those SDG with few targets, the width of bars would be very wide. We use a correction factor, i.e., Fac, to change the bar width in the plot. 
 N <- targ_n_com %>%
-  filter(!is.na(goal)) %>%
+  dplyr::filter(!is.na(goal)) %>%
   # ungroup() %>%
   dplyr::group_by(goal) %>%
   # ungroup() %>%
   dplyr::count(goal) %>%
   dplyr::mutate(
-    max = max(.$n),
-    Fac = n/max(.$n)) #%>%
+    max = max(.$n, na.rm = T),
+    Fac = n/max(.$n, na.rm = T)) #%>%
   # dplyr::select(-n)
 
 #### Calculate scaling factor and insert into data frame
@@ -1247,8 +759,7 @@ sdg7 <- df %>% dplyr::filter(goal == 'SDG7') %>% arrange(target_id, n_statement)
 
 ### SDG icons
 getwd()
-image_png <- sort(sample(dir("./Data/data_raw/SDG-Icons-2019_WEB", 
-                            full.names = TRUE), 18))
+image_png <- sort(sample(dir("./Data/data_raw/SDG-Icons-2019_WEB", full.names = TRUE), 18))
 image_png
 img_sur <- "./Data/data_raw/SDG-Icons-2019_WEB/E-WEB-Goal-"
 
@@ -1557,8 +1068,7 @@ ht_goal
 
 ### combine the two parts --------------------------------------------------
 library(ggpubr)
-ht <- ggarrange(ht_goal + 
-                  theme(legend.position = "none"), 
+ht <- ggarrange(ht_goal + theme(legend.position = "none"), 
                 ht_targ, 
   nrow = 1, ncol = 2, labels = '', hjust = -0.5, #widths = c(6.8, 2), 
   widths = c(0.05, 1), font.label = list(size = 5), #vjust = 2,
@@ -1912,7 +1422,7 @@ ggsave(filename = fname,
 ##### - all the 500 companies that they selected
 ```{r}
 #### 1) consider all selected companies --------------------------------------------
-# com_list_all  <- com3 %>% distinct(Company, iso3, Continent, ind)
+# com_list_all  <- com700 %>% distinct(Company, iso3, Continent, ind)
 com_list_all  <- com_final %>% distinct(company_name, iso3, region, Continent, ind)
 
 n.com.country <- com_list_all %>%
@@ -4079,7 +3589,7 @@ ctr_have_data   <- df %>%
 
 ### add the 500 companies selected for coding to the above data
 #### this was wrong, as the selected list is not 700 + companies list
-# ctr_list_all <- com3 %>% distinct(Company, iso3) %>% as.data.frame() %>%
+# ctr_list_all <- com700 %>% distinct(Company, iso3) %>% as.data.frame() %>%
 #   merge(., ctr_have_data, by = 'iso3', all.x = T)
 ctr_list_all <- com_final %>% as.data.frame() %>%
   ungroup() %>%

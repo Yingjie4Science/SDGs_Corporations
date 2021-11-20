@@ -136,7 +136,7 @@ txt2 <- tabulizer::extract_text(file = pdf) %>%
   stringr::str_replace_all("- ", "")    # fix incomplete words continuing to next line
   
 
-### ??? --> cause encoding problems for punctuation in a sentence --> 'This plan is designed to fortify our company<U+9225><U+6A9A> position as a leading global building materials company.'
+### change encoding is needed to fix the encoding problems of punctuation in a sentence --> 'This plan is designed to fortify our company<U+9225><U+6A9A> position as a leading global building materials company.'
 
 # get count of words
   cat('Total words from `tabulizer`:', sapply(strsplit(txt2, " "), length))
@@ -147,19 +147,20 @@ txt2 <- tabulizer::extract_text(file = pdf) %>%
 We will us `tabulizer` since it gives us more words and is cleaner!
 
 ```{r}
-# cleaned txt as input for analysis 
+# cleaned .txt as input for analysis 
   txt <- txt2
 ```
 
 
 ### Organizing files: find, rename and copy and paste to another directory in batch
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 # renaming company PDF file to company name only
-  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
-  TXTname <- paste0(dir.reports, 'txt_cleaned/', company_name[1], '.txt'); TXTname
+company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist(); 
+company_name <- company_name[1]; company_name
+TXTname <- paste0(dir.reports, 'txt_cleaned/', company_name, '.txt'); TXTname
    
-  writeLines(txt, TXTname)
+writeLines(txt, TXTname)
 ```
 
 
@@ -231,11 +232,9 @@ noise_text <- paste('1 Company Overview 2 How We Create Value 3 Our Performance 
 txt <- txt %>%
   stringr::str_replace_all(noise_text, ".")
 
-## separate the large character chunk to short sentences by '.' (period), ';' (semicolon), '/ ' (slash with space)
-txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: |\\, ")) %>% trimws() 
-  
-
-txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: ")) %>% trimws() 
+## separate the large character chunk to short sentences by '.' (period), ';' (semicolon), ':' (colon), and '/ ' (slash with space)
+# txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: |\\, ")) %>% trimws() ## with ',' (comma)
+txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: ")) %>% trimws()      ## without ',' (comma)
 
 
 # get structure
@@ -267,7 +266,7 @@ Make a list of keywords for SDGs.
 |SDG_id       |SDG_keywords     |
 |SDG1_1       |keywords here    |
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 ## make a vector of terms to concatenate with AND
 
 func_AND_vector <- function(v){
@@ -618,8 +617,6 @@ writexl::write_xlsx(coded_xls3, path = paste0('./Data/data_TextMining/coded_Ceme
 ```
 
 ```{r - Stats and plot}
-
-
 # get sums for each SDG
   # colSums(corpus$SDG1)
 
@@ -627,7 +624,6 @@ writexl::write_xlsx(coded_xls3, path = paste0('./Data/data_TextMining/coded_Ceme
 # coded_sdgs <- dplyr::pull(coded, sdgs)   ## the same as below one
 coded_sdgs <- as.vector(unlist(coded['sdgs'])) %>%
   paste(sep = " ", collapse = " ")
-
 # coded_sdgs
 
 
@@ -670,7 +666,7 @@ goals_df <- ls_un_id %>%
   as.data.frame()
 
 ### merge data 
-coded_sdgs_df1 <- merge(coded_sdgs_df, goals_df, 
+coded_sdgs_df_format <- merge(coded_sdgs_df, goals_df, 
                         by.x = c('goal', 'coded_sdgs'), by.y = c('goalname', 'target_id_un'), all = T) %>%
   dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
   arrange(goal, id) %>%
@@ -680,10 +676,10 @@ coded_sdgs_df1 <- merge(coded_sdgs_df, goals_df,
                 coded_sdgs = reorder(coded_sdgs, id)) %>%
   as.data.frame()
 
-str(coded_sdgs_df1)
+str(coded_sdgs_df_format)
 
 ### plot
-coded_sdgs_df1 %>%
+coded_sdgs_df_format %>%
   ggplot(aes(x = fct_rev(coded_sdgs))) +
   geom_col(aes(y = n_statements), alpha = 0.6) +
   geom_text(aes(y = n_statements, label = n_statements), size = 5, color = 'red') +
@@ -691,7 +687,7 @@ coded_sdgs_df1 %>%
   coord_flip() +
   theme_bw() +
   ylab('Number of SDG statements') + xlab('')
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', comp_name, '_coded_machine_update', '.jpg'); fname
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', company_name, '_coded_machine_update', '.jpg'); fname
 ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in', dpi = 300)
 ```
 
@@ -699,15 +695,13 @@ ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in
 
 
 ```{r - Compare with UNGSII}
-comp_name <- 'CEMEX'
-xls <- paste0('./Data/data_TextMining/df_', comp_name, '_reference.xlsx'); xls
+# company_name <- 'CEMEX'
+xls <- paste0('./Data/data_TextMining/df_', company_name, '_reference.xlsx'); xls
 human <- readxl::read_excel(xls) 
 
 cols_selected <- names(human)[1:6]; cols_selected
 
 
-
-  
 human_format <- human %>%  
   ### some duplicated Target ids ---
   ungroup() %>%
@@ -736,7 +730,7 @@ human_format %>%
   theme_bw() +
   theme(strip.background = element_rect(fill="orange")) +
   ylab('Number of SDG statements') + xlab('')
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', comp_name, '_coded_human', '.jpg'); fname
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', company_name, '_coded_human', '.jpg'); fname
 ggsave(filename = fname, plot = last_plot(), width = 16, height = 9, units = 'in', dpi = 300)
 ```
 

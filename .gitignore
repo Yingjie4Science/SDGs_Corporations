@@ -38,6 +38,8 @@ Data/data_TextMining/annual_reports/txt_cleaned/
 WordNet/
 text2sdg/
 TXT/
+DF/
+DF_coded/
 
 MS/*
 Refs/*
