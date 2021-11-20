@@ -34,9 +34,12 @@ Data/*
 Data/data_TextMining/*.docx
 Data/data_TextMining/ref/*
 Data/data_TextMining/annual_reports/pdfs/
+Data/data_TextMining/annual_reports/pdf_coded_human/*.pdf
 Data/data_TextMining/annual_reports/txt_cleaned/
 WordNet/
 text2sdg/
+
+
 TXT/
 DF/
 DF_coded/
