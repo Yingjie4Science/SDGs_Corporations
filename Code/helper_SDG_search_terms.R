@@ -40,29 +40,80 @@ func_AND_plus <- function(target){
 ################################################################################################## #
 
 
+## Auxiliary list ------
+
+ag_ls = "agricultur|food|farm|forestry|pastoral|pasture|agro|fisher|agronom|horticulture|cultivation|husbandry|grazing|planting"
+
+child_ls = "child|^teen|juvenile|youth|young|minor|'under 5'|'under five'|adolescen|girl|boy"
+
+death_ls = "mortal|death|dead|^die|dying|fatal|deceas|^demis|destruct|lethal"
+
+disaster_ls = "shock|disaster|catastrophe|hazard|flood|drought|risk|exposure|harm|wildfire|wild fire|extreme weather"
+
+emission_ls = "emission|co2|carbon|green house|greenhouse|GHG|G.H.G.|chlorofluorocarbon|cfc|c.f.c.|methane|CH4|nitrous oxide|^N2O|ozone|\\bO3\\b"
+
+increase_ls = "accelerat|ascend|advanc|climb|better|boost|^boom|escalat|^grow|^hik|improv|increas|increment|jump|^lift|^rais|^ris|rocket|skyrocket|^surg|^soar|strengthen|upsurg|upward"
+
 support_ls = "financ|fund|assist|help|^aid|invest|boost|bolster|^cash|compensation|donor|donat|enhanc|expenditure|grant|^loan|money|official flow|support|subsid|stimulate|strengthen|transfer|uphold"
 
 urban_ls = "urbaniz|urban|city|cities|settlement|land consumption|land use|metropoli|town|municipal"
 
-
-
-
 poverty_ls = "poverty|poor|impover|underprivileg|necessitous"
-
-
-reduce_ls = "alleviat|abate|avert|abolish|eradicat|eliminat|^eras|^ease|^end|rid of|phase out|wipe out|reduc|^cut|^curb|curtail|declin|decreas|diminish|drop|dwindl|halt|hinder|hamper|impede|inhibit|lessen|lower|mitigat|slash|shrink|stop|trim|weaken|\\bno\\b|zero|prevent|prohibit"
-
-disaster_ls = "shock|disaster|catastrophe|hazard|flood|risk|exposure|harm"
-
-emission_ls = "emission|co2|carbon|green house|greenhouse|GHG|G.H.G.|chlorofluorocarbon|cfc|c.f.c."
-
 
 policy_ls = "action|activit|administ|agreement|approach|arrangement|blueprint|deal|guide|govern|method|manag|polic|plan|proced|program|project|practice|procedure|propos|protocol|rule|regulat|law|treat|right|constitution|initiative|scheme|strateg"
 
+reduce_ls = "alleviat|abate|avert|abolish|eradicat|eliminat|^eras|^ease|^end|rid of|phase out|wipe out|reduc|^cut|^curb|curtail|declin|decreas|diminish|drop|dwindl|halt|hinder|hamper|impede|inhibit|lessen|lower|mitigat|slash|shrink|stop|trim|weaken|\\bno\\b|zero|prevent|prohibit"
 
-developing_country_ls = c("developing|least develop|less develop|underdevel|poor|small island|africa|impover|pover", "countr|nation|state")
+
+
+developing_country_name_ls = paste(
+  "Aruba|Afghanistan|Angola|Anguilla|Albania|United Arab Emirates|Argentina|Armenia|American Samoa", 
+  "French Southern Territories|Antigua and Barbuda|Azerbaijan|Burundi|Benin|Burkina Faso|Bangladesh|Bahrain|Bahamas",
+  "Bosnia and Herzegovina|Belarus|Belize|Bolivia|Brazil|Barbados|Brunei Darussalam|Bhutan|Botswana|Central African Republic",
+  "Chile|China|Côte d'Ivoire|Cameroon|Congo|Cook Islands|Colombia|Comoros|Cabo Verde|Costa Rica|Cuba|Curaçao|Cayman Islands",
+  "Cyprus|Cyprus|Djibouti|Dominica|Dominican Republic|Algeria|Ecuador|Egypt|Eritrea|Western Sahara|Ethiopia|Fiji|Micronesia",
+  "Gabon|Georgia|Ghana|Guinea|Gambia|Guinea-Bissau|Equatorial Guinea|Grenada|Guatemala|Guam|Guyana|Hong Kong|Heard Island and McDonald Islands",
+  "Honduras|Haiti|Indonesia|India|Iran|Iraq|Jamaica|Jordan|Kazakhstan|Kenya|Kyrgyzstan|Cambodia|Kiribati|Saint Kitts and Nevis|Kuwait|Lao",
+  "Lebanon|Liberia|Libya|Saint Lucia|Sri Lanka|Lesotho|Macao|Saint Martin|Morocco|Moldova|Madagascar|Maldives|Mexico|Marshall Islands",
+  "North Macedonia|Mali|Myanmar|Montenegro|Mongolia|Northern Mariana Islands|Mozambique|Mauritania|Montserrat|Mauritius|Malawi|Malaysia",
+  "Namibia|New Caledonia|Niger|Norfolk Island| Nigeria|Nicaragua|Niue|Nepal|Nauru|Oman|Pakistan|Panama| Pitcairn|Peru|Philippines|Palau",
+  "Papua New Guinea|Puerto Rico|Paraguay|Palestine|French Polynesia|Qatar|Russia|Rwanda|Sudan| Senegal|Singapore|South Georgia and the South Sandwich Islands",
+  "Saint Helena|Solomon Islands|Sierra Leone|El Salvador|Somalia|Serbia|South Sudan|Sao Tome and Principe|Suriname|Eswatini|Sint Maarten|Seychelles|Syrian",
+  "Turks and Caicos Islands|Chad|Togo|Thailand|Tajikistan|Turkmenistan|Timor-Leste|Tonga|Trinidad and Tobago|Tunisia|Turkey|Tanzania|Uganda|Ukraine|Uruguay",
+  "Uzbekistan|Saint Vincent and the Grenadines|Venezuela|Virgin Islands|Viet Nam|Vanuatu|Wallis and Futuna|Samoa|Yemen|South Africa|Zambia|Zimbabwe|Somaliland",
+  "Kosovo|Ashmore|Cartier|Siachen Glacier|North Korea", 
+  func_AND_plus(c('Democratic','Korea')), 
+  sep = "|")
+
+developing_country_iso3_ls = paste(
+  "ABW|AFG|AGO|AIA|ALB|ARE|ARG|ARM|ASM|ATF|ATG|AZE|BDI|BEN|BFA|BGD|BHR|BHS|BIH|BLR|BLZ|BOL|BRA|BRB|BRN|BTN|BWA",
+  "CAF|CHL|CHN|CIV|CMR|COD|COG|COK|COL|COM|CPV|CRI|CUB|CUW|CYM|CYP|CYP|DJI|DMA|DOM|DZA|ECU|EGY|ERI|ESH|ETH|FJI|FSM|GAB|GEO|GHA|GIN|GMB|GNB|GNQ|GRD|GTM|GUM|GUY",
+  "HKG|HMD|HND|HTI|IDN|IND|IRN|IRQ|JAM|JOR|KAZ|KEN|KGZ|KHM|KIR|KNA|KOR|KWT|LAO|LBN|LBR|LBY|LCA|LKA|LSO|MAC|MAF|MAR|MDA|MDG|MDV|MEX|MHL|MKD|MLI|MMR|MNE|MNG|MNP",
+  "MOZ|MRT|MSR|MUS|MWI|MYS|NAM|NCL|NER|NFK|NGA|NIC|NIU|NPL|NRU|OMN|PAK|PAN|PCN|PER|PHL|PLW|PNG|PRI|PRK|PRY|PSE|PYF|QAT|RUS|RWA|SDN|SEN|SGP|SGS|SHN|SLB|SLE|SLV",
+  "SOM|SRB|SSD|STP|SUR|SWZ|SXM|SYC|SYR|TCA|TCD|TGO|THA|TJK|TKM|TLS|TON|TTO|TUN|TUR|TZA|UGA|UKR|URY|UZB|VCT|VEN|VIR|VNM|VUT|WLF|WSM|YEM|ZAF|ZMB|ZWE", 
+  sep = "|")
+developing_country_iso3_ls <- gsub('\\|', '\\\\b|\\\\b', developing_country_iso3_ls)
+developing_country_iso3_ls <- paste0('\\b', developing_country_iso3_ls, '\\b')
+developing_country_iso3_ls
+
+developing_country_iso2_ls = paste(
+  "AW|AF|AO|AI|AL|AE|AR|AM|AS|TF|AG|AZ|BI|BJ|BF|BD|BH|BS|BA|BY|BZ|BO|BR|BB|BN|BT|BW|CF|CL|CN|CI|CM|CD|CG|CK|CO|KM|CV|CR|CU|CW|KY|CY|CY|DJ|DM|DO|DZ|EC|EG|ER|EH",
+  "ET|FJ|FM|GA|GE|GH|GN|GM|GW|GQ|GD|GT|GU|GY|HK|HM|HN|HT|ID|IN|IR|IQ|JM|JO|KZ|KE|KG|KH|KI|KN|KR|KW|LA|LB|LR|LY|LC|LK|LS|MO|MF|MA|MD|MG|MV|MX|MH|MK|ML|MM|ME|MN",
+  "MP|MZ|MR|MS|MU|MW|MY|NA|NC|NE|NF|NG|NI|NU|NP|NR|OM|PK|PA|PN|PE|PH|PW|PG|PR|KP|PY|PS|PF|QA|RU|RW|SD|SN|SG|GS|SH|SB|SL|SV|SO|RS|SS|ST|SR|SZ|SX|SC|SY|TC|TD|TG",
+  "TH|TJ|TM|TL|TO|TT|TN|TR|TZ|UG|UA|UY|UZ|VC|VE|VI|VN|VU|WF|WS|YE|ZA|ZM|ZW", 
+  sep = "|")
+developing_country_iso2_ls <- gsub('\\|', '\\\\b|\\\\b', developing_country_iso2_ls)
+developing_country_iso2_ls <- paste0('\\b', developing_country_iso2_ls, '\\b')
+developing_country_iso2_ls
+
+
+developing_country_ls = c("developing|least develop|less develop|underdevel|poor|small island|africa|impover|pover", 
+                          "countr|nation|state")
 developing_country_ls = func_AND_plus(developing_country_ls)
-developing_country_ls = func_OR_vector(v = c(developing_country_ls, 'global south'))
+developing_country_ls = func_OR_vector(v = c(developing_country_ls, 
+                                             developing_country_iso3_ls,
+                                             developing_country_iso2_ls,
+                                             'global south|Third World'))
 
 
 
@@ -111,16 +162,11 @@ SDG1_b <- func_AND_plus(SDG1_b)
 
 ## 2. Zero Hunger ----------------------------------------------------------------------------------
 
-ag_ls = "agricultur|food|farm|forestry|pastoral|pasture|agro|fisher|agronom|horticulture|cultivation|husbandry|grazing|planting"
-
-child_ls = "child|^teen|juvenile|youth|young|minor|'under 5'|'under five'|adolescen|girl|boy"
-
-
 SDG2_1_x = c(reduce_ls, "hunger|undernourish|starv|famine|malnourish") 
-SDG2_1_y = c(reduce_ls, "food", "insecurity")
-SDG2_1_z = c("food", "access|availab|safe|secur|nutritious|sufficient|ample|plentiful")
+SDG2_1_y = c(reduce_ls, "food", "insecurity|desert")
+SDG2_1_z = c("food", "access|availab|safe|secur|nutritious|sufficient|ample|plentiful|abundant")
 
-SDG2_2 = c("malnutrition|malnourish|undernourish|undernutrition|stunting|wasting|overweight|^polio|paralysis|tephromyelitis|nutrition|anaem|anem",
+SDG2_2 = c("malnutrition|malnourish|undernourish|undernutrition|under nourished|stunting|wasting|overweight|^polio|paralysis|tephromyelitis|nutrition|anaem|anem",
            paste(child_ls, "infant|pregnan|lactat|women|woman|older", sep = '|'))
 
 SDG2_3_x = c(ag_ls, 
@@ -130,9 +176,12 @@ SDG2_3_y = c("access|availab",
 SDG2_3_z = c("reform", 
              "land")
 
-SDG2_4_x = c(ag_ls, "sustain|resilien|productiv|organic|ecological")
-SDG2_4_y = c("adapt", paste("climate change|extreme weather|drought|global warming|warm|temperat", disaster_ls, sep = '|'))
-SDG2_4_z = c("adapt", 'sea level', "ris")
+SDG2_4_x = c(ag_ls, 
+             "sustain|resilien|productiv|organic|ecological")
+SDG2_4_y = c("adapt", 
+             paste(disaster_ls, "climate change|global warming|warm", func_AND_plus(c('temperat', '^ris')), sep = '|'))
+SDG2_4_z = c("adapt", 
+             'sea level', "ris")
 SDG2_4_w = c("land|soil", "quality|fertil")
 
 SDG2_5_x = c("manag|diversif|diversity|conserv|secur|cultivat|farm|domesticat", 
@@ -151,7 +200,7 @@ SDG2_a_y = c("plant|soy|livestock|animal|cattle|cow|pig|sheep|hog|horse|oxen|her
 SDG2_b_x = c(ag_ls, 
              "export|trade|supply chain|value chain|market|business|commerce", 
              paste("subsid|restrict|allowance", support_ls, sep = '|'))
-SDG2_b_y = "Doha Development Round|DDR|D.D.R."
+SDG2_b_y = "Doha Development Round|Doha Round|DDR|D.D.R."
 
 SDG2_c = c(ag_ls, "market|price", "volatil|anomal|change|unstable|unsettled|elastic|elusive")
 
@@ -197,19 +246,18 @@ SDG2_c <- func_AND_plus(SDG2_c)
 
 
 ## 3. Good Health and Well-being  ------------------------------------------------------------------
-# death_ls = "mortal|death|^dead|^die|dying|fatal|deceas|^demis|destruct|lethal"
-death_ls = "mortal|death|dead|die|dying|fatal|deceas|demis|destruct|lethal"
 
-SDG3_1 = c(paste0("matern|birth|", func_AND_plus(c("post","natal|partum"))), 
-           paste0("death_ls|health|healthcare|complica|depress|", func_AND_plus(c("health", "care"))))
 
-SDG3_2 = c(paste(child_ls, "newborn|'before fifth'|premature|infant", func_AND_plus(c("neo", "natal")), sep = '|'),
+SDG3_1 = c(paste0("matern|antenatal|birth|", func_AND_plus(c("post","natal|partum"))), 
+           paste0("death_ls|health|healthcare|complica|depress|^care", func_AND_plus(c("health", "^care"))))
+
+SDG3_2 = c(paste(child_ls, "newborn|'before fifth'|premature|infant", func_AND_plus(c("^neo", "^natal")), sep = '|'),
            paste("death_ls|syndrome|wellness|well", func_AND_plus(c("well", "being")), sep = '|'))
 
 SDG3_3 = func_OR_vector(v = c(
-  "epidemic|pandemic|outbreak|communicable|infect|contagious|endemic|sars|'acute respiratory syndrome'|zika", 
-  "dengue|schistosomiasis|ebola|measles|cholera|AIDS|HIV|Acquired immunodeficiency syndrome|Human immunodeficiency virus", 
-  "Yellow fever|Middle East respiratory syndrome|MERS-CoV|tuberculos|malaria|'tropical disease'|hepatit", 
+  "epidemic|pandemic|outbreak|communicable|infect|contagious|endemic|COVID|^sars|'acute respiratory syndrome'|zika", 
+  "dengue|schistosomiasis|ebola|measles|cholera|^AIDS|^HIV|Acquired immunodeficiency syndrome|Human immunodeficiency virus", 
+  "Yellow fever|Middle East respiratory syndrome|MERS-CoV|Antiretroviral|tuberculos|malaria|'tropical disease'|hepatit|Lyme disease", 
   func_AND_plus(c("water", "borne")),
   func_AND_plus(c("sexual", "transmi"))))
 
@@ -219,15 +267,14 @@ SDG3_4_x = c(
         death_ls,
         sep = '|'),
   # paste(death_ls, "disorder|disease|illness|sick", sep = "|"),
-  reduce_ls
-  );
+  reduce_ls);
 SDG3_4_y = c(
-  "mental|psychological", 
-  paste(death_ls, "disorder|disease|illness|sick|health|well", sep = "|"), 
-  reduce_ls
-  )
+  "mental|psychological|psychiatric", 
+  paste(death_ls, "disorder|disease|health|well|illness|sick|disabilit", sep = "|"), 
+  reduce_ls)
+SDG3_4_z = c('life expectancy', increase_ls)
 
-SDG3_5 = c("substance|drug|alcohol|drink|ethanol|liquor|liqueur|booze|wine|beer", 
+SDG3_5 = c("substance|drug|alcohol|drink|ethanol|liquor|liqueur|booze|wine|beer|Narcotic", 
            "abus|misuse|misconduct|obsessive|addict|harm|disorder")
 
 SDG3_6 = c("road|traffic|congest|collision|crash|jam|transport|transit|travel", 
@@ -236,7 +283,7 @@ SDG3_6 = c("road|traffic|congest|collision|crash|jam|transport|transit|travel",
                  sep = "|"))
 
 SDG3_7_x = c(
-  paste("sex|reproductive|family planning|contracept|condom|diaphragm|Birth Control|intrauterine device|^IUD|conception control", 
+  paste("^sex|reproductive|family planning|contracept|condom|diaphragm|Birth Control|intrauterine device|^IUD|conception control", 
         func_AND_plus(c("health", "care")), sep = "|"), 
   "access|availab|modern|inform|educat")
 SDG3_7_y = c(child_ls, "birth|mother|pregnan")
@@ -244,11 +291,14 @@ SDG3_7_y = c(child_ls, "birth|mother|pregnan")
 
 
 SDG3_8 = c("health|medicine|vaccin", 
-           "coverage|expenditure|expense|income|financ|care|service|essential|access|availab|policy_ls|public")
+           paste("coverage|expenditure|expense|income|financ|care|service|essential|access|availab|Affordable|public", policy_ls, sep = "|"))
 
-SDG3_9 = c("hazard|unsafe|unintentional|contamin", 
-           "chemical|air|water|soil|pollut|contamin|sanita|hygien|poison",
-           paste(death_ls, "illness|sick|health|well being|well-being", sep = "|"))
+SDG3_9_x = c("hazard|unsafe|unintentional|contamin|pollut", 
+             "chemical|air|water|soil|sanita|hygien|poison",
+             paste(death_ls, "illness|sick|health|well being|well-being|wellbeing", sep = "|"))
+SDG3_9_y = c("lack", 
+             "sanita|hygien*|poison", 
+             paste(death_ls, "illness|sick|health|well being|well-being|wellbeing", sep = "|"))
 
 
 SDG3_a = c("tobacco|nicotine|cigar|^vap|smok" , 
@@ -279,7 +329,8 @@ SDG3_3 <- SDG3_3
 
 SDG3_4_x <- func_AND_plus(SDG3_4_x)
 SDG3_4_y <- func_AND_plus(SDG3_4_y)
-SDG3_4   <- func_OR_vector(c(SDG3_4_x, SDG3_4_y))
+SDG3_4_z <- func_AND_plus(SDG3_4_z)
+SDG3_4   <- func_OR_vector(c(SDG3_4_x, SDG3_4_y, SDG3_4_z))
 
 SDG3_5 <- func_AND_plus(SDG3_5)
 SDG3_6 <- func_AND_plus(SDG3_6)
@@ -288,8 +339,13 @@ SDG3_7_x <- func_AND_plus(SDG3_7_x)
 SDG3_7_y <- func_AND_plus(SDG3_7_y)
 SDG3_7   <- func_OR_vector(c(SDG3_7_x, SDG3_7_y))
 
-SDG3_8 <- func_AND_plus(SDG3_8)    
-SDG3_9 <- func_AND_plus(SDG3_9) 
+SDG3_8 <- func_AND_plus(SDG3_8) 
+
+SDG3_9_x <- func_AND_plus(SDG3_9_x) 
+SDG3_9_y <- func_AND_plus(SDG3_9_y)
+SDG3_9   <- func_OR_vector(c(SDG3_9_x, SDG3_9_y))
+
+
 SDG3_a <- func_AND_plus(SDG3_a)
 SDG3_b <- func_AND_plus(SDG3_b)  
 SDG3_c <- func_AND_plus(SDG3_c)  
@@ -342,8 +398,9 @@ SDG4_5 = c(
 
 SDG4_6 = "literacy|numeracy|literate"
 
-SDG4_7 = c("^knowledge|skill|educat|curricula|teach|student|cultur",
-           "sustainable development|sustainable lifestyle|'human right'|'gender equality'|peace|non-violence|'global citizenship'|international|'cultural diversity'|polic|reform")
+SDG4_7_x = c("^knowledge|skill|educat|curricula|teach|student|cultur",
+             "sustainable development|sustainable lifestyle|'human right'|'gender equality'|peace|non-violence|'global citizenship'|international|'cultural diversity'|polic|reform")
+SDG4_7_y = "Universal education"
 
 SDG4_a = c("educat|learn|school", 
            "facilit|infrastructure|environment|'basic service'")
@@ -353,7 +410,7 @@ SDG4_b = c(paste("scholarship|fellowship|flow", support_ls, sep = "|"),
            developing_country_ls) 
 
 
-SDG4_c = c('teacher|educator|faculty|instructor|lecturer|professor|supervisor|mentor|tutor|trainer|adviser|coach', 
+SDG4_c = c('teacher|educator|faculty|instructor|lecturer|professor|supervisor|mentor|tutor|trainer|adviser|coach|caregiver', 
            "supply|attrition|qualif|train|capab|capacity")
 
 
@@ -370,7 +427,10 @@ SDG4_3 <- func_AND_plus(SDG4_3)
 SDG4_4 <- func_AND_plus(SDG4_4)  
 SDG4_5 <- func_AND_plus(SDG4_5)  
 SDG4_6 <- SDG4_6
-SDG4_7 <- func_AND_plus(SDG4_7)
+
+SDG4_7_x <- func_AND_plus(SDG4_7_x)
+SDG4_7   <- func_OR_vector(c(SDG4_7_x, SDG4_7_y))
+
 SDG4_a <- func_AND_plus(SDG4_a)
 SDG4_b <- func_AND_plus(SDG4_b)
 SDG4_c <- func_AND_plus(SDG4_c)
@@ -387,7 +447,7 @@ female_ls = "woman|women|girl|female|lady|ladies"
 
 ###
   
-SDG5_1_x = c("discriminat|equality|justice|disparities|segregat|anti|infanticid|gap|'wage gap'|unemploy|empower|livelihood",
+SDG5_1_x = c("discriminat|equality|justice|disparities|segregat|^anti|marginali|infanticid|gap|'wage gap'|unemploy|empower|livelihood",
            paste(female_ls, "sex|gender|employment", sep = "|"))
 SDG5_1_y = "misogyn|feminis"
 
@@ -420,7 +480,7 @@ SDG5_a_x = c("access|availab|right|reform|equal|legal|law",
 SDG5_a_y = "agrarian feminism"
 
 
-SDG5_b = c("technology|information|empower|mobile|telephone",
+SDG5_b = c("tech|information|empower|mobile|telephone|\\bICT\\b",
            female_ls)	
 
 SDG5_c = c("policy_ls|legislation|promot|empower", 
@@ -455,8 +515,8 @@ SDG5_c <- func_AND_plus(SDG5_c)
 
 ## 6. Clean Water and Sanitation --------------------------------------------------------------------
 
-SDG6_1 = c("access|availab|safe|secure|clean|manag|afford|equit", 
-           "drinking water")
+SDG6_1 = c("access|availab|afford|safe|secure|clean|manag|equit", 
+           "drinking water|drinkable water")
 
 SDG6_2_x = c("access|availab|safe|manag|adequate|equit|equal|facilit|service",
              paste("sanita|hygien|soap|cleanliness", func_AND_plus(c("hand", "wash")), sep = '|'))
@@ -517,21 +577,25 @@ SDG6_b <- func_AND_plus(SDG6_b)
 
 ## 7. Affordable and Clean Energy ----------------------------------------------------------------
 
-renewable_ls = c("advance|modern|clean|renewable|alternat|wind|solar|biomass|nuclear|sun|tide|tidal|wave|wood|thermal|algae|Hydro|hybrid|friendly",
-                 "energy|fuel|power")
-renewable_ls <- func_AND_plus(renewable_ls) 
-renewable_ls <- func_OR_vector(c(
-  renewable_ls, 
-  "renewable|biofuel|bioenergy|biodiesel|biogas|bioethanol|biorefinery|hydrogen|hydropower|hydroelectric|ethanol|photovoltaic|wind farm|offshore wind|turbine|solar panel"))
+renewable_ls_x = c(paste("advance|modern|clean|renewable|alternat|wind|solar|biomass|nuclear|sun|tide|tidal|wave|wood|thermal|algae|Hydro|hybrid|green",
+                         func_AND_plus(c("enviro|eco", "friendly")), sep = "|"),
+                   "energy|fuel|power")
+
+renewable_ls_y = paste("renewable|biofuel|bioenergy|biodiesel|biogas|bioethanol|biorefinery|hydrogen|hydropower", 
+                       "hydroelectric|ethanol|photovoltaic|wind farm|offshore wind|wind turbine|solar panel", sep = "|")
+renewable_ls_x <- func_AND_plus(renewable_ls_x) 
+renewable_ls   <- func_OR_vector(c(renewable_ls_x, renewable_ls_y))
 
 
 
 SDG7_1 = c(paste(renewable_ls, "electricity", sep = "|"), 
-           "reliable|affordab|access|availab")
+           "reliable|affordab|access|availab|modern")
 
 SDG7_2_x = c(renewable_ls, 
              "share|consum|transiti|shift")
 SDG7_2_y = paste("energy transition", func_AND_plus(c("smart", "grid|meter")), sep = "|")
+SDG7_2_z = c("coal|fossil fuel|fossil-fuel", 
+             reduce_ls)
 
 
 SDG7_3 = c("energy|electricity|fuel|power|utilit",
@@ -551,7 +615,8 @@ SDG7_b = c(renewable_ls,
 SDG7_1 <- func_AND_plus(SDG7_1)
 
 SDG7_2_x <- func_AND_plus(SDG7_2_x) 
-SDG7_2   <- func_OR_vector(c(SDG7_2_x, SDG7_2_y))
+SDG7_2_z <- func_AND_plus(SDG7_2_z) 
+SDG7_2   <- func_OR_vector(c(SDG7_2_x, SDG7_2_y, SDG7_2_z))
 
 SDG7_3 <- func_AND_plus(SDG7_3)
 
@@ -567,8 +632,6 @@ SDG7_b <- func_AND_plus(SDG7_b)
 
 economic_ls = "econom|profit|revenue|^GDP|gross|income|gain|proceed|yield|dividend|earning|fiscal|financ|monetary|budget|return"
 
-increase_ls = "accelerat|ascend|advanc|climb|better|boost|^boom|escalat|^grow|^hik|improv|increas|increment|jump|^lift|^rais|^ris|rocket|skyrocket|^surg|^soar|strengthen|upsurg|upward"
-
 
 ###
 
@@ -582,7 +645,7 @@ SDG8_2 = c(economic_ls,
 SDG8_3_x = c('polic', 
              paste(economic_ls, "development|employ", sep = "|"))
 SDG8_3_y = c("employ|job|work", 
-             "decent|quality|creation")
+             "decent|quality|creation|stable")
 SDG8_3_z = c("microenterprise|micro-enterprise|entrepreneur|inclusive",
              'growth') 
 SDG8_3_w = c("small|medium|starting", 
@@ -595,7 +658,7 @@ SDG8_4 = c("sustainab|efficien|environment|footprint",
 
 SDG8_5_x = c("full|decent|productive|informal|precarious|protect",
            "employ|job|work")
-SDG8_5_y = "unemploy"
+SDG8_5_y = "unemploy|equal pay"
 
 
 SDG8_6 = c(child_ls, 
@@ -609,13 +672,14 @@ SDG8_7_y = "modern slavery|human trafficking"
 SDG8_8_x = c("labour|labor|employ", 
              'right')
 SDG8_8_y = c("safe|secure", 
-             "working environment")
+             "work|job",
+             "environment|workplace|condition")
 SDG8_8_z = c(paste(death_ls, "precarious|injur|harm", sep = "|"), 
              "job|work|employ")
 
 
 SDG8_9_x = c("touris", 
-             "sustainab|community-based|employment")
+             paste("sustainab|community-based|employment", func_AND_plus(c('creat', 'job')), sep = "|"))
 SDG8_9_y = func_AND_plus(c("tour",  "poli"))
 SDG8_9_z = 'ecotourism'  
 
@@ -671,7 +735,12 @@ SDG8_b <- func_AND_plus(SDG8_b)
 
 ## -9. Industry, Innovation, and Infrastructure ----------------------------------------------------
 
-infrastructure_ls = "infrastructure|building|^hous|architecture|construction|freight|transport|^road|^rail|^port|power plant|^dams"
+infrastructure_ls = paste(
+  "infrastructure|building|^hous|architecture|construction|freight|transport|^road|^rail|^port|power plant|^dams",
+  "bridge|airport|aviation|sewer|broadband|internet|telecommunication|electricity|power grid|electrical grid|park",
+  "tunnel|water supply|Canal|Hospital|Irrigation scheme|Levee|Lighthouse|",
+  "Pipeline|transit|Public space|Sewage treatment|Sewerage|Sluice|Solid waste|Utilities|Weir|waterway|harbor|dock|dike", sep = "|")
+  
 
 
 ###
@@ -697,8 +766,6 @@ SDG9_4_w = c("clean|environment|green",
 
 SDG9_5_x = c("tech|innovation|research|development", 
              "industr|manufactur")
-SDG9_5_y = c("electric|hybrid",
-             "car|bus|vehicle|automobile|truck")
 
 SDG9_a = c(infrastructure_ls, support_ls, developing_country_ls)
 
@@ -706,7 +773,7 @@ SDG9_b = c(paste("tech|innovation|research|development|diversif", increase_ls, s
            paste("domestic", developing_country_ls, sep = "|"))
 
 SDG9_c = c("access|availab", 
-           paste("information|internet|mobile network|broadband", 
+           paste("information|internet|mobile network|Phone service|broadband|^ICT|\\b5G\\b|\\b4G\\b", 
                  func_AND_plus(c('communications', 'technology')), sep = '|'))
 
 
@@ -722,8 +789,7 @@ SDG9_4_w <- func_AND_plus(SDG9_4_w)
 SDG9_4   <- func_OR_vector(c(SDG9_4_x, SDG9_4_y, SDG9_4_z, SDG9_4_w))
 
 SDG9_5_x <- func_AND_plus(SDG9_5_x)
-SDG9_5_y <- func_AND_plus(SDG9_5_y)
-SDG9_5   <- func_OR_vector(c(SDG9_5_x, SDG9_5_y))
+SDG9_5   <- SDG9_5_x
 
 SDG9_a <- func_AND_plus(SDG9_a)
 SDG9_b <- func_AND_plus(SDG9_b)
@@ -733,15 +799,15 @@ SDG9_c <- func_AND_plus(SDG9_c)
 
 ## 10. Reduce inequality within and among countries ------------------------------------------------
 
-SDG10_1 = c("income|livelihood|household expenditure",
+SDG10_1 = c("income|livelihood|household expenditure|earning|pay",
             paste("empower", increase_ls, sep = "|"))
 
 SDG10_2 = c("inclusi|empower|promot|reform",
             "social|economic|political|age|sex|disab|race|ethnicity|origin|religion|income|demographic")
 
-SDG10_3_x = c("inequalit|discriminat|harass",
+SDG10_3_x = c("inequalit|discriminat|harass|homophobia|racism|sexism",
               reduce_ls)
-SDG10_3_y = c("equal opportunity|^equity||human right|justice",
+SDG10_3_y = c("equal opportunity|^equity||human right|justice|inclusi",
               "ensure|promot|empower")
 
 SDG10_4_x = c("equal|inequalit",
@@ -813,11 +879,11 @@ SDG10_general <- func_AND_plus(SDG10_general)
 
 
 SDG11_1 = c("access|availab|afford",
-            "housing|'basic service'|slum|settlement")
+            "housing|'basic service'|slum|Shanty|settlement|living")
 SDG11_2 = c("access|availab|afford|improv",
-            "transport|road|congestion|shipment|transit")
+            "transport|road|congestion|shipment|transit|bus|shuttle")
 SDG11_3 = c(urban_ls,
-            "inclusi|sustainab|resilien|plan|manage|participat")
+            "inclusi|sustainab|smart|resilien|plan|manage|participat")
 
 SDG11_4 = c("protect|safeguard|preserv|conserv|expenditure|fund|invest|assure|retain",
             "heritage")
@@ -838,7 +904,7 @@ SDG11_a_x = c("link|balanc|bind|bridg|connect|network",
 SDG11_a_y = c(paste("plan|develop", policy_ls, sep = '|'),
               "region|territorial")
 
-SDG11_b = c(paste(urban_ls, "local government", sep = "|"),
+SDG11_b = c(paste(urban_ls, "local government|Strategy", sep = "|"),
             paste("inclusi|efficien|climate", disaster_ls, sep = "|"))
 
 SDG11_c = c(support_ls,
@@ -885,7 +951,7 @@ SDG12_4 = c(paste("manag|minim", reduce_ls, sep = '|'),
 
 SDG12_5_x = c("recycl|prevent|reduc|reus|circular|conserv",
               "waste|material|resource")
-SDG12_5_y = "cradle to cradle"
+SDG12_5_y = "cradle to cradle|Life cycle|Circular economy"
 
 
 SDG12_6_x = c("sustainab|green",
@@ -983,7 +1049,7 @@ SDG13_general = paste(climate_ls, 'kyoto protocol', emission_ls, sep = '|')
 SDG13_1 <- func_AND_plus(SDG13_1)
 
 SDG13_2_x <- func_AND_plus(SDG13_2_x)
-SDG13_2 <- func_OR_vector(c(SDG13_2_x, SDG13_2_y))
+SDG13_2   <- func_OR_vector(c(SDG13_2_x, SDG13_2_y))
 
 SDG13_3 <- func_AND_plus(SDG13_3)
 
@@ -1004,9 +1070,9 @@ ocean_ls = "marine|maritime|ocean|sea|coast|tidal|aquatic|coral"
 
 
 SDG14_1 = c(ocean_ls,
-            "pollut|nutrient|eutroph|plastic|debris|runoff|chemical|fertiliz|waste")
+            "pollut|nutrient|eutroph|Kelp|alga|plastic|debris|runoff|chemical|fertiliz|waste")
 
-SDG14_2 = c(ocean_ls,
+SDG14_2 = c(paste(ocean_ls, 'coral', sep = "|"),
             "sustainab|resilien|restor|manag|mitigat|health|productiv|habitat|bleach") 
 
 SDG14_3 = c(ocean_ls,
@@ -1084,7 +1150,7 @@ SDG14_c <- func_AND_plus(SDG14_c)
 
 ## 15. Life On Land --------------------------------------------------------------------------------
 
-ecosystem_ls = "ecosystem|eco-system|ecolog|environment|natur"
+ecosystem_ls = "ecosystem|eco-system|ecolog|environment|natur|environs"
 
 
 SDG15_1 = paste(func_AND_plus(c("terrestrial|land|inland|freshwater|forest|wetland|mountain|dryland|biodivers|wildlife|wild animal|wild species|protected|reserve",
@@ -1170,7 +1236,7 @@ SDG16_1_x = c(paste(death_ls,
                     "violen|victim|homicid|murder|kill|assault|assassination", sep = "|"),
               reduce_ls)
 SDG16_1_y = c("verbal|physical|domestic|psychological|child|sex", 
-              "abuse|violen|assault",
+              "abuse|violen|assault|torture",
               reduce_ls) 
 SDG16_1_z = "safe walking|peaceful society"
   
@@ -1184,7 +1250,7 @@ SDG16_2_y = c(child_ls,
 
 SDG16_3_x = c("access|availabl", 
               "code|norm|order|justice|authorit|rul|law|legal|legislation|litigation|resolution|regulation")
-SDG16_3_y = "victim|violence|detain|prison|inmate|disput|conflict resolution|actual innocence|false confession|sentenced"
+SDG16_3_y = "victim|violence|detain|prison|inmate|disput|conflict resolution|actual innocence|false confession|sentenced|Arbitrary detention|Enforced disappearance"
 
 
 SDG16_4_x = c("illicit|illegal|illegitimate|banned|criminal|irregular|prohib|smuggl|unauthorized|unlawful|unconstitutional|unlicensed|unlicenced|unwarranted|stolen|steal|theft|organiz|seiz|found|surrender|trace|tracing|track|conflict|traffic",
@@ -1192,7 +1258,7 @@ SDG16_4_x = c("illicit|illegal|illegitimate|banned|criminal|irregular|prohib|smu
 SDG16_4_y = "criminal|crime|cybercrime"
 
 
-SDG16_5 = paste("corrupt|brib", 
+SDG16_5 = paste("corrupt|brib|Tax evasion", 
                 func_AND_plus(c("contact|asked|pay|paid|extort", "public official")), sep = "|")
 
 SDG16_6_x = c("institut|government|legislature|judiciary|authority|ministry|public service",
@@ -1221,7 +1287,7 @@ SDG16_10_y = 'Aarhus Convention'
 
 
 SDG16_a_x = c(paste("violen|terroris|^crime|criminal|genocid|murder|human traffick|refugee|extremis|insurgen|^war|warfare",
-                    func_AND_plus(c("^arm|^gun", "conflict")), sep = "|"), 
+                    func_AND_plus(c("^arm|^gun|weapon", "conflict")), sep = "|"), 
               reduce_ls) 
 SDG16_a_y = c(paste("institution|cooperat|collaborat|joint effort|partnership|independen|human right|democracy|treaty|^civil",
                     func_AND_plus(c("^peace", "keep")), sep = "|"),
@@ -1312,7 +1378,7 @@ SDG17_5 = c("invest|fund|financ",
 ### Technology
 
 SDG17_6 = c("access|availab|facilit",
-            "science|technology|innovation|knowledge-sharing|Internet|broadband",
+            "science|^tech|innovation|knowledge-sharing|Internet|broadband",
             paste("North-South|South-South|triangular region", developing_country_ls, sep = "|"))
 
 SDG17_7 = c("environment",
@@ -1330,8 +1396,8 @@ SDG17_9 = c("capacity building|financ|technical assistance|international support
 
 
 ### Trade
-SDG17_10_x = c("trad",
-               "universal|rules-based|open|non‑discriminatory|equitable")
+SDG17_10_x = c("trad|^WTO",
+               "universal|rules-based|open|non‑discriminatory|equitable|equal")
 SDG17_10_y = "Doha Development Agenda|Weighted tariff average"
 
 
@@ -1362,7 +1428,7 @@ SDG17_16 = paste("multi-stakeholder|partner|cooperat|collaborat|joint effort",
                  func_AND_plus(c("^shar|mobiliz|assembl|marshal", 
                                  paste("knowledge|expertise|skill|^tech|automation|capital|currency|asset|resource", 
                                        support_ls, sep = '|'))), 
-                 func_AND_plus(c("stakeholder", "sustainable")),
+                 func_AND_plus(c("stakeholder", "sustainable|^SDG")),
                  sep = "|")
 
 SDG17_17 = c("partnership", 
@@ -1480,28 +1546,28 @@ target_keys <- data.frame(SDG_id = paste0('SDG', targ_ids),
 
 
 ## - Test ------------------------------------------------------------------------------------------
-pat <- '(sdg|goal|target|indicator)[^0-9]{0,2}(?=17[\\.]{0,1})|No Poverty'
-pat <- '(sdg|goal|target|indicator)[^0-9]{0,2}(?=7\\.a[\\.]{0,1})|No Poverty'
-
-test <- data.frame(term = c(
-  'i love SDGs and sdg 17 and sdg 17 and goal 17',
-  'i love SDGs and sdg 17.1 and and goal 17.1, indicator17.12， targe17.1.1, indicator 17.1.2', 
-  'I like sdg17 and you',
-  'I like sdg-17 and you',
-  'I like sdgs 17 and you',
-  'I like goals 7 and you',
-  'I like goals 7.a and you',
-  'I like sdg1 and 17 and you',
-  'I like 17 sdgs and you?',
-  'when will be no Poverty?'
-)) %>%
-  dplyr::mutate(
-    match = ifelse(
-      grepl(pattern = pat, x = term, ignore.case = T, perl = T), 1, 0),
-    n = str_count(string = term, regex(pattern = pat, ignore_case = T))) %>%
-  # arrange(desc(match)) %>%
-  as.data.frame()
-test
+# pat <- '(sdg|goal|target|indicator)[^0-9]{0,2}(?=17[\\.]{0,1})|No Poverty'
+# pat <- '(sdg|goal|target|indicator)[^0-9]{0,2}(?=7\\.a[\\.]{0,1})|No Poverty'
+# 
+# test <- data.frame(term = c(
+#   'i love SDGs and sdg 17 and sdg 17 and goal 17',
+#   'i love SDGs and sdg 17.1 and and goal 17.1, indicator17.12， targe17.1.1, indicator 17.1.2', 
+#   'I like sdg17 and you',
+#   'I like sdg-17 and you',
+#   'I like sdgs 17 and you',
+#   'I like goals 7 and you',
+#   'I like goals 7.a and you',
+#   'I like sdg1 and 17 and you',
+#   'I like 17 sdgs and you?',
+#   'when will be no Poverty?'
+# )) %>%
+#   dplyr::mutate(
+#     match = ifelse(
+#       grepl(pattern = pat, x = term, ignore.case = T, perl = T), 1, 0),
+#     n = str_count(string = term, regex(pattern = pat, ignore_case = T))) %>%
+#   # arrange(desc(match)) %>%
+#   as.data.frame()
+# test
 
 
 ### ref:  https://stackoverflow.com/questions/41802272/understanding-lookahead-in-r-regexp
