@@ -44,8 +44,15 @@ TXT/
 DF/
 DF_coded/
 
+
+findSDGs/
+
+
 MS/*
 Refs/*
+
+
+
 *gitignore
 #*.Rproj
 test_*

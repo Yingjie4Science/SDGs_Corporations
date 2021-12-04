@@ -1,0 +1,209 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "12/3/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+### To clear your environment 
+remove(list = ls())
+
+
+library(tidyverse)
+library(janitor)
+```
+
+
+
+## Raw data
+
+### Wiki data
+
+  1. Refer to the *List of countries and territories by land and maritime borders* from  https://en.wikipedia.org/wiki/List_of_countries_and_territories_by_land_and_maritime_borders; 
+  
+  2. *Convert Wiki Tables to CSV* using https://wikitable2csv.ggor.de/ (default setting) and download as *table-1.csv*. 
+  
+  3. Read into R and clean the table
+  
+  
+```{r}
+csv <- paste0('./Data/country/', 'wiki_List_of_ISO_3166_country_codes.csv')
+# csv <- paste0('./Data/_distant_matrix/', 'table-1 (1).csv')
+
+b <- read_csv(csv, skip = 1) %>%
+  clean_names() %>%
+  as.data.frame()
+
+names(b)
+
+names(b) <- c('country_name', 'official_state_name', 'sovereignty', 'alpha_2_code', 'alpha_3_code', 'numeric_code', 'subdivision_code_links', 'internet_cc_tld')
+
+
+## bc -> borders cleaned
+bc <- b %>%
+  dplyr::filter(!is.na(country_name)) %>%
+  dplyr::filter(stringr::str_detect(country_name, ' – See', negate = T)) %>%
+  dplyr::mutate(country_name = gsub("\\s*\\[[^\\)]+\\]", "", country_name), ## remove `[numbers]`
+                country_name = gsub("\\s*\\([^\\)]+\\)", "", country_name), ## remove `(strings)`
+                country_name = stringr::str_replace_all(string = country_name, fixed("\n"), " "), ## erase new lines
+                country_name = stringr::str_replace_all(string = country_name, fixed("\r"), " "), ## erase carriage return
+                country_name = stringr::str_replace_all(string = country_name, fixed("\t"), " "), ## erase tabs
+) %>%
+  as.data.frame()
+  
+fname <- paste0('./Data/country/', 'wiki_List_of_ISO_3166_country_codes_cleaned.xlsx')
+writexl::write_xlsx(x = bc, path = fname)
+```
+
+*Note*: this wiki data list was then added to the file '_ctr_iso2_iso3.xlsx'. 
+
+
+
+### naturalearth 
+```{r}
+library(rnaturalearthdata)
+# library(rnaturalearth)
+# library(sf)
+
+shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
+  st_drop_geometry() %>%
+  dplyr::select(name, type, iso_a3, economy, income_grp) %>%
+  dplyr::mutate(iso_a3 = ifelse(name == 'France', 'FRA', iso_a3))
+# plot(shp['iso_a3'])
+shp_iso_na <- shp %>% 
+  dplyr::filter(is.na(iso_a3))
+shp_iso_na$name
+
+
+### fill the gap 
+shp <- shp %>%
+  dplyr::mutate(iso_a3 = ifelse(name == "Norway", 'NOR', iso_a3),
+                iso_a3 = ifelse(name == "N. Cyprus", 'CYP', iso_a3)) %>%
+  filter(name != 'Antarctica')
+
+
+fname <- paste0('./Data/country/', 'naturalearth_country_names.xlsx'); fname
+writexl::write_xlsx(x = shp, path = fname)
+```
+
+
+
+## Country
+
+### - Indididual names
+
+```{r}
+dirname(getwd())
+
+xlsx <- paste0(dirname(getwd()), '/SDGs_Metacoupling/Data/', '_ctr_iso2_iso3.xlsx'); xlsx
+xls2 <- paste0('./Data/country/', 'naturalearth_country_names.xlsx')
+
+excel_sheets(xlsx)
+## --> "readme" "fao"  "iso"  "iban" "worldbank" "wiki"
+
+func_get_country <- function(xlsx, sheet, column) {
+  ctr_name <- readxl::read_excel(path = xlsx, sheet = sheet) %>%
+    dplyr::select(column)
+  names(ctr_name) <- 'name'
+  return(ctr_name)
+}
+
+ctr_name_fao  <- func_get_country(xlsx = xlsx, sheet = 'fao', column = 1)
+ctr_name_iso  <- func_get_country(xlsx = xlsx, sheet = 'iso', column = 1)
+ctr_name_iban <- func_get_country(xlsx = xlsx, sheet = 'iban', column = 1)
+ctr_name_wiki <- func_get_country(xlsx = xlsx, sheet = 'wiki', column = 1)
+ctr_name_naturalearth <- func_get_country(xlsx = xls2, sheet = 1, column = 1)
+ctr_name_worldbank    <- readxl::read_excel(path = xlsx, sheet = 'worldbank') %>%
+    dplyr::filter(!is.na(Region)) %>%
+    dplyr::select(1)
+names(ctr_name_worldbank) <- 'name'
+
+
+ctr_names <- rbind(ctr_name_fao, ctr_name_iso, ctr_name_iban, ctr_name_wiki, ctr_name_worldbank, ctr_name_naturalearth) %>%
+  dplyr::filter(stringr::str_detect(name, 'Least developed|income', negate = T)) %>%
+  dplyr::mutate(name = gsub("\\s*\\[[^\\)]+\\]", "", name), ## remove `[numbers]`
+                name = gsub("\\s*\\([^\\)]+\\)", "", name), ## remove `(strings)`
+                name = stringr::str_replace_all(string = name, fixed("\n"), " "), ## erase new lines
+                name = stringr::str_replace_all(string = name, fixed("\r"), " "), ## erase carriage return
+                name = stringr::str_replace_all(string = name, fixed("\t"), " "), ## erase tabs
+                name = gsub("\\.$", "", name),        ## remove period in the end of a string
+                name = gsub(", The|\\*", "", name),   ## remove ", The" and "*"
+                name = stringr::str_squish(name),     ## remove leading & trailing whitespace, and repeated whitespace inside a string
+                ) %>%
+  dplyr::distinct(name) %>%
+  arrange(name)
+```
+
+
+
+
+
+### - Individual country code
+
+```{r}
+ctr_name_fao  <- func_get_country(xlsx = xlsx, sheet = 'fao', column = 3)
+ctr_name_iso  <- func_get_country(xlsx = xlsx, sheet = 'iso', column = 3)
+ctr_name_iban <- func_get_country(xlsx = xlsx, sheet = 'iban', column = 3)
+ctr_name_wiki <- func_get_country(xlsx = xlsx, sheet = 'wiki', column = 5)
+ctr_name_naturalearth <- func_get_country(xlsx = xls2, sheet = 1, column = 3)
+ctr_name_worldbank    <- readxl::read_excel(path = xlsx, sheet = 'worldbank') %>%
+  dplyr::filter(!is.na(Region)) %>%
+  dplyr::select(2)
+names(ctr_name_worldbank) <- 'name'
+
+
+ctr_iso3 <- rbind(ctr_name_fao, ctr_name_iso, ctr_name_iban, ctr_name_wiki, ctr_name_worldbank, ctr_name_naturalearth) %>%
+  dplyr::filter(!is.na(name)) %>%
+  dplyr::distinct(name) %>%
+  arrange(name)
+```
+
+
+
+## Regions
+
+### Region names and number of country in each region 
+
+  The region names are manually collected from Wiki, World Bank. 
+  
+```{r}
+xlsx <- paste0('./Data/country/', 'Region_names.xlsx'); xlsx
+
+regions <- readxl::read_excel(path = xlsx, sheet = 1) %>%
+  as.data.frame()
+
+```
+
+
+
+
+
+## Bind together with multipliers
+```{r}
+ctr_names$group = 'country name'
+ctr_names$num_country = 1
+
+ctr_iso3$group = 'country iso3' 
+ctr_iso3$num_country = 1
+
+
+regions <- regions %>% dplyr::select(name, num_country)
+regions$group = 'region name' 
+
+
+## bind together 
+country_region_names <- rbind(ctr_names, ctr_iso3, regions) %>%
+  distinct(name, .keep_all = T) %>%
+  # dplyr::mutate(name = paste0('^', name, '$')) %>% ## this is wrong, as this asking each sentence starting and ending with the 'name'
+  as.data.frame()
+
+
+## save to database
+save(country_region_names, file = paste0('./Data/data_TextMining/database/', 'country_region_names.RData'))
+```
+
+
+
