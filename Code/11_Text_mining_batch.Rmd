@@ -26,8 +26,8 @@ getwd()
 # directories for Yingjie
   dir.reports <- './Data/data_TextMining/annual_reports/'
   dir.results <- './Data/data_results/'
-  dir.figures <- './Data/figures/';      dir.figures
-  dirpath <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  dir.figures <- './Data/figures/'
+  dirpath     <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
 
 # directories for Veronica
   # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
@@ -58,6 +58,10 @@ goals_df <- ls_un_id %>%
   dplyr::mutate(target_id_un = factor(target_id_un, levels = unique(target_id_un)),
                 target_id_un = reorder(target_id_un, id)) %>%
   as.data.frame()
+
+## save to `SDG_TM` for R package development
+fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
+save(goals_df, file = fname)
 ```
 
 
@@ -181,6 +185,14 @@ for (i in 1:length(SDG_ls_str) ) {
     dplyr::mutate(SDG_id       = as.character(SDG_id),
                   SDG_keywords = as.character(SDG_keywords))
 }
+
+fname <- paste0('./Data/', 'SDG_keys.RData'); fname
+save(SDG_keys, file = fname)
+
+
+## save to `SDG_TM` for R package development
+fname <- paste0(dirname(getwd()), '/SDG_TM/data/SDG_keys.RData'); fname
+save(SDG_keys, file = fname)
 ```
 
 
