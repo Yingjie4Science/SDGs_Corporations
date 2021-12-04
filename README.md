@@ -1,5 +1,5 @@
 
-# How corporations are delivering actions towards the SDGs
+# Global Business Giants’ Commitment to SDGs
 
 
-All codes and data that support this study will be updated upon publication.  
+The codes and data for supporting this study.  
