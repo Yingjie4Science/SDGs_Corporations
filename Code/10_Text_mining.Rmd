@@ -53,7 +53,7 @@ getwd()
 
 ```{r}
 
-pdf <- paste0(dir.reports, 'CEMEX--IntegratedReport2018.pdf'); pdf
+pdf <- paste0(dir.reports, 'pdf_coded_human/', 'CEMEX--IntegratedReport2018.pdf'); pdf
 # pdf <- paste0(dir.reports, 'Apple--10-K-2018-(As-Filed).pdf'); pdf
 # pdf <- paste0(dir.reports, 'Pfizer--2018-Financial-Report.pdf'); pdf # not readable or editable
 # pdf <- paste0(dir.reports, 'Pfizer--Financial-Report-2017.pdf'); pdf
@@ -160,12 +160,13 @@ company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unl
 company_name <- company_name[1]; company_name
 TXTname <- paste0(dir.reports, 'txt_cleaned/', company_name, '.txt'); TXTname
    
-writeLines(txt, TXTname)
+# writeLines(txt, TXTname)
 ```
 
 
 
 ## For-loop all PDFs
+  
   Conversion to text --> and save .txt with name from list and move to another folder. 
   
 ```{r}
@@ -261,129 +262,31 @@ writexl::write_xlsx(txt_sentence_df, fname, )
 
 ## SDG search terms
 
-Make a list of keywords for SDGs.
+  Make a list of keywords for SDGs.
 
 |SDG_id       |SDG_keywords     |
 |SDG1_1       |keywords here    |
 
-```{r eval=FALSE, include=FALSE}
-## make a vector of terms to concatenate with AND
-
-func_AND_vector <- function(v){
-  pat <- paste0("(?=.*(?:", v, "))", collapse="")
-  return(pat)
-}
-
-
-## make a vector of terms to concatenate with OR
-func_OR_vector <- function(v){
-  pat <- paste0(v, collapse = "|")
-  return(pat)
-}
-
-
-
-
-reduce_ls <- c('alleviat|abate|avert|abolish|eradicat|eliminat|eras|ease|end|rid of|phase out|wipe out|reduc|cut|curb|curtail|declin|decreas|diminish|drop|dwindl|halt|hinder|hamper|impede|inhibit|lessen|lower|mitigat|slash|shrink|stop|trim|weaken|\\bno\\b|zero|prevent|prohibit')
-
-disaster_ls <- 'shock|disaster|catastrophe|hazard|flood|risk|exposure|harm'
-
-policy_ls <- 'polic|plan|action|activit|administ|approach|arrangement|blueprint|deal|guide|govern|method|manag|proced|program|project|practice|procedure|propos|protocol|rule|regulat|law|treat|right|constitution|agreement|initiative|scheme|strateg'
-
-developing_country_ls =  func_AND_vector(v = c(
-  'developing|least develop|less develop|underdevel|poor countr|poor|small island|africa|impover|pover',
-  'countr|nation')
-)
-
-developing_country_ls =  func_OR_vector(v = c(
-  developing_country_ls,
-  'global south'))
-developing_country_ls
-
-
-
-# each vector is for each SDG, and each item is a set of synonyms
-
-
-```
-
-
-
-
-```{r - SDG 13, eval=FALSE, include=FALSE}
-# SDG 13 -------------------------------------------------------------------------------------------
-climate_ls <- 'climat|warming|extreme weather|sea level|temperature|heat|melt|SDG 13|goal 13|target 13|indicator 13'
-
-emission_ls <- 'emission|co2|carbon|green house|greenhouse|GHG|G.H.G.|chlorofluorocarbon|cfc|c.f.c.'
-
-
-SDG13_1 = func_AND_vector(v = c(
-  climate_ls, 
-  disaster_ls, 
-  paste('resilien|adapt|adjust', reduce_ls, sep = '|')
-  ))
-SDG13_1 <- paste0("^", SDG13_1, ".+")
-
-
-SDG13_2 = func_AND_vector(v = c(
-  paste(climate_ls, emission_ls, sep = '|'), 
-  paste('captur|sequest', reduce_ls, policy_ls, sep = '|')))
-SDG13_2 <- paste0("^", SDG13_2, ".+")
-
-
-SDG13_3 = func_AND_vector(v = c(
-  paste(climate_ls, "kyoto protocol", emission_ls, sep = '|'), 
-  "sequest|reduc|captur|mitigat|manag",
-  'educat|aware|engag|outreach|communica'
-  )); 
-SDG13_3
-SDG13_3 <- paste0("^", SDG13_3, ".+")
-
-
-SDG13_a = func_AND_vector(v = c(
-  paste(climate_ls, "kyoto protocol", sep = '|'), 
-  "fund|mobili|aid|assist|invest|financ|unfccc|mobili|convention"))
-SDG13_a <- paste0("^", SDG13_a, ".+")
-
-
-SDG13_b = func_AND_vector(v = c(
-  climate_ls, 
-  "capacity|polic|strateg|plan|protocol|action|proced|program|initiative", 
-  developing_country_ls))
-SDG13_b <- paste0("^", SDG13_b, ".+")
-
-
-SDG13_general = func_OR_vector(v = c(
-  climate_ls,
-  'kyoto protocol',
-  emission_ls))
-SDG13_general ## no need "^" and ".+"
-
-  
-# TO ADD MORE SDGS HERE
-  # ...
-  
-
-```
-
-
+  These SDG search terms can be *direct mention*, such as "SDG 1", "SDG 2", "SDG 1.2", "SDG 1.a", or *indirect mention*.  
 
   This collection includes terms that are directly related to SDGs, i.e., if companies specifically mention SDG ids (e.g., 'SDG 13'), or the target or indicator ids (e.g., SDG 13.1.a). 
   
-```{r - Collection - direct commit}
+```{r - 1. Collection - direct commit}
 source('./Code/helper_SDG_search_terms.R')
 
 SDG_keys <- rbind(goal_keys, target_keys)
 
 SDG_ls_str <- SDG_keys$SDG_id %>% as.character(); SDG_ls_str
 
+
+SDG_keys_drc <- SDG_keys
 ```
 
 
 
   This collection includes terms that are indirectly related to SDGs, i.e., the terms are constructed based on the alignment to the description and meanings of each SDG or Target. 
   
-```{r - Collection - indrect commit}
+```{r - 2. Collection - indrect commit}
 source('./Code/helper_SDG_search_terms.R')
 
 ### bind these vectors and make it a dataframe to work from ----------------------------------------
@@ -404,9 +307,20 @@ for (i in 1:length(SDG_ls_str) ) {
     dplyr::mutate(SDG_id       = as.character(SDG_id),
                   SDG_keywords = as.character(SDG_keywords))
 }
+
+
+SDG_keys_indrc <- SDG_keys
 ```
 
 
+```{r - 3. Collection - both}
+
+SDG_keys_drc$match_tpye   <- 'direct'
+SDG_keys_indrc$match_tpye <- 'indirect'
+
+SDG_keys_all <- rbind(SDG_keys_drc, SDG_keys_indrc)
+
+```
 
 
 ## To detect  
@@ -438,7 +352,7 @@ for (i in 1:length(SDG_ls_str) ) {
 |1000      |we are talking getting rich |0          |0          |...        |0        |
 ```  
 
-```{r - Coded}
+```{r - Detect SDGs}
 # THIS CODE IS TO IDENTIFY MATCHING ROWS, BUT IT DOES NOT EXTRACT SENTENCES
 # in the original dataframe, if it matches, then in a new column, say yes; if not, say no.
 
@@ -449,14 +363,10 @@ code <- txt_sentence_df %>%
                 n_total = 0,
                 sdgs_n  = '')
 
-# for (i in 1:length(SDG_ls_str)){  ## all SDG indicators
-# # for (i in 8:13){                ## climate indicators only (trial run)
-#     sdg_i_str <- SDG_ls_str[i]    ## the SDG id name
-#     sdg_i_obj <- get(sdg_i_str)   ## the corresponding SDG search term list
-for (i in 1:nrow(SDG_keys)){  ## all SDG indicators
-# for (i in 8:13){                ## climate indicators only (trial run)
-    sdg_i_str <- SDG_keys$SDG_id[i]    ## the SDG id name
-    sdg_i_obj <- SDG_keys$SDG_keywords[i]   ## the corresponding SDG search term list
+
+for (i in 1:nrow(SDG_keys)){                ## Loop all SDG indicators
+    sdg_i_str <- SDG_keys$SDG_id[i]         ## get the SDG id name
+    sdg_i_obj <- SDG_keys$SDG_keywords[i]   ## get the corresponding SDG search term list
     
     print(sdg_i_str)
     # print(sdg_i_obj)
@@ -464,13 +374,13 @@ for (i in 1:nrow(SDG_keys)){  ## all SDG indicators
     code <-  code %>%
       as.data.frame() %>%
       
-      ## at the sentence level - count once --------------------------------------------------------
+      ## at the sentence level - count once if goals/targets are mentioned -------------------------
       dplyr::mutate(
         match = ifelse(
           grepl(pattern = sdg_i_obj, x = statement, ignore.case = T, perl = T), 1, 0))  %>% ## yes-1 or no-0 if they match
       dplyr::mutate(sdgs = ifelse(match > 0, paste0(sdgs, ',', sdg_i_str), sdgs)) %>%
       
-      ## at the sentence level - count all matches -------------------------------------------------
+      ## at the sentence level - count the times of all the mentions -------------------------------
       dplyr::mutate(
         n       = str_count(string = statement, regex(pattern = sdg_i_obj, ignore_case = T)),
         n_total = n_total + n,
@@ -491,11 +401,134 @@ sum(coded$n_total)
 ```
 
 
+  At the **sentence** level - detect if a subject country or region is mentioned. 
+  
+```{r - Detect region names}
+
+file <- paste0('./Data/data_TextMining/database/', 'country_region_names.RData')
+load(file)
+
+
+coded_region        <- coded
+coded_region$region <- ''
+
+for (i in 1:nrow(country_region_names)){    
+    region_i <- country_region_names$name[i]  ## get the region name
+    
+    ## if the number of character of a region name is less than 4, we need to add word boundary to the word
+    region_i_enhanced <- ifelse(nchar(region_i) < 4,
+                                paste0('\\b', region_i, '\\b'),
+                                region_i)
+    
+    ## if the number of character of a region name is less than 4,, we cannot ignore case
+    case_to_choose    <- ifelse(nchar(region_i) < 4, 
+                                0,   
+                                1)
+    
+    # print(region_i)
+    print(region_i_enhanced)
+    # print(case_to_choose)
+
+    coded_region <-  coded_region %>%
+      as.data.frame() %>%
+      ## at the sentence level - detect if a subject country or region is mentioned ----------------
+      dplyr::mutate(
+        region = ifelse(grepl(pattern = region_i_enhanced, x = statement, ignore.case = case_to_choose, perl = T), 
+                        paste0(region, ',', region_i),  ## If detected, add the region name to the cell
+                        paste0(region, '')))  %>%       ## If not, add nothing
+      as.data.frame()
+}
+
+```
+
+
+
+  At the **paragraph** level - detect if a subject country or region is mentioned. 
+  
+  We treat 10 sentences before and 10 sentences after a focus sentence as a approximate paragragh here.  
+  
+```{r - Detect region names - in paragraph}
+
+file <- paste0('./Data/data_TextMining/database/', 'country_region_names.RData')
+load(file)
+
+## create a separate data frame
+coded_para <- coded_region
+coded_para$para <- ''
+coded_para$region_para <- ''
+
+
+## aggregate sentences to paragraph level ----------------------------------------------------------
+nmax <- nrow(coded_para)
+
+for (i in 1:nmax) {
+  
+  ## - for the first 10 sentences, we only append 10 sentences after them 
+  if(i <= 10){
+    para = paste(
+      coded_para$statement[i], 
+      coded_para$statement[i+1], coded_para$statement[i+2], coded_para$statement[i+3], coded_para$statement[i+4], coded_para$statement[i+5],
+      coded_para$statement[i+6], coded_para$statement[i+7], coded_para$statement[i+8], coded_para$statement[i+9], coded_para$statement[i+10], 
+      sep = '. ')} 
+  
+  ## - for the last 10 sentences, we only append 10 sentences before them
+  else if (i > nmax - 10) {
+    para = paste(
+      coded_para$statement[i-10], coded_para$statement[i-9], coded_para$statement[i-8], coded_para$statement[i-7], coded_para$statement[i-6],
+      coded_para$statement[i-5],  coded_para$statement[i-4], coded_para$statement[i-3], coded_para$statement[i-2], coded_para$statement[i-1],
+      coded_para$statement[i],
+      sep = '. ')} 
+  
+  ## - for all other cases, we append both 10 sentences before and 10 after 
+  else {
+    para = paste(
+      coded_para$statement[i-10], coded_para$statement[i-9], coded_para$statement[i-8], coded_para$statement[i-7], coded_para$statement[i-6],
+      coded_para$statement[i-5],  coded_para$statement[i-4], coded_para$statement[i-3], coded_para$statement[i-2], coded_para$statement[i-1],
+      coded_para$statement[i], 
+      coded_para$statement[i+1], coded_para$statement[i+2], coded_para$statement[i+3], coded_para$statement[i+4], coded_para$statement[i+5],
+      coded_para$statement[i+6], coded_para$statement[i+7], coded_para$statement[i+8], coded_para$statement[i+9], coded_para$statement[i+10],
+      sep = '. ')}
+  
+  
+  # coded_para <- coded_para %>% dplyr::mutate(para = para)
+  
+  coded_para$para[i] <- para
+}
+
+# writexl::write_xlsx(coded_para, path = 'test.xlsx') ## --> works well
 
 
 
 
+## detect region names at para level ---------------------------------------------------------------
 
+for (i in 1:nrow(country_region_names)){    
+    region_i <- country_region_names$name[i]  ## get the region name
+    
+    ## if the number of character of a region name is less than 4, we need to add word boundary to the word
+    region_i_enhanced <- ifelse(nchar(region_i) < 4,
+                                paste0('\\b', region_i, '\\b'),
+                                region_i)
+    
+    ## if the number of character of a region name is less than 4,, we cannot ignore case
+    case_to_choose    <- ifelse(nchar(region_i) < 4, 
+                                0,   
+                                1)
+    
+    # print(region_i)
+    print(region_i_enhanced)
+    # print(case_to_choose)
+
+    coded_para <-  coded_para %>%
+      as.data.frame() %>%
+      dplyr::mutate(
+        region_para = ifelse(grepl(pattern = region_i_enhanced, x = para, ignore.case = case_to_choose, perl = T), 
+                             paste0(region_para, ',', region_i),  ## If detected, add the region name to the cell
+                             paste0(region_para, '')))  %>%       ## If not, add nothing
+      as.data.frame()
+}
+
+```
 
 
 ```{r - Test Count matches}
@@ -559,12 +592,12 @@ coded_check <- coded %>%
 ### format the data to inspect by SDG --------------------------------------------------------------
 coded_xls <- coded %>%
   dplyr::select(statement, sdgs) %>%
-  dplyr::mutate(sdg = gsub(pattern = 'general', 'g', sdgs, perl = T),
+  dplyr::mutate(sdg = gsub(pattern = 'general', 'g', sdgs, perl = T),      ## replace 'general' with "g"
                 sdg = gsub(pattern = '_[0-9a-z]{1,2}', '', sdg, perl = T), ## to get the SDG ids from target names
-                sdg = gsub(pattern = '^,', '', sdg)) ## remove the starting comma
+                sdg = gsub(pattern = '^,', '', sdg))                       ## remove the starting comma
 
 
-for (i in 1:nrow(coded_xls)) {  ##
+for (i in 1:nrow(coded_xls)) {
   ## to get a list of unique SDGs
   s <- coded_xls$sdg[i] %>% strsplit(x = ., split = ',') %>% unlist() %>% unique()
   print(s)
@@ -572,18 +605,21 @@ for (i in 1:nrow(coded_xls)) {  ##
   
 }
 
+
+### --> to put 17 SDGs in columns 
+#### 1. add a column with a list of 17 SDGs
 coded_xls1 <- coded_xls %>%
   dplyr::mutate(test = paste('SDG', seq(1,17), collapse = ',', sep = ''))
 
 
-### split one column to multiple ------------------
+#### 2. split the column to multiple
 library(splitstackshape)
 coded_xls2 <- cSplit(indt = coded_xls1, splitCols = 'test', sep = ",", direction = "wide", drop = T) %>%
   dplyr::rename(id = sdg) %>%
   dplyr::mutate(id = row_number()) ## v  = sdg_u %>% strsplit(., ',')
 
 
-## one `SDG` for a column, if match, return 1, otherwise 0 for each SDG ----------------------------
+#### 3. Each `SDG` in a column, if match, return 1, otherwise 0
 names(coded_xls2)
 
 coded_xls3 <- coded_xls2 %>%
@@ -595,6 +631,7 @@ coded_xls3 <- coded_xls2 %>%
   dplyr::select(-sdg_u, -id) %>%
   as.data.frame()
 
+## rename the column names
 names(coded_xls3) <- c("Statement", "SDG_target", paste0('SDG', seq(1,17)))
 
 writexl::write_xlsx(coded_xls3, path = paste0('./Data/data_TextMining/coded_Cemex_inspection.xlsx'))
@@ -849,8 +886,8 @@ for (i in 1:length(matching)){
   lookaround <- 2
   # pattern to search
     pattern <- paste0("([[a-z']]+ ){0,", lookaround, "}",
-                    paste(matching[i], collapse = '|'), 
-                  "( [[a-z']]+){0,", lookaround, "}")
+                      paste(matching[i], collapse = '|'),
+                      "( [[a-z']]+){0,", lookaround, "}")
     print(pattern)
   # add to list
     ls[[i]] <- pattern
@@ -873,6 +910,8 @@ DOC_SI$keywords <- str_extract_all(DOC_SI$comments,
                               "\\w+" #match any word character
                               )
 ```
+
+
 
 
 ```{r TEST look around, eval=FALSE, include=FALSE}
