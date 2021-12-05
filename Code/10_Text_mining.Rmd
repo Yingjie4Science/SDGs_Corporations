@@ -269,58 +269,14 @@ writexl::write_xlsx(txt_sentence_df, fname, )
 
   These SDG search terms can be *direct mention*, such as "SDG 1", "SDG 2", "SDG 1.2", "SDG 1.a", or *indirect mention*.  
 
-  This collection includes terms that are directly related to SDGs, i.e., if companies specifically mention SDG ids (e.g., 'SDG 13'), or the target or indicator ids (e.g., SDG 13.1.a). 
-  
-```{r - 1. Collection - direct commit}
-source('./Code/helper_SDG_search_terms.R')
-
-SDG_keys <- rbind(goal_keys, target_keys)
-
-SDG_ls_str <- SDG_keys$SDG_id %>% as.character(); SDG_ls_str
-
-
-SDG_keys_drc <- SDG_keys
-```
-
-
-
-  This collection includes terms that are indirectly related to SDGs, i.e., the terms are constructed based on the alignment to the description and meanings of each SDG or Target. 
-  
-```{r - 2. Collection - indrect commit}
-source('./Code/helper_SDG_search_terms.R')
-
-### bind these vectors and make it a dataframe to work from ----------------------------------------
-SDG_ls_str <- ls(pattern = "SDG[0-9].*") %>% sort(); SDG_ls_str
-
-SDG_ls_str <- grep("['xyzw]", SDG_ls_str, value = TRUE, invert = TRUE) # invert = TRUE means to return the values that were not matched.
-SDG_ls_str
-
-SDG_keys <- data.frame()  
-
-for (i in 1:length(SDG_ls_str) ) {
-  # print(i)
-  sdg_i_str <- SDG_ls_str[i]
-  sdg_i_obj <- get(sdg_i_str)
-  df_i <- data.frame(SDG_id       = sdg_i_str, 
-                     SDG_keywords = sdg_i_obj)
-  SDG_keys <- rbind(SDG_keys, df_i) %>%
-    dplyr::mutate(SDG_id       = as.character(SDG_id),
-                  SDG_keywords = as.character(SDG_keywords))
-}
-
-
-SDG_keys_indrc <- SDG_keys
-```
-
-
-```{r - 3. Collection - both}
-
-SDG_keys_drc$match_tpye   <- 'direct'
-SDG_keys_indrc$match_tpye <- 'indirect'
-
-SDG_keys_all <- rbind(SDG_keys_drc, SDG_keys_indrc)
+```{r - Load the database}
+fname <- paste0('./Data/data_TextMining/database/', 'SDG_keys.RData'); fname
+load(fname) ## --> SDG_keys_drc, SDG_keys_indrc, SDG_keys
 
 ```
+
+ 
+
 
 
 ## To detect  
@@ -405,39 +361,11 @@ sum(coded$n_total)
   
 ```{r - Detect region names}
 
-file <- paste0('./Data/data_TextMining/database/', 'country_region_names.RData')
-load(file)
+source('./Code/function_detect_region.R')
 
+coded_region <- coded
 
-coded_region        <- coded
-coded_region$region <- ''
-
-for (i in 1:nrow(country_region_names)){    
-    region_i <- country_region_names$name[i]  ## get the region name
-    
-    ## if the number of character of a region name is less than 4, we need to add word boundary to the word
-    region_i_enhanced <- ifelse(nchar(region_i) < 4,
-                                paste0('\\b', region_i, '\\b'),
-                                region_i)
-    
-    ## if the number of character of a region name is less than 4,, we cannot ignore case
-    case_to_choose    <- ifelse(nchar(region_i) < 4, 
-                                0,   
-                                1)
-    
-    # print(region_i)
-    print(region_i_enhanced)
-    # print(case_to_choose)
-
-    coded_region <-  coded_region %>%
-      as.data.frame() %>%
-      ## at the sentence level - detect if a subject country or region is mentioned ----------------
-      dplyr::mutate(
-        region = ifelse(grepl(pattern = region_i_enhanced, x = statement, ignore.case = case_to_choose, perl = T), 
-                        paste0(region, ',', region_i),  ## If detected, add the region name to the cell
-                        paste0(region, '')))  %>%       ## If not, add nothing
-      as.data.frame()
-}
+coded_region <- detect_region(data = coded_region, text_column = 'statement')
 
 ```
 
@@ -449,13 +377,9 @@ for (i in 1:nrow(country_region_names)){
   
 ```{r - Detect region names - in paragraph}
 
-file <- paste0('./Data/data_TextMining/database/', 'country_region_names.RData')
-load(file)
-
 ## create a separate data frame
 coded_para <- coded_region
 coded_para$para <- ''
-coded_para$region_para <- ''
 
 
 ## aggregate sentences to paragraph level ----------------------------------------------------------
@@ -502,32 +426,12 @@ for (i in 1:nmax) {
 
 ## detect region names at para level ---------------------------------------------------------------
 
-for (i in 1:nrow(country_region_names)){    
-    region_i <- country_region_names$name[i]  ## get the region name
-    
-    ## if the number of character of a region name is less than 4, we need to add word boundary to the word
-    region_i_enhanced <- ifelse(nchar(region_i) < 4,
-                                paste0('\\b', region_i, '\\b'),
-                                region_i)
-    
-    ## if the number of character of a region name is less than 4,, we cannot ignore case
-    case_to_choose    <- ifelse(nchar(region_i) < 4, 
-                                0,   
-                                1)
-    
-    # print(region_i)
-    print(region_i_enhanced)
-    # print(case_to_choose)
+coded_para <- coded_para %>%
+  dplyr::rename(region_sent = region)
 
-    coded_para <-  coded_para %>%
-      as.data.frame() %>%
-      dplyr::mutate(
-        region_para = ifelse(grepl(pattern = region_i_enhanced, x = para, ignore.case = case_to_choose, perl = T), 
-                             paste0(region_para, ',', region_i),  ## If detected, add the region name to the cell
-                             paste0(region_para, '')))  %>%       ## If not, add nothing
-      as.data.frame()
-}
-
+coded_para <- detect_region(data = coded_para, text_column = 'para') %>%
+  dplyr::rename(region_para = region)
+  
 ```
 
 
