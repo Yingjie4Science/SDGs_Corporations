@@ -1,0 +1,140 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Directories and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+library(dplyr)
+library(stringr)
+library(docstring)
+
+```
+
+
+# SDG search terms
+
+
+  Make a list of keywords for SDGs.
+
+|SDG_id       |SDG_keywords     |
+|SDG1_1       |keywords here    |
+
+  These SDG search terms can be *direct mention*, such as "SDG 1", "SDG 2", "SDG 1.2", "SDG 1.a", or *indirect mention*.  
+
+  This collection includes terms that are directly related to SDGs, i.e., if companies specifically mention SDG ids (e.g., 'SDG 13'), or the target or indicator ids (e.g., SDG 13.1.a). 
+  
+  
+```{r - 1. Collection - direct commit}
+
+script_file <- './Code/helper_SDG_search_terms.R' ## the 2nd version
+
+source(file = script_file)
+
+## combine 2 levels of key words together
+SDG_keys   <- rbind(goal_keys, target_keys)
+SDG_ls_str <- SDG_keys$SDG_id %>% as.character(); SDG_ls_str
+
+## name it as the 'directly' keywords
+SDG_keys_drc <- SDG_keys
+```
+
+
+
+
+
+ This collection includes terms that are *indirectly* related to SDGs, i.e., the terms are constructed based on the alignment to the description and meanings of each SDG or Target. 
+  
+```{r - 2. Collection - indirect commit}
+
+### get the list of all the 'indirect' keywords and bind these together in a dataframe
+SDG_ls_str <- ls(pattern = "SDG[0-9].*") %>% sort(); SDG_ls_str
+
+# SDG_ls_str <- grep("['xyzw]", SDG_ls_str, value = TRUE, invert = TRUE) # invert = TRUE means to return the values that were not matched.
+# SDG_ls_str
+
+SDG_keys <- data.frame()  
+
+for (i in 1:length(SDG_ls_str) ) {
+  # print(i)
+  sdg_i_str <- SDG_ls_str[i]
+  sdg_i_obj <- get(sdg_i_str)
+  df_i <- data.frame(SDG_id       = sdg_i_str, 
+                     SDG_keywords = sdg_i_obj)
+  SDG_keys <- rbind(SDG_keys, df_i) %>%
+    dplyr::mutate(SDG_id       = as.character(SDG_id),
+                  SDG_keywords = as.character(SDG_keywords))
+}
+
+
+SDG_keys_indrc <- SDG_keys %>%
+  as.data.frame() %>%
+  arrange(SDG_id) %>%
+  dplyr::mutate(SDG_id2 = gsub('_x.*|_y.*|_z.*|_w.*', '', SDG_id)) %>%
+  group_by(SDG_id2) %>%
+  ## here we keep the separated search terms (e.g., SDG11_1_x, SDG11_1_y), but removed the combined search terms (e.g., SDG11_1, which is a combination of SDG11_1_x and SDG11_1_y)
+  dplyr::mutate(n = n(),                               ## count the number of the same target
+                m = ifelse(SDG_id2 == SDG_id, 1, 0),   ## if the original name is the same as the new cleaned name
+                filter = case_when(n==1 & m==1 ~ 1,    ## use a filter to remove if (n>1 and the names are the same) 
+                                   n >1 & m==1 ~ 0,
+                                   TRUE ~ 1)) %>%
+  dplyr::select(SDG_id, SDG_id2, n, m, filter, everything()) %>%
+  # dplyr::filter(filter == 1) %>%    ## changed on 2/28/2022
+  dplyr::select(-n, -m, -filter) %>%
+  dplyr::select(-SDG_id) %>%
+  dplyr::rename(SDG_id = SDG_id2) %>%
+  as.data.frame()
+```
+
+
+
+
+
+
+```{r - 3. Collection - both}
+
+SDG_keys_drc$match_tpye   <- 'direct'
+SDG_keys_indrc$match_tpye <- 'indirect'
+
+SDG_keys <- rbind(SDG_keys_drc, SDG_keys_indrc)
+
+
+
+## Save to database --------------------------------------------------------------------------------
+
+### 1. for this project
+fname <- paste0('./Data/data_TextMining/database/', 'SDG_keys.RData'); fname
+save(SDG_keys_drc, SDG_keys_indrc, SDG_keys, file = fname)
+
+
+### 2. save to `SDG_TM` for R package development
+fname <- paste0(dirname(getwd()), '/SDG_TM/data/SDG_keys.RData'); fname
+save(SDG_keys, file = fname)
+
+### 3. for Meng Cai's repo
+fname <- paste0('./Code/findSDGs/data/', 'SDG_keys.RData'); fname
+save(SDG_keys, file = fname)
+```
+
+
+
+
+# Make a copy 
+  Make a copy of the R script to Package repo. 
+```{r}
+
+new.folder <- paste0(dirname(getwd()), '/SDG_TM/code'); new.folder
+
+# copy the files to the new folder
+file.copy(from = script_file, to = new.folder, overwrite = T)
+```
+
