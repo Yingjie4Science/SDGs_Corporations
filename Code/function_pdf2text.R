@@ -15,6 +15,7 @@ pdf2text <- function(filename){
     stringr::str_replace_all(fixed("\n"), " ") %>% # erase new lines
     stringr::str_replace_all(fixed("\r"), " ") %>% # erase carriage return
     stringr::str_replace_all(fixed("\t"), " ") %>% # erase tabs
+    stringr::str_replace_all(fixed("\b"), " ") %>% # erase backspace
     stringr::str_replace_all(fixed("\""), " ") %>% # erase "
     paste(sep = " ", collapse = " ") %>%
     stringr::str_squish() %>%                      # remove leading & trailing whitespace, and repeated whitespace inside a string
@@ -23,8 +24,8 @@ pdf2text <- function(filename){
   
   
   ## text to DF ------------------------------------------------------------------------ #
-  # separate the large character chunk to short sentences by
-  #    '.' (period), ';' (semicolon), ':' (colon), and '/ ' (slash with space)
+  ### separate the large character chunk to short sentences by
+  ###    '.' (period), ';' (semicolon), ':' (colon), and '/ ' (slash with space)
   ### --> used before 2022/02/06
   # txt_sentence <- unlist(strsplit(txt, split = "\\. |\\; |\\/ |\\: ")) %>% trimws() ## without ',' (comma) 
   
