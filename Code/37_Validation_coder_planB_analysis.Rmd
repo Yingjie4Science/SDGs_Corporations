@@ -1,0 +1,243 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "01/23/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+  This script aims to produce randomly selected reports (25%) and text lines (200 rows per report) to validate the text mining results. 
+  
+  **Before clicking Run All**
+  - update `nth_round` 
+  
+  
+
+# Directories and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+# directories for Yingjie
+  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.results <- './Data/data_results/'
+  dir.figures <- './Data/figures/'
+  dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+
+# load packages
+  source('./Code/_packages.R')
+
+  library(tm)        # text mining: readPDF(), Corpus()
+  library(tidyverse) # piping and wrangling
+  library(tabulizer) # importing PDFs
+  #library(remotes)  # installing from remote repositories
+  library(metagear)  # for `effort_distribute()`
+  
+today <- format(Sys.time(), "%Y%m%d_%H%M"); today
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+
+```
+
+
+
+# Data in
+
+```{r}
+gdrive <- "G:/My Drive/_paper/SDGs/SDGs_Corporations/data_TextMining_shared/"
+
+nth_round <- 3
+
+dir.task1 <- paste0(gdrive, "task1_R", nth_round, "_done"); dir.task1
+
+
+
+
+f.ls <- list.files(path = dir.task1, pattern = "^task1_", full.names = T); f.ls
+## test line
+# f    <- "./Data/data_TextMining/coded_validation_coder/planB_done/task1/task1_YL.xlsx" 
+ds   <- data.frame()
+for (f in f.ls) {
+  
+  coder <- basename(f) %>% gsub('task1_|\\.xlsx', '', .); coder
+  d <- readxl::read_excel(path = f) %>%
+    dplyr::mutate(coder = coder, index = as.numeric(row.names(.)))
+  ds <- rbind(ds, d)
+  
+}
+
+unique(ds$correct_or_not)
+unique(ds$coder)
+
+
+
+
+
+## unify the checking result to "0, 1, NA" only ------------------------------------------
+ds0 <- ds %>%
+  dplyr::mutate(coder = gsub(pattern = '.*_', '', coder)) %>%                    ## clean coder name
+  dplyr::mutate(correct_or_not = gsub(pattern = '\\*', '', correct_or_not)) %>%  ## clean coder's response
+  dplyr::mutate(correct = case_when(correct_or_not == "1" ~ 1,
+                                    correct_or_not == "0" ~ 0,
+                                    is.na(correct_or_not) ~ NA_real_,
+                                    grepl("^Y", correct_or_not) ~ 1,
+                                    TRUE                  ~ 0)) %>%
+  dplyr::select(coder, correct, correct_or_not, everything()) 
+
+
+ds1 <- ds0 %>%
+  arrange(correct_or_not)
+
+
+
+## to check the alignment across coders --------------------------------------------------
+ds2 <- ds1 %>%
+  dplyr::select(coder, correct, company, index) %>%
+  ## only analyze rows being checked
+  # dplyr::filter(!is.na(correct)) %>%
+  spread(key = coder, value = correct) %>%
+  dplyr::mutate(same12 = ifelse(MC == VF, 1, 0),
+                same13 = ifelse(MC == YL, 1, 0),
+                same14 = ifelse(MC == YZ, 1, 0),
+                same23 = ifelse(VF == YL, 1, 0),
+                same24 = ifelse(VF == YZ, 1, 0),
+                same34 = ifelse(YL == YZ, 1, 0),
+                same3  = ifelse(MC == YL & YZ == YL, 1, 0),
+                same4  = ifelse(MC == YL & YZ == YL & VF == YL, 1, 0)) %>%
+  as.data.frame()
+```
+
+
+
+## how good TM is
+```{r}
+
+names(ds2)
+
+### The accuracy of our SDGdetector judged by SDG experts
+ds_accuracy <- ds2 %>%
+  dplyr::select(company, index, MC, VF, YL, YZ) %>%
+  gather(key = 'coder', value = "value", 3:ncol(.)) %>%
+  dplyr::group_by(coder) %>%
+  dplyr::summarise(accuracy = sum(value, na.rm = T)/nrow(ds2)) %>%
+  dplyr::mutate(id = row.names(.)) %>% dplyr::select(id, everything())
+ds_accuracy
+
+
+### test code
+# (sum(ds2$MC, na.rm = T)/nrow(ds2)) %>% 
+#   scales::percent() %>% 
+#   cat('accuracy by MC:', .)
+```
+
+
+
+
+
+
+## check the alignment across coders
+```{r}
+names(ds2)
+
+### The inter-expert reliability 
+ds_intercoder <- ds2 %>%
+  dplyr::select(company, index, same12, same13, same14, same23, same24, same34) %>%
+  gather(key = 'pair', value = "value", 3:ncol(.)) %>%
+  dplyr::group_by(pair) %>%
+  dplyr::summarise(alignment = sum(value, na.rm = T)/nrow(ds2))
+
+ds_intercoder
+```
+
+  *Test code
+```{r}
+
+# (sum(ds2$same3, na.rm = T)/nrow(ds2)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between MC-YL-YZ:', .)
+# 
+# (sum(ds2$same4, na.rm = T)/nrow(ds2)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between 4 ppl:', .)
+
+
+
+
+## only look at the rows inspected by all of us ------------------------------------------
+# ds4 <- ds2 %>%
+#   dplyr::filter(!is.na(YZ))
+# 
+# (sum(ds4$same3, na.rm = T)/nrow(ds4)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between MC-YL-YZ:', ., '(when only count rows being inspected by all)')
+# 
+# (sum(ds4$same4, na.rm = T)/nrow(ds4)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between 4 ppl:', ., '(when only count rows being inspected by all)')
+```
+
+
+
+
+## look into the difference in text
+```{r}
+
+## pull coder comments together and add to the compare table later
+dsnote <- ds0 %>% dplyr::select(coder, company, index, 
+                                # statement, 
+                                # target_by_machine, 
+                                coder_notes) %>%
+  # dplyr::mutate(id_order = row.names(.)) %>%
+  # ungroup() %>% 
+  group_by(coder) %>%
+  as.data.frame() %>%
+  # tidyr::pivot_wider(id_cols = c(company, index), names_from = coder, values_from = coder_notes) %>%
+  tidyr::spread(key = coder, value = coder_notes) %>%
+  as.data.frame()
+  
+dsnote1 <- d %>%
+  dplyr::select(index, statement, target_by_machine) %>%
+  left_join(., dsnote, by = 'index')
+  
+## the comparison table
+dsdiff <- ds2 %>%
+  dplyr::select(1:6, same13, same23, same34, same4) %>%
+  left_join(x =., 
+            y = dsnote1, 
+            by = c('company', 'index')) %>%
+  # arrange(same4) %>%
+  arrange(index) %>%
+  as.data.frame()
+
+dsdiff[, 13:16] <- sapply(dsdiff[, 13:16], function(col) ifelse(is.na(col), ' ', col))
+
+## save to XLSX for easy read
+f <- paste0(dirname(dir.task1), '/', basename(dir.task1), '_analysis.xlsx'); f
+writexl::write_xlsx(dsdiff, path = f)
+
+```
+
+
+
+
+# Process of evaluate the inspection results
+
+  1. Compare the difference between `YL` and others Based on the file "taskx_Rx_done_analysis.xlsx".
+  
+  2. Read each notes (either from the above xlsx or individual xlsx) to understand the difference. 
+  
+  3. Edit "SDG keywords for Text Mining Codebook" according to the notes and comments. 
+  
+  4. Add the controversial ones to the Appendix of "SDG_TM_Inspection_Protocol" for further discussion. 
+  

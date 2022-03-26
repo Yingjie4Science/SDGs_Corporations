@@ -1,0 +1,325 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "01/23/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+  This script aims to produce randomly selected reports (25%) and text lines (200 rows per report) to validate the text mining results. 
+  
+
+# Directories and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+# directories for Yingjie
+  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.results <- './Data/data_results/'
+  dir.figures <- './Data/figures/'
+  dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+
+# load packages
+  source('./Code/_packages.R')
+
+  library(tm)        # text mining: readPDF(), Corpus()
+  library(tidyverse) # piping and wrangling
+  library(tabulizer) # importing PDFs
+  #library(remotes)  # installing from remote repositories
+  library(metagear)  # for `effort_distribute()`
+  
+today <- format(Sys.time(), "%Y%m%d_%H%M"); today
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+
+```
+
+
+
+# Data input
+
+## Helper data
+```{r}
+source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
+
+fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
+load(fname)
+```
+
+
+
+
+## List of all the coded reports
+```{r}
+
+## 1. load the reports with human-coded results
+ls1 <- list.files(path = paste0(dir.reports, 'pdf_coded_human/DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); 
+# ls1
+cat('There are', ls1 %>% length(), 'corporate reports were coded')
+
+
+
+## 2. load the reports without human-coded results
+ls2 <- list.files(path = paste0(dir.reports, 'pdf_not_coded/DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); 
+# ls2
+cat('There are', ls2 %>% length(), 'corporate reports were coded')
+
+
+ls <- c(ls1, ls2)
+cat('There are', ls %>% length(), 'corporate reports were coded, in total.')
+
+```
+
+
+
+
+## Random samples from the machine-coded results
+
+  **Note1**: We randomly choose 4200 sentences for inspection from the 500 reports. Among the 4200, 200 are the common samples for all the coders, and the rest 4000 are evenly distributed to four coders (each get another 1000) for independent inspection.
+  
+  **Note2**: For the in total 4200 sentences, 50% comes from sentences with SDG labels while the rest 50% from sentences without any SDG labels. 
+  
+```{r - Parameter settings, include=FALSE}
+nth_round <- 3   ## which round of inspection
+len_min   <- 40  ## exclude super short sentences
+
+## --> On average, sentences today range from 15 to 20 words. The average word in the English language is 4.7 characters.
+## --> https://medium.com/@theacropolitan/sentence-length-has-declined-75-in-the-past-500-years-2e40f80f589f
+## --> https://www.wyliecomm.com/2021/11/whats-the-best-length-of-a-word-online/
+```
+
+
+```{r - Pull data}
+### to put all coded report together
+coded_bind <- data.frame() 
+for (f in ls) {
+  # print(f)
+  com_name <- gsub('\\.RData|_coded', '', basename(f)); #print(com_name)
+  load(f) ## all coded reports were named "coded" as Rdata
+  coded <- coded %>% dplyr::mutate(company = com_name) %>%
+    dplyr::select(company, everything())
+  ## bind all coded data together 
+  coded_bind <- rbind(coded_bind, coded)
+}
+
+unique(coded_bind$company) %>% length()
+cat('There are', nrow(coded_bind), 'sentences in total from the coded companies.')
+
+# gc()
+```
+
+
+
+
+```{r - Subset the samples}
+
+### take random samples from the whole dataset -------------------------------------------
+set.seed(nth_round*123)
+
+cat('We choose 4200, or', round(4200/nrow(coded_bind)*100, digits = 2), '% of all the sentences for inspection.\n\n')
+
+## 50% (n = 2100) rows with coded info
+coded_sample1 <- coded_bind %>% 
+  dplyr::filter(nchar(sdgs) > 3)       %>%      ## with coded info
+  dplyr::filter(nchar(statement) > len_min) %>% ## remove sentences that are too short
+  
+  ## !!! remove the rows that are labeled as "SDGx_general" only - this is for inspection use only
+  dplyr::mutate(myfilter = stringr::str_count(sdgs, ",") - stringr::str_count(sdgs, "general")) %>%
+  dplyr::filter(myfilter != 0) %>%
+  dplyr::select(-myfilter) %>%
+  
+  dplyr::sample_n(., size = 2100, replace = F) %>%
+  as.data.frame()
+
+
+## 50% (n = 2100) rows without any coded SDG labels info
+coded_sample0 <- coded_bind %>% 
+  dplyr::filter(nchar(sdgs) < 3)       %>%
+  dplyr::filter(nchar(statement) > len_min) %>% ## remove sentences that are too short
+  dplyr::sample_n(., size = 2100, replace = F)  
+
+dfs <- rbind(coded_sample1, coded_sample0)
+n   <- unique(dfs$company) %>% length(); 
+cat(n, 'companies are included in the sample.\n\n')
+
+
+### save all the hits to xlsx for easier inspection. 
+fname <- paste0(dirname(dir.reports), '/coded_validation_coder/planB/screening_dfs_planB_R', nth_round, '.xlsx');  fname
+writexl::write_xlsx(x = dfs, path = fname)
+fname <- paste0(dirname(dir.reports), '/coded_validation_coder/planB/screening_dfs_planB_R', nth_round, '.RData'); fname
+save(dfs, file = fname)
+```
+
+
+
+## Format the samples for human coders
+
+   - (1) add additional columns for coders
+   - (2) get the unique SDG target and sort them for easy checking
+
+```{r}
+
+fname <- paste0(dirname(dir.reports), '/coded_validation_coder/planB/screening_dfs_planB_R', nth_round, '.RData'); fname
+load(fname)
+names(dfs)
+
+### load the function 
+source('./Code/function_format_coded.R')
+
+
+### add additional columns for coders 
+dfs_format <- dfs %>%
+  dplyr::select(company, id, everything()) %>%
+  dplyr::select(-n_total, -sdgs_n)         %>%
+  dplyr::rename(sdg_by_machine = sdgs)     %>%
+  dplyr::arrange(desc(nchar(sdg_by_machine)))  %>%
+  dplyr::mutate(
+    # statement = str_to_sentence(statement),     ## change all capitalized words
+    statement = trimws(statement),
+    correct_or_not = "", which_target_ifnot = "", coder_notes = "")
+
+
+### get the unique SDG target and sort them for easy checking
+dfs_format1 <- dfs_format %>%
+  dplyr::mutate(sdg_by_machine = gsub('^\\,', '', sdg_by_machine)) 
+
+dfs_format2 <- data.frame()
+for (i in 1:nrow(dfs_format1)) {
+  
+  ## 0. get one row 
+  d <- dfs_format1[i, ]
+  n <- nchar(d$sdg_by_machine) ## if n > 0, there are SDGs were detected for this row
+
+  if (n>0) {
+    ## 1. get the coded SDG list and take the unique and sorted values
+    sdg_ls <- d$sdg_by_machine %>% 
+      strsplit(., split = ',') %>% unlist() %>%                   ## split this long string to a vector
+      # stringr::str_subset(., pattern = "general", negate = T) %>% ## remove SDGs with 'general'
+      unique() %>% sort() %>%                                     ## get the unique SDG list
+      paste(., collapse = ', ')                                   ## combine the vector to a long string
+    
+    ## 2. update the sdg list in the original dataframe
+    d$sdg_by_machine <- sdg_ls
+    
+    ## 3. rename the sdg column 
+    d2 <- d %>% dplyr::rename(target_by_machine = sdg_by_machine)
+  
+  } else {
+    d2 <- d %>% dplyr::rename(target_by_machine = sdg_by_machine)
+  }
+  
+  dfs_format2 <- rbind(dfs_format2, d2)
+}
+
+```
+
+
+
+## Generate tasks for each coder
+
+  - 200 common sentences for all coders. 
+  
+  - 1000 sentences for each coder
+  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+
+dfs_format3 <- dfs_format2 %>%
+  # arrange(nchar(statement)) %>%  ## to inspect short sentences
+  group_by(statement) %>%
+  arrange(target_by_machine) %>%
+  as.data.frame()
+
+n_novalue <- dfs_format3 %>% dplyr::filter(nchar(target_by_machine) < 3) %>% nrow(); n_novalue
+n_value   <- dfs_format3 %>% dplyr::filter(nchar(target_by_machine) > 3) %>% nrow(); n_value
+
+nrow(dfs_format3)
+(n_value+n_novalue)
+
+percent_rows <- (n_value/(n_value+n_novalue)) %>% scales::percent()
+cat(percent_rows, 'of the selected samples have machine-coded info.')
+
+
+
+## split the workload --------------------------------------------------------------------
+n_coders = 4
+
+####################################### ###
+### 1. Select the 200 for common pool   ###
+####################################### ###
+
+dfs_task1 <- dfs_format3 %>%
+  dplyr::sample_n(., size = 200, replace = F) %>%
+  ungroup() %>%
+  dplyr::mutate(target_by_machine = ifelse(nchar(target_by_machine)<3, NA, target_by_machine)) %>%
+  arrange(is.na(target_by_machine), target_by_machine) %>%
+  as.data.frame()
+
+output_dir <- paste0(dirname(dir.reports), '/coded_validation_coder/planB/task1_R', nth_round); output_dir
+if (!dir.exists(output_dir)) {dir.create(output_dir)}
+
+dir_eff <- paste0(output_dir, '/task1_R', nth_round, '.xlsx');  dir_eff
+file.remove(list.files(path = dir_eff, full.names = TRUE))
+writexl::write_xlsx(dfs_task1, path = dir_eff)
+
+names(dfs_task1)
+
+
+####################################### ###
+### 2. Split the 4000 to each           ### 
+####################################### ###
+
+dfs_task2 <- dfs_format3 %>%
+  anti_join(., dfs_task1, by = c("company", "id")) %>% ## exclude the 200 common pool list
+  dplyr::mutate(target_by_machine = ifelse(nchar(target_by_machine)<3, NA, target_by_machine)) %>%
+  arrange(is.na(target_by_machine), target_by_machine) %>%
+  as.data.frame()
+
+output_dir <- paste0(dirname(dir.reports), '/coded_validation_coder/planB/task2_R', nth_round); output_dir
+if (!dir.exists(output_dir)) {dir.create(output_dir)}
+
+file.remove(list.files(path = output_dir, full.names = TRUE))
+metagear::effort_distribute(dfs_task2, initialize = T, 
+                  reviewers = paste0('coder', seq(1:n_coders)), 
+                  save_split = TRUE, 
+                  directory  = output_dir)
+
+
+### 2.1. save the task2 as xlsx
+for (i in 1:n_coders) {
+  # print(i)
+  
+  ### read in and format
+  dir_eff <- output_dir
+  f <- list.files(dir_eff, pattern = paste0("effort_coder", i), full.names = T); f
+  d <- read_csv(file = f) %>% dplyr::select(-INCLUDE)
+  file.remove(f)
+
+  ### save to file
+  fxlsx <- gsub('\\.csv$', paste0('_R', nth_round, '\\.xlsx'), f);  fxlsx
+  fxlsx <- gsub('effort', 'task2', fxlsx);  fxlsx
+  writexl::write_xlsx(x = d, path = fxlsx)
+  
+    
+  ### data desc
+  n_tagged <- d %>% dplyr::filter(nchar(target_by_machine) > 3) %>% nrow(); n_tagged
+  
+  cat('There are', nrow(d), "rows for coder", i, ', and', (n_tagged/nrow(d))*100, '% with SDG tags.')
+}
+
+```
+
+
+
