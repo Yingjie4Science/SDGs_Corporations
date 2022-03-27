@@ -73,7 +73,7 @@ save(goals_df, file = fname)
   Conversion to text --> and save .txt with name from list and move to another folder. 
   
   (1) get the list of the downloaded PDFs. 
-```{r}
+```{r - 350 +}
 ## read the company information list from XLS file. 
 com_download <- readxl::read_excel("./Data/data_TextMining/com_list_HumanCoded_URL.xlsx") %>%
   dplyr::filter(str_starts(string = url, pattern = "NA", negate = T))
@@ -96,13 +96,21 @@ union(setdiff(a,b), setdiff(b,a)) %>% sort()
 ```
 
 
+```{r - 146 not human-coded}
+### for the not-human-coded PDF
+files <- list.files(path = paste0(dir.reports, 'pdf_not_coded'), pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
+com_name_ls <- gsub("\\--.*", "", basename(files))
+
+cat('There are', length(files), "PDF reports."); ## 146
+```
+
+
 
   (2) Convert each PDF to text format
-```{r eval=FALSE, include=FALSE}
+```{r - Convert, eval=FALSE, include=FALSE}
 
 ### Custom function
 source('./Code/function_pdf2text.R') # `pdf2text`
-
 
 
 ### loop all the PDF
@@ -126,7 +134,7 @@ for (pdf in files) {
     as.data.frame()
   
   ## --> save as r data
-  fname <- paste0(dirpath, 'DF/',  company_name[1], '.RData'); print(fname)
+  fname <- paste0(dirname(pdf), '/DF/',  company_name[1], '.RData'); print(fname)
   save(txt_sentence_df, file = fname)
   
   ## --> update the PDF list, if error occurs
@@ -210,7 +218,7 @@ dir_input <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
 ## 2. load the `txt to df` data
 ls <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
 
-cat('There are', ls %>% length(), 'corporate reports were converted.')
+cat('There are', ls %>% length(), 'corporate reports were converted.') ## 352
 ```
 
 
@@ -227,11 +235,11 @@ ls <- ls[1:10]
 
 
 
-```{r - 100 + reports without human data, eval=FALSE, include=FALSE}
+```{r - 146 + reports without human data, eval=FALSE, include=FALSE}
 dir_input <- paste0(dir.reports, "pdf_not_coded/"); dir_input
 ls  <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
 
-cat('There are', ls %>% length(), 'corporate reports were converted.')
+cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146
 ```
 
 
