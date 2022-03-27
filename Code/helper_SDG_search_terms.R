@@ -89,7 +89,7 @@ child_ls = paste("child|\\bteen|juvenile|youth|young|\\bminor.?\\b|under 5|under
 death_ls = "mortal|death|\\bdead|\\bdie\\b|\\bdies\\b|\\bdied\\b|\\bdying|fatal|deceas|\\bdemis|\\bkill|lethal|perish|lose.*life|pass away"
 
 disaster_ls = paste(
-  "shock|disaster|catastrophe|hazard|hurricane|tornado|cyclone|flood|drought||\\bharm.?\\b|\\bharmed\\b", 
+  "shock|disaster|catastrophe|hazard|hurricane|tornado|cyclone|flood|drought|\\bharm.?\\b|\\bharmed\\b", 
   "wild.?fire|fire.?storm|extreme weather|extreme temperature|extreme heat|heat.?wave|cold wave", 
   "extreme precipitation|lightning|thunderstorm|ice storm|blizzard|hailstorm|tropical storm|earthquake", 
   "volcanic eruption|limnic eruption|exploding lake|landslide|mudslide|debris flow|tsunami|sinkhole|subsidence", sep = "|")
@@ -132,9 +132,9 @@ poverty_ls = "poverty|\\bpoor|impover|underprivileg|necessitous|homeless|\\bhobo
 
 
 reduce_ls = paste("alleviat|\\babate|\\bavert|abolish|eradicat|eliminat|\\beras|\\bease|\\bend.?\\b|\\bended\\b|rid of|phase out|\\bwipe out",
-                  "\\breduc|\\bcut|\\bcurb|curtail|declin|decreas|diminish|\\bdrop|dwindl|\\bhalt|hinder|hamper|impede",
+                  "\\breduc|\\bcut.?\\b|\\bcurb|curtail|declin|decreas|diminish|\\bdrop|dwindl|\\bhalt|hinder|\\bhamper|impede",
                   "\\binhibit.?\\b|\\binhibited\\b|\\binhibiting",
-                  "lessen|mitigat|slash|shrink|\\bstop|\\btrim|weaken|\\bno \\b|\\bzero|prevent|prohibit|minimis|minimiz", sep = "|")
+                  "lessen|mitigat|slash|shrink|\\bstop|\\btrim|weaken|\\bno\\b|\\bzero|prevent|prohibit|minimis|minimiz", sep = "|")
 
 
 ls_hazardous_waste_chemicals = paste(
@@ -1200,7 +1200,7 @@ SDG8_5_x7 = c("unemployment",
 
 
 SDG8_6 = c("youth|young people|\\bteens\\b", 
-           "\\bin \\b",
+           "\\bin\\b|\\bwith\\b",
            "educat|employment|\\btraining")
 temp   <- SDG8_6
 SDG8_6 <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[3], n = 4, third_AND_string = temp[1])
@@ -1236,7 +1236,7 @@ SDG8_8_x5 = c(paste(death_ls, "injur|\\bharm.?\\b|\\bharmed\\b|danger|\\binciden
               "\\bjob.?\\b|\\bwork|\\bemploy|occupation",
               reduce_ls)
 temp <- SDG8_8_x5
-w_ex <- c('alcohol', 'Drinking', 'No\\.')
+w_ex <- c('alcohol', 'Drinking', '\\bNo\\.')
 ### Option 4 ----
 SDG8_8_x5 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, exclude = w_ex, third_AND_string = temp[3])
 
@@ -1710,6 +1710,7 @@ SDG11_2   <- SDG11_2
 SDG11_3_x <- func_AND_plus(SDG11_3_x)
 
 SDG11_5_x <- func_AND_plus(SDG11_5_x)
+
 SDG11_6 <- func_AND_plus(SDG11_6)
 
 
@@ -1792,7 +1793,7 @@ SDG12_4_x = c(paste("manag|\\btreat|agreement|responsi|recycl|\\bre.?us|life cyc
                     sep = "|"))
 # SDG12_4_x <- func_AND_plus(SDG12_4_x)
 temp      <- SDG12_4_x
-SDG12_4_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
+SDG12_4_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
 
 
 SDG12_4_y = "environmental permit"
@@ -1953,7 +1954,8 @@ climate_good_ls = paste(
 ####
 SDG13_1 = c(paste(climate_ls, 'kyoto protocol', sep = "|"), 
             paste(disaster_ls, death_ls, "\\bmissing person|human loss", sep = "|"),
-            paste("resilien|adapt|adjust|\\bcombat|\\blimit", reduce_ls, sep = '|'))
+            paste("resilien|adapt|adjust|\\bcombat|\\blimit.?\\b", reduce_ls, sep = '|'))
+SDG13_1   <- func_AND_plus(SDG13_1)
 
 
 SDG13_2_x = paste(climate_good_ls, 'kyoto protocol|\\bunfccc|tipping point', sep = '|')
@@ -1979,7 +1981,7 @@ SDG13_2_z = c(paste(climate_ls, climate_good_ls, sep = "|"),
                     "response to|cope.?with|coping with|deal.?with|dealing with|handl|measure",
                     policy_ls, reduce_ls, sep = '|')) 
 SDG13_2_w1 <- c(emission_ls, 
-                paste("captur|sequest|\\blimit|remov|absorb", reduce_ls, sep = "|"))
+                paste("captur|sequest|\\blimit.?\\b|remov|absorb", reduce_ls, sep = "|"))
 SDG13_2_z  <- func_AND_plus(SDG13_2_z)
 SDG13_2_w1 <- func_AND_plus(SDG13_2_w1)
 
@@ -1995,30 +1997,25 @@ SDG13_2_w2 <- paste0("^(?!.*(?:Power segment|Renewables & Power|wind up|Clean En
 SDG13_3 = c(paste(climate_ls, 'kyoto protocol', emission_ls, sep = "|"),
             paste("adapt|captur|contribut|convention", reduce_ls, policy_ls, sep = '|'),
             "educat|aware|engag|outreach|communicat|cultivat|informing|\\binform\\b|\\binforms\\b|\\binformed\\b|\\btrain|tutor|instruct|teach|learn")
+SDG13_3   <- func_AND_plus(SDG13_3)
 
 
 SDG13_a_x = c(paste(climate_ls, climate_good_ls, 'kyoto protocol', sep = '|'),
               paste(support_ls, "dollar|capital|mobili|implement|operat|convention|mitigat|foster", sep = '|'))
+SDG13_a_x <- func_AND_plus(SDG13_a_x)
 SDG13_a_y = "United Nations Framework Convention on Climate Change|\\bunfccc\\b|U\\.N\\.F\\.C\\.C\\.C\\.|Green Climate Fund|\\bGCF\\b|G\\.C\\.F\\."
 
 
 SDG13_b  = c(paste(climate_ls, climate_good_ls, 'kyoto protocol', sep = '|'),
              paste(policy_ls, "capacity|\\bscope", support_ls, sep = '|'),
              developing_country_ls)
+SDG13_b   <- func_AND_plus(SDG13_b)
 
 
-SDG13_general = paste(climate_ls, climate_good_ls, 'kyoto protocol', emission_ls, sep = '|')
+SDG13_general <- paste(climate_ls, climate_good_ls, 'kyoto protocol', emission_ls, sep = '|')
 
 
 ####
-SDG13_1   <- func_AND_plus(SDG13_1)
-SDG13_3   <- func_AND_plus(SDG13_3)
-SDG13_a_x <- func_AND_plus(SDG13_a_x)
-SDG13_b   <- func_AND_plus(SDG13_b)
-
-SDG13_general <- SDG13_general
-
-
 # SDG13_2   <- func_OR_vector(c(SDG13_2_x, SDG13_2_y, SDG13_2_z, SDG13_2_w1, SDG13_2_w2))
 # SDG13_a   <- func_OR_vector(c(SDG13_a_x, SDG13_a_y))
 
@@ -2326,10 +2323,8 @@ SDG16_4_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6, 
 
 
 
-SDG16_4_y <- "unauthorized acquisition|money laundering"
-SDG16_4_z <- c("\\baudit",
-               "financ|cash flow")
-SDG16_4_z <- func_AND_plus(SDG16_4_z)
+SDG16_4_y <- "unauthorized acquisition|money.?launder|money.?washing|launder money|laundering money"
+
 
 
 SDG16_5_x = c("corrupt|\\bbrib|Tax evasion|extortion", 
