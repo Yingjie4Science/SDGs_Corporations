@@ -89,7 +89,7 @@ child_ls = paste("child|\\bteen|juvenile|youth|young|\\bminor.?\\b|under 5|under
 death_ls = "mortal|death|\\bdead|\\bdie\\b|\\bdies\\b|\\bdied\\b|\\bdying|fatal|deceas|\\bdemis|\\bkill|lethal|perish|lose.*life|pass away"
 
 disaster_ls = paste(
-  "shock|disaster|catastrophe|hazard|hurricane|tornado|cyclone|flood|drought|\\bharm.?\\b|\\bharmed\\b", 
+  "shock|disaster|catastrophe|cataclysm|casualt|calamit|hazard|mishap|hurricane|tornado|cyclone|flood|drought|\\bharm.?\\b|\\bharmed\\b", 
   "wild.?fire|fire.?storm|extreme weather|extreme temperature|extreme heat|heat.?wave|cold wave", 
   "extreme precipitation|lightning|thunderstorm|ice storm|blizzard|hailstorm|tropical storm|earthquake", 
   "volcanic eruption|limnic eruption|exploding lake|landslide|mudslide|debris flow|tsunami|sinkhole|subsidence", sep = "|")
@@ -98,11 +98,13 @@ disaster_ls = paste(
 emission_ls = paste("\\bemission|\\bCO2\\b|carbon|green.?house|\\bGHG\\b|G\\.H\\.G\\.|chlorofluorocarbon|\\bcfc\\b|c\\.f\\.c\\.|\\bCFCs\\b",
                     "water vapour|methane|\\bCH4\\b|nitrous oxide|\\bN2O\\b|\\bozone|\\bO3\\b|fluorinated gas", sep = "|")
 
-female_ls = "woman|women|\\bgirl|female|\\blady\\b|\\bladies\\b"
+female_ls = "woman|women|\\bgirl|female|\\blady\\b|\\bladies\\b|\\bmaid"
 
-increase_ls = paste("accelerat|ascend|\\badvanc|climb|better|boost|\\bboom|\\bdouble|escalat|\\bgrow|\\bhike|\\bhiking|improv",
-                    "increas|foster|increment|jump|\\blift|\\brais|\\brise.?\\b|rising|\\brose|risen|\\brocket|skyrocket|\\bsurg|\\bsoar|promot",
-                    "strengthen|upsurg|upward", 
+increase_ls = paste("accelerat|ascend|\\badvanc|augment|\\bamplif|magnif|burgeon|\\bclimb|better|boost|\\bboom|\\bdouble|escalat",
+                    "expansion|\\bexpand|expansion|\\benlarge|\\bgrow|\\bhike|\\bhiking|heighten|improv",
+                    "increas|foster|\\bfortif|increment|jump|\\blift|\\brais|\\brise.?\\b|rising|\\brose|risen|\\brocket|skyrocket",
+                    "\\bsurg|\\bsoar|promot|proliferat",
+                    "strengthen|enhanc|aggrandiz|reinforce|upsurg|upward", 
                     sep = "|")
 
 illegal_ls = "illegal|criminal|illegitimate|illicit|unauthorized|unlawful|unlicensed|unconstitutional|prohibited|forbidden|banned"
@@ -118,23 +120,25 @@ support_ls  = paste("financ|\\bfund.?\\b|\\bfunding\\b|\\bassist|budget|\\baid.?
                     "government aid.?\\b|state aid.?\\b|federal aid|national aid", 
                     "invest|compensation|donor|donat",
                     "help|enhanc|expenditure|\\bgrant.?\\b|\\bloan|official flow|support|\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis",
-                    "\\bstimulat|strengthen|transfer|uphold|boost|bolster", sep = "|")
+                    "\\bstimulat|strengthen|fortify|transfer|uphold|boost|bolster", sep = "|")
 
-urban_ls = "urbaniz|\\burban|\\bcity|\\bcities|human settlement|land consumption|land use|metropoli|town|municipal"
+urban_ls = "urbaniz|\\burban|\\bcity|\\bcities|human settlement|land consumption|land use|metropoli|town|municipal|oppidan"
 
 
 policy_ls = paste("action|activit|administ|agreement|approach|arrangement|blueprint|\\bdeal|\\bguide|govern", 
                   "method|manag|\\bpolicy|\\bpolicies|\\bplan\\b|\\bplans\\b|planning|proced|program|project.?\\b",
-                  "practice|procedure|propos|protocol|\\brule.?\\b|regulat",
+                  "practice|procedure|propos|protocol|\\brule.?\\b|\\bregulat",
                   "\\blaw|\\btreat|\\bright|constitution|initiative|scheme|strateg", sep = "|")
 
-poverty_ls = "poverty|\\bpoor|impover|underprivileg|necessitous|homeless|\\bhobo|low income|low-income|lower income|underclass"
+poverty_ls = "poverty|\\bpoor|impover|destitution|underprivileg|necessitous|homeless|\\bhobo|low income|low-income|lower income|underclass"
 
 
-reduce_ls = paste("alleviat|\\babate|\\bavert|abolish|eradicat|eliminat|\\beras|\\bease|\\bend.?\\b|\\bended\\b|rid of|phase out|\\bwipe out",
-                  "\\breduc|\\bcut.?\\b|\\bcurb|curtail|declin|decreas|diminish|\\bdrop|dwindl|\\bhalt|hinder|\\bhamper|impede",
+reduce_ls = paste("alleviat|\\babate|abridge|\\bavert|abolish|eradicat|eliminat|\\beras|\\bease|\\bend.?\\b|\\bended\\b|rid of|phase out|\\bwipe out",
+                  "\\breduc|\\bcut.?\\b|\\bcurb|curtail|declin|decreas|diminish|diminution|\\bdrop|dwindl",
+                  "\\bfade\\b|fall off|go down|goes down|went down|tone down|die down|cut down",
+                  "\\bhalt|hinder|\\bhamper|impede",
                   "\\binhibit.?\\b|\\binhibited\\b|\\binhibiting",
-                  "lessen|mitigat|slash|shrink|\\bstop|\\btrim|weaken|\\bno\\b|\\bzero|prevent|prohibit|minimis|minimiz", sep = "|")
+                  "lessen|mitigat|slash|shrink|\\bstop|slump|\\btrim|weaken|\\bno\\b|\\bzero|prevent|prohibit|minimis|minimiz", sep = "|")
 
 
 ls_hazardous_waste_chemicals = paste(
@@ -239,7 +243,7 @@ developing_country_iso3_ls
 
 
 developing_country_group_ls = 
-  c("developing|least develop|least.?developed|less develop|underdevel|\\bpoor|low.?income|low income|small island|africa|\\bimpover|\\bpover", 
+  c("developing|least.?develop|less.?develop|underdevel|\\bpoor|low.?income|lower.?income|small island|africa|\\bimpover|\\bpover|\\bemergent", 
     "countr|\\bnation|\\bstate.?\\b")
 developing_country_group_ls = func_AND_vector(developing_country_group_ls)
 
@@ -338,7 +342,7 @@ SDG2_1_y <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[3], third_AN
 
 temp <- "malnutrition|malnourish|undernourish|undernutrition|under nourished|stunting|wasting|overweight|underweight|\\bpolio|paralysis|tephromyelitis|nutrition|anaem|anem"
 SDG2_2_x = c(temp,
-             paste(child_ls, "infant|neonate|newborn|baby|babies|older", sep = '|'))
+             paste(child_ls, "infant|neonate|newborn|baby|babies|toddler|older", sep = '|'))
 SDG2_2_y = c(temp,
              "pregnan|lactat", 
              "women|woman")
@@ -546,7 +550,7 @@ SDG3_9_y = c("\\black",
 
 
 SDG3_a = c("tobacco|nicotine|cigar|\\bvap|smok" , 
-           paste("control|regulat|administer|\\bban\\b|\\bbans\\b|\\bbanned\\b|govern|manag|cessation|\\bquit", reduce_ls, sep = "|"))
+           paste("control|\\bregulat|administer|\\bban\\b|\\bbans\\b|\\bbanned\\b|govern|manag|cessation|\\bquit", reduce_ls, sep = "|"))
 SDG3_a   <- func_AND_plus(SDG3_a)
 SDG3_a   <- gsub("\\.\\+", "(?!.*government)(?!.*Governance)(?!.*Management)(?!.*manager)", SDG3_a) ## to exclude these
 
@@ -1159,7 +1163,7 @@ SDG8_4_y = c("consumption|footprint",
              "per GDP|per capita|\\befficien",
              "material.?\\b")
 SDG8_4_z = c("environmental degradation",
-             paste(reduce_ls, "decoupl|informed", sep = "|"))
+             paste(reduce_ls, "de.?coupl|informed", sep = "|"))
 temp <- SDG8_4_z
 SDG8_4_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
@@ -1495,7 +1499,7 @@ SDG10_4_x <- gsub("\\.\\+", "(?!.*\\\\bequal to)(?!.*equalization)(?!.*\\\\bpric
 
 
 
-SDG10_5 = c("regulat|monitor|administer|govern.?\\b|governed|governing|sound",
+SDG10_5 = c("\\bregulat|monitor|administer|govern.?\\b|governed|governing|sound",
             "financial market|financial institution")
 SDG10_5 <- func_AND_plus(SDG10_5)
 SDG10_5 <- gsub("\\.\\+", "(?!.*regulatory)(?!.*regulator)(?!.*General government)(?!.*Corporate Governance)(?!.*Financial Institutions Act)(?!.*Pension Fund)", SDG10_5) ## to exclude
@@ -1662,7 +1666,7 @@ SDG11_4 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
 SDG11_5_x = c(reduce_ls,
               paste(death_ls, "economic loss|\\bmissing|affected|damag|\\bdisrupt", sep = '|'),
               disaster_ls)
-SDG11_5_y = "waste generation|waste management"
+SDG11_5_y = "waste generat|waste manag|waste collected|waste controlled"
 
 
 SDG11_6 = c(paste("contaminat|environment|\\bair.?\\b|\\bsmog|\\bhaze|pm2\\.5|pm10|pm 2\\.5|pm 10|particulate matter", 
@@ -1765,12 +1769,12 @@ SDG12_2_x = c("sustainab|\\befficien",
               "resource|material.?\\b", 
               "manag|\\busing\\b|\\buse\\b|\\buses\\b|consumption|production")
 SDG12_2_y = c("manag|conserv|protocol",
-              "natural resource|natural capital")
+              "natural.?resource|natural capital|biological resource|Renewable resource|raw material|\\btimber|land resource|mineral resource")
 SDG12_2_z = c("resource.?efficien|efficient resource",
               increase_ls)
 SDG12_2_w = c("material.?\\b|\\bwater\\b|resource", 
               "footprint|\\bflow\\b|\\bflows\\b|consum",
-              paste("manag", reduce_ls, sep = "|"))
+              paste("manag|per GDP|per capita|\\befficien", reduce_ls, sep = "|"))
 
 
 
@@ -1782,8 +1786,8 @@ temp    <- SDG12_3
 SDG12_3 <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[2], n = 4, third_AND_string = temp[1])
 
 
-SDG12_4_x = c(paste("manag|\\btreat|agreement|responsi|recycl|\\bre.?us|life cycle|safe handl|per capita", 
-                    "environmentally sound|Responsible|Eco.?Friendly|Environmentally.?Friendly",
+SDG12_4_x = c(paste("manag|\\btreat|agreement|responsi|recycl|\\bre.?us|re.?utilize|re.?possess|collected|controlled|handled|life cycle|safe handl|per capita", 
+                    "environmentally.?sound|Responsible|Eco.?Friendly|Environmentally.?Friendly",
                     reduce_ls, sep = '|'),
               paste(waste_ls, 
                     "chemical|contaminat|pesticide|pollut|\\bpoison|hazard|toxin|toxic", 
@@ -1796,7 +1800,7 @@ temp      <- SDG12_4_x
 SDG12_4_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
 
 
-SDG12_4_y = "environmental permit"
+SDG12_4_y = "environmental permit|waste generat"
 
 SDG12_4_z = c("environmental impact|environmental issue|environmental risk",
              paste(reduce_ls, "decoupl|informed", sep = "|"))
@@ -1805,22 +1809,22 @@ w_ex <- c("Limiting Our Environmental Impact")
 ### Option 1
 # SDG12_4_z <- func_AND_plus(SDG12_4_z)
 ### Option 3 ----
-SDG12_4_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, exclude = w_ex)
+SDG12_4_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6, exclude = w_ex)
 
 
-SDG12_5_x = c(paste("recycl|\\bre.?us|circular", reduce_ls, sep = "|"), 
+SDG12_5_x = c(paste("recycl|\\bre.?us|re.?utilize|re.?possess|circular", reduce_ls, sep = "|"), 
               "waste")
 temp <- SDG12_5_x
 ### Option 1
 # SDG12_5_x <- func_AND_plus(SDG12_5_x)
 ### Option 2 ----
-SDG12_5_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
+SDG12_5_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
 
 
-SDG12_5_y = c("recycl|\\bre.?us|circular", 
+SDG12_5_y = c("recycl|\\bre.?us|re.?utilize|re.?possess|circular", 
               "material.?\\b|resource|\\bpaper\\b")
 temp      <- SDG12_5_y
-SDG12_5_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
+SDG12_5_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
 
 
 
@@ -1895,7 +1899,7 @@ SDG12_a = c("sustainab|\\bgreen\\b|\\bgreener\\b|\\bclean",
 
 SDG12_b = c("sustainab|green",
             "touris",
-            "monitor|manag|accounting|\\btrack|regulat|administer|govern")
+            "monitor|manag|accounting|\\btrack|\\bregulat|administer|govern")
 
 SDG12_c = c("fossil|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|crude oil|gasoline|kerosene|non.?renewable|traditional energy",
             "\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis|expenditure|expens")
@@ -2044,7 +2048,7 @@ SDG14_3 = c(ocean_ls,
 SDG14_4_x = c("\\bfish|seafood|blue food|\\bcatch\\b|\\bcatches\\b|bycatch|harvest|overfish",
               paste(illegal_ls, 
                     "unreported|underreport|unregulated|destruct|destroy|diminish|exploit", 
-                    "sustainab|\\brestor|conserv|manag|mitig|regulat|monitor|restrict|enforc|prohibit|\\bquota\\b|monitor", 
+                    "sustainab|\\brestor|conserv|manag|mitig|\\bregulat|monitor|restrict|enforc|prohibit|\\bquota\\b|monitor", 
                     sep = "|"))
 SDG14_4_y = "overfish|maximum sustainable yield|\\bMSY\\b"
 
@@ -2062,7 +2066,7 @@ SDG14_6_x = c("\\bfish|seafood|\\bcatch\\b|\\bcatches\\b|bycatch|harvest|aquacul
               "\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis")
 SDG14_6_y = c("\\bfish|seafood|\\bcatch\\b|\\bcatches\\b|bycatch|harvest|aquaculture|blue food|mariculture",
               paste(illegal_ls, "unreported|unregulated|destructive|destroy|diminish|exploit|poach|traffick", sep = "|"),
-              paste("instrument|\\blaw|enforc|restrict|prohibit|\\bquota\\b|regulat|monitor|prohibit", policy_ls, sep = '|'))
+              paste("instrument|\\blaw|enforc|restrict|prohibit|\\bquota\\b|\\bregulat|monitor|prohibit", policy_ls, sep = '|'))
 
 SDG14_7_x = c("econom|benefi|sustain",
               "\\bfish|aquacultur|seafood|\\bcatch\\b|\\bcatches\\b|bycatch|blue food|mariculture",
@@ -2087,11 +2091,11 @@ SDG14_a_x4 = "Intergovernmental Oceanographic Commission|Guidelines on the Trans
 
 SDG14_b = c(paste("artisan|tradition", "small.?scale", sep = '|'),
             "\\bfish|seafood|\\bcatch\\b|\\bcatches\\b|bycatch|harvest",
-            "resource|market|\\blaw|legal|\\bpolicy|\\bpolicies|institutional|regulat|jurisdiction")
+            "resource|market|\\blaw|legal|\\bpolicy|\\bpolicies|institutional|\\bregulat|jurisdiction")
 
 SDG14_c = c(ocean_ls,
             "restor|conserv|protect|safeguard|sustain|manag|mitig|monitor",
-            "\\blaw|legal|\\bpolicy|\\bpolicies|institutional|regulat|jurisdiction|instrument")
+            "\\blaw|legal|\\bpolicy|\\bpolicies|institutional|\\bregulat|jurisdiction|instrument")
 
 ####
 SDG14_1 <- func_AND_plus(SDG14_1)
@@ -2132,7 +2136,7 @@ SDG14_c <- func_AND_plus(SDG14_c)
 
 ## 15. Life On Land --------------------------------------------------------------------------------
 
-ecosystem_ls = "eco.?system|\\becolog|environment|\\bnatur|environs"
+ecosystem_ls = "eco.?system|\\becolog|environment|\\bnatur|environs|biosphere"
 
 
 SDG15_1_x = c("terrestrial|inland|fresh.?water|\\bforest|woodland|wetland|marsh|mountain|dryland|rainforest|agroforest|tundra|biodivers|wildlife|wild animal|wild species",
