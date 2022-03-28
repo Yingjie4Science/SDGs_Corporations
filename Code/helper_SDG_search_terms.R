@@ -983,7 +983,7 @@ SDG6_b <- func_AND_plus(SDG6_b)
 ## 7. Affordable and Clean Energy ----------------------------------------------------------------
 
 renewable_ls_x = c(paste("\\badvanc|alcohol|modern|\\bclean|\\brenewable|alternat|ethanol|biorefinery|\\bwind\\b|solar|biomass|nuclear|\\bsun\\b|\\btide\\b|tidal",
-                         "\\bwave.?\\b|\\bwood.?\\b|thermal|geothermal|algae|\\balgal|\\bHydro|hybrid|hydrogen|synthetic|\\bgreen\\b|sustainable",
+                         "\\bwave.?\\b|\\bwood.?\\b|thermal|geothermal|algae|\\balgal|\\bHydro|hybrid|hydrogen|synthetic|\\bgreen\\b|\\bgreener\\b|sustainable",
                          "enviroment.?friendly|eco.?friendly", sep = "|"),
                    "energy|\\bfuel.?\\b|\\bpower\\b")
 
@@ -1018,7 +1018,7 @@ SDG7_2_y = paste("energy transition", "smart grid|smart meter|hybrid vehicle", s
 
 
 
-SDG7_2_z = c("fossil.?fuel|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|methane|crude oil|gasoline|kerosene|non.?renewable", 
+SDG7_2_z = c("fossil.?fuel|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|methane|crude oil|gasoline|kerosene|non.?renewable|traditional energy", 
              reduce_ls)
 ### Option 1: use `func_AND_plus` function
 # SDG7_2_z <- func_AND_plus(SDG7_2_z) 
@@ -1229,7 +1229,7 @@ SDG8_8_x3 = c("\\bsafe|\\bsecure",
 SDG8_8_x3 <- func_AND_plus(SDG8_8_x3)
 
 SDG8_8_x4 <- paste("occupational health|occupational safe|zero incident|safety management|safety and health management",
-                   "retirement fund|secure retirement|\\bpension|employee benefit", sep = "|")
+                   "retirement fund|secure retirement|employee benefit", sep = "|")
 SDG8_8_x4 <- paste0("^(?!.*\\breport.?\\b).*", "(", SDG8_8_x4, ")")
 
 SDG8_8_x5 = c(paste(death_ls, "injur|\\bharm.?\\b|\\bharmed\\b|danger|\\bincident", sep = "|"), 
@@ -1326,7 +1326,7 @@ infrastructure_ls = paste(
   "infrastructure|\\bhouse\\b|\\bhouses\\b|\\bhousing\\b|architecture|construction|freight|transport|\\broad.?\\b|\\broadway|\\brail|\\bport.?\\b|power plant|\\bdams",
   "bridge|airport|aviation|sewer|broadband|cellular infrastructure|internet|telecommunication|electricity|power grid|electrical grid|\\bpark.?\\b",
   "tunnel|water supply|Canal|Hospital|Irrigation scheme|Levee|Lighthouse",
-  "Pipeline|\\btransit.?\\b|Public space|Sewage treatment|Sewerage|Sluice|Solid waste|Utilities|\\bWeir|waterway|harbor|\\bdock|\\bdike", sep = "|")
+  "Pipeline|\\btransit.?\\b|Public space|Sewage treatment|Sewerage|Sluice|Solid waste|Utilities|\\bWeir|waterway|harbor|harbour|\\bdock|\\bdike|\\bdyke", sep = "|")
 
 ###
 
@@ -1385,7 +1385,7 @@ SDG9_4_y = c("resource",
 SDG9_4_z = c("\\bindustr",  
              emission_ls,
              paste(reduce_ls, "manage|\\btreat", sep = '|'))
-SDG9_4_w = c("\\bclean|environmentally sound|\\bgreen\\b", 
+SDG9_4_w = c("\\bclean|environmentally sound|\\bgreen\\b|\\bgreener\\b", 
              "technolog|\\bindustr")
 
 SDG9_4_x <- func_AND_plus(SDG9_4_x)
@@ -1609,9 +1609,9 @@ waste_ls = "waste|rubbish|garbage|junk|debris|trash|litter|sewage|sludge|scrap m
 
 SDG11_1_x = c("access|availab|affordable|adequate|formal|safe|insufficient|deficient|\\black|scarce|scant|unsatisfactory",
               paste("\\bhouse\\b|\\bhouses\\b|\\bhousing\\b|\\bhome\\b|apartment|condo|dwelling|residence|accommodation|\\bshelter", 
-                    "basic service|sanitation|hygiene|electricity|slum|Shanty|\\bliving", sep = "|"))
+                    "basic service|sanitation|hygiene|electricity|slum\\b|slums\\b|slummy|Shanty|\\bliving", sep = "|"))
 SDG11_1_y = c(paste(urban_ls, reduce_ls, "upgrade|enhanc", sep = "|"),
-              "slum")
+              "slum\\b|slums\\b|slummy")
 SDG11_1_z = "formal settlement|housing finance"
 
 
@@ -1746,7 +1746,7 @@ SDG11_c <- func_AND_plus(SDG11_c)
 company_ls <- "\\bcompany\\b|\\bcompanies|\\bfirm.?\\b|\\bcorporate\\b|\\bcorporation|business|enterprise"
 
 
-SDG12_1_x1 = c("sustainab|green|\\bclean|Responsible|Eco.?Friendly/Environmentally.?Friendly|Recyclable",
+SDG12_1_x1 = c("sustainab|\\bgreen\\b|\\bgreener\\b|\\bclean|Responsible|Eco.?Friendly/Environmentally.?Friendly|Recyclable",
                "consum|\\bproduc|manufactur")
 temp <- SDG12_1_x1
 
@@ -1888,7 +1888,7 @@ SDG12_7 = c("sustainab",
 SDG12_8 = c("sustainable development|harmony with nature",
             "information|awareness|educat|curricul")
 
-SDG12_a = c("sustainab|\\bgreen\\b|\\bclean",
+SDG12_a = c("sustainab|\\bgreen\\b|\\bgreener\\b|\\bclean",
             "consum|\\bproduc|manufactur|\\buse|\\busing\\b",
             "scientific|\\bscience|tech|\\brenewable",
             developing_country_ls)
@@ -1897,7 +1897,7 @@ SDG12_b = c("sustainab|green",
             "touris",
             "monitor|manag|accounting|\\btrack|regulat|administer|govern")
 
-SDG12_c = c("fossil|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|crude oil|gasoline|kerosene|non.?renewable",
+SDG12_c = c("fossil|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|crude oil|gasoline|kerosene|non.?renewable|traditional energy",
             "\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis|expenditure|expens")
 
 
@@ -1940,7 +1940,7 @@ SDG12_c <- func_AND_plus(SDG12_c)
 climate_ls = paste("\\bclimat|global change|global environment change|\\bENSO\\b|\\bEl Ni|Southern Oscillation",
                    "extreme weather|weather pattern|warming|\\bwarmer|warmest", 
                    "temperature|hotter|hottest|heat.?up|heat.?wave",
-                   "heavy rain|cloudburst|aridity|drought|flood|\\bstorm|extreme temperature|extreme heat", 
+                   "heavy rain|cloudburst|aridity|drought|rainfall shortfall|flood|\\bstorm|extreme temperature|extreme heat", 
                    "cold wave|extreme precipitation|heavy downpour|thunderstorm|ice storm|blizzard|hailstorm|tropical storm",
                    "Human activit|anthropogenic|wild.?fire|fire.?storm",
                    "\\bsea.?level|\\bsea.?ice|\\bmelt", 
@@ -1948,7 +1948,7 @@ climate_ls = paste("\\bclimat|global change|global environment change|\\bENSO\\b
 
 climate_good_ls = paste(
   "\\bCOP\\b|\\bCOP.?\\d+|\\bIPCC\\b|\\bUNFCC\\b|Paris Agreement|Paris Climate Agreement|Montreal Protocol",
-  "1\\.5.?°C|2.?°C|1\\.5 degrees Celsius|2 degrees Fahrenheit|net.?zero|SDG 13|goal 13|target 13|indicator 13|negative emissions", 
+  "1\\.5.?°C|2.?°C|1\\.5 degrees Celsius|2 degrees Fahrenheit|net.?zero|SDG 13|goal 13|target 13|indicator 13|negative emission|Carbon Neutral|carbon sink", 
   sep = "|")
 
 ####
@@ -1963,7 +1963,7 @@ SDG13_2_x = paste(climate_good_ls, 'kyoto protocol|\\bunfccc|tipping point', sep
 
 SDG13_2_y = c(
   paste("ocean acidification|deforestation|desertificati|animal farming|farming livestock|fertilizer",
-        "air pollut|fossil.?fuel|fossil gas|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|typhoons|hurricane", sep = "|"), 
+        "air pollut|fossil.?fuel|fossil gas|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|traditional energy|typhoons|hurricane", sep = "|"), 
   reduce_ls)
 temp <- SDG13_2_y
 
