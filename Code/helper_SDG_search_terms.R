@@ -3,10 +3,12 @@
 ## This script collects all the search terms for SDGs at the target levels  ##
 ## ######################################################################## ##
 
-#' **Last update on**:  3/25/2022
+#' **Last update on**:  3/31/2022
 #' 
 #' **New changes**: 
+#' 
 #' Compare to the earlier version, we made the following changes
+#' 
 #' 1. Instead of combining multiple term lists by `OR` for one particular target,  
 #'    it is more intuitive and accurate to add each alternative term list to the search 
 #'    term table or database directly. 
@@ -80,14 +82,27 @@ source('./Code/function_lookaround_nearby_n.R')
 
 ## Auxiliary list ------
 
+
+
+### ag_ls ----
 ag_ls = "agricultur|\\bagro|agronom|agrarian|\\bcrop|food|farm|forestry|pastoral|pasture|\\bfisher|horticulture|cultivation|husbandry|grazing|\\bgrain|planting|\\btillage|\\btilling"
 
+
+### child_ls ----
 child_ls = paste("child|\\bteen|juvenile|youth|young|\\bminor.?\\b|under 5|under five|underfive|before fifth|adolescen",
                  "\\bgirl|\\bboy\\b|\\bboys\\b|\\bkid\\b|\\bkids\\b|\\bkiddo|\\bkiddy|\\bkiddies|offspring",
                  sep = "|")
 
+
+### company_ls ----
+company_ls <- "\\bcompany\\b|\\bcompanies|\\bfirm.?\\b|\\bcorporate\\b|\\bcorporation|business|enterprise"
+
+
+### death_ls ----
 death_ls = "mortal|death|\\bdead|\\bdie\\b|\\bdies\\b|\\bdied\\b|\\bdying|fatal|deceas|\\bdemis|\\bkill|lethal|perish|lose.*life|pass away"
 
+
+### disaster_ls ----
 disaster_ls = paste(
   "shock|disaster|catastrophe|cataclysm|casualt|calamit|hazard|mishap|hurricane|tornado|cyclone|flood|drought|\\bharm.?\\b|\\bharmed\\b", 
   "wild.?fire|fire.?storm|extreme weather|extreme temperature|extreme heat|heat.?wave|cold wave", 
@@ -95,11 +110,34 @@ disaster_ls = paste(
   "volcanic eruption|limnic eruption|exploding lake|landslide|mudslide|debris flow|tsunami|sinkhole|subsidence", sep = "|")
 ## -> avoid "risk", which is too broad
 
+
+### disability_ls ----
+disability_ls = "Disabled|disabilit|handicapped|incapacitated|crippled|\\bblind\\b"
+
+
+### economic_ls ----
+economic_ls = paste("econom|\\bGDP\\b|gross domestic product",
+                    "fiscal|monetary", 
+                    sep = "|")
+## taking away these synonyms due to excessive matches: (financ|profit|revenue|income|\\bgain|proceed|yield|dividend|\\bearning|\\bmonies|budget|return|\\bvalu) 
+
+
+### emission_ls ----
 emission_ls = paste("\\bemission|\\bCO2\\b|carbon|green.?house|\\bGHG\\b|G\\.H\\.G\\.|chlorofluorocarbon|\\bcfc\\b|c\\.f\\.c\\.|\\bCFCs\\b",
                     "water vapour|methane|\\bCH4\\b|nitrous oxide|\\bN2O\\b|\\bozone|\\bO3\\b|fluorinated gas", sep = "|")
 
+### equal_ls ----
+equal_ls = "equal|\\bequitab|\\bequality|\\bunbias|unprejudic|\\bfair|impartial"
+
+
+### discrimination_ls ----
+discrimination_ls = "discrimin|\\bbias|prejudice|\\bunfair|inequal|inequit|disparit|imparit"
+  
+  
+### female_ls ----
 female_ls = "woman|women|\\bgirl|female|\\blady\\b|\\bladies\\b|\\bmaid"
 
+### increase_ls ----
 increase_ls = paste("accelerat|ascend|\\badvanc|augment|\\bamplif|magnif|burgeon|\\bclimb|better|boost|\\bboom|\\bdouble|escalat",
                     "expansion|\\bexpand|expansion|\\benlarge|\\bgrow|\\bhike|\\bhiking|heighten|improv",
                     "increas|foster|\\bfortif|facilitat|increment|jump|\\blift|\\brais|\\brise.?\\b|rising|\\brose|risen|\\brocket|skyrocket",
@@ -107,36 +145,61 @@ increase_ls = paste("accelerat|ascend|\\badvanc|augment|\\bamplif|magnif|burgeon
                     "strengthen|enhanc|aggrandiz|reinforce|upsurg|upward", 
                     sep = "|")
 
+### infrastructure_ls ----
+infrastructure_ls = paste(
+  "infrastructure|\\bhouse\\b|\\bhouses\\b|\\bhousing\\b|architecture|construction|freight|transport|\\broad.?\\b|\\broadway|\\brail|\\bport.?\\b|power plant|\\bdams",
+  "bridge|airport|aviation|sewer|broadband|cellular infrastructure|internet|telecommunication|electricity|power grid|electrical grid|\\bpark.?\\b",
+  "tunnel|water supply|Canal|Hospital|Irrigation scheme|Levee|Lighthouse",
+  "Pipeline|\\btransit.?\\b|Public space|Sewage treatment|Sewerage|Sluice|Solid waste|Utilities|\\bWeir|waterway|harbor|harbour|\\bdock|\\bdike|\\bdyke", sep = "|")
+
+
+### illegal_ls ----
 illegal_ls = "illegal|criminal|illegitimate|illicit|unauthorized|unlawful|unlicensed|unconstitutional|prohibited|forbidden|banned"
 
-
+### LGBT_ls ----
 LGBT_ls = "\\bLGBT|\\blesbian|\\bgay\\b|bisexual|transgender|\\bQueer\\b|Questioning|Intersex|\\bAllies\\b|\\bAsexual\\b|Pansexual"
    
 
+
+### renewable_ls ----
+renewable_ls_x = c(paste("\\badvanc|alcohol|modern|\\bclean|\\brenewable|alternat|ethanol|biorefinery|\\bwind\\b|solar|biomass|nuclear|\\bsun\\b|\\btide\\b|tidal",
+                         "\\bwave.?\\b|\\bwood.?\\b|thermal|geothermal|algae|\\balgal|\\bHydro|hybrid|hydrogen|synthetic|\\bgreen\\b|\\bgreener\\b|sustainable",
+                         "enviroment.?friendly|eco.?friendly", sep = "|"),
+                   "energy|\\bfuel.?\\b|\\bpower\\b")
+renewable_ls_y = paste("(\\brenewables|biofuel|bioenergy|biodiesel|biogas|bioethanol|hydropower", 
+                       "hydroelectric|electrofuel|\\be.?fuel|photovoltaic|wind farm|offshore wind|wind turbine|solar panel)", sep = "|")
+renewable_ls_x <- func_AND_vector(renewable_ls_x) ## not suitable to use `func_AND_plus` here
+renewable_ls   <- func_OR_vector(c(renewable_ls_y, renewable_ls_x))
+
+
+
+### finance_ls ----
 finance_ls <- paste("financ|\\bfund.?\\b|\\bfunding\\b|\\bassist|budget|\\baid.? to",
                     "government aid.?\\b|state aid.?\\b|federal aid|national aid",
                     "invest|compensation|donor|donat",
                     "expenditure|\\bgrant\\b|\\bgrants\\b|\\bloan|official flow|\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis")
 ## -> be careful when using invest*, might mistakenly match "investigation|investigate"
 
-
+### support_ls ----
 support_ls  = paste("financ|\\bfund.?\\b|\\bfunding\\b|\\bassist|budget|\\baid.? to",
                     "government aid.?\\b|state aid.?\\b|federal aid|national aid", 
                     "invest|compensation|donor|donat",
                     "help|enhanc|expenditure|\\bgrant.?\\b|\\bloan.?\\b|official flow|support|\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis",
                     "\\bstimulat|strengthen|\\bfortif|transfer|uphold|boost|bolster", sep = "|")
 
+### urban_ls -----
 urban_ls = "urbaniz|\\burban|\\bcity|\\bcities|human settlement|land consumption|land use|metropoli|town|municipal|oppidan"
 
-
+### policy_ls ----
 policy_ls = paste("action|activit|administ|agreement|approach|arrangement|blueprint|\\bdeal|\\bguide|govern", 
                   "method|manag|\\bpolicy|\\bpolicies|\\bplan\\b|\\bplans\\b|planning|proced|program|project.?\\b",
                   "practice|procedure|propos|protocol|\\brule.?\\b|\\bregulat",
                   "\\blaw|\\btreat|\\bright|constitution|initiative|scheme|strateg", sep = "|")
 
+### poverty_ls ----
 poverty_ls = "poverty|\\bpoor|impover|destitution|underprivileg|necessitous|homeless|\\bhobo|low income|low-income|lower income|underclass"
 
-
+### reduce_ls ----
 reduce_ls = paste("alleviat|\\babate|abridge|\\bavert|abolish|eradicat|eliminat|\\beras|\\bease|\\bend.?\\b|\\bended\\b|rid of|phase out|\\bwipe out",
                   "\\breduc|\\bcut.?\\b|\\bcurb|curtail|declin|decreas|diminish|diminution|\\bdrop|dwindl",
                   "\\bfade\\b|fall off|go down|goes down|went down|tone down|die down|cut down",
@@ -144,7 +207,7 @@ reduce_ls = paste("alleviat|\\babate|abridge|\\bavert|abolish|eradicat|eliminat|
                   "\\binhibit.?\\b|\\binhibited\\b|\\binhibiting",
                   "lessen|mitigat|slash|shrink|\\bstop|slump|\\btrim|weaken|\\bno\\b|\\bzero|prevent|prohibit|minimis|minimiz", sep = "|")
 
-
+### ls_hazardous_waste_chemicals ----
 ls_hazardous_waste_chemicals = paste(
   "\\bPhenol|\\bEthane|\\bEthene|\\bCresol|\\bIndeno|\\bEndrin|\\bDibenz|\\bSilvex|\\bArsine|\\bPropen|\\bCumene|\\bXylene|\\bAldrin|\\bIsolan",
   "\\bOxamyl|\\bKepone|\\bThiram|\\bBarban|\\bBenzene|\\bEthanol|\\bDiethyl|\\bPropane|\\bMercury|\\bMethane|\\bOxirane|\\bDibenzo|\\bAniline",
@@ -198,7 +261,7 @@ ls_hazardous_waste_chemicals = paste(
   "\\bDDD\\b|\\bDDT\\b",
   sep = "|")
 
-
+### developing_country_name_ls ----
 developing_country_name_ls = paste(
   "Aruba|Afghanistan|Angola|Anguilla|Albania|United Arab Emirates|Argentina|Armenia|American Samoa", 
   "French Southern Territories|Antigua and Barbuda|Azerbaijan|Burundi|Benin|Burkina Faso|Bangladesh|Bahrain|Bahamas",
@@ -512,10 +575,14 @@ SDG3_5 = c("substance|drug|alcohol|drinking|drunk|ethanol|liquor|liqueur|booze|\
            "\\babus|misuse|misconduct|obsessive|addict|\\bharm.?\\b|\\bharmed\\b|hazardous|disorder",
            paste('\\btreatment', reduce_ls, sep = "|"))
 
-SDG3_6_x = c("\\broad.?\\b|\\broadway|\\blane|avenue|street|\\bdrive\\b|\\bcar\\b|automobile|\\bmotor|vehicle|highway|expressway|freeway|\\brail|congest|collision|collid|\\bjam|traffic|transport|\\btransit.?\\b|travel", 
-           paste(death_ls, 
-                 "fatal|injur|accident|adversit|bottleneck|damag|wound|catastroph|calamit|casualt|crash|disaster|\\bharm.?\\b|\\bharmed\\b|hazard|emergenc|traged", 
-                 sep = "|"))
+SDG3_6_x = c(
+  paste("\\broad.?\\b|\\broadway|\\blane|avenue|street|\\bdrive\\b|\\bcar\\b|automobile|\\bmotor|vehicle",
+        "highway|expressway|freeway|\\brail|congest|collision|collid|\\bjam|traffic|transport.?\\b|transportation|\\btransit.?\\b|travel", 
+        sep = "|"),
+  paste(death_ls,
+        "fatal|injur|accident|adversit|bottleneck|damag|wound|catastroph|calamit|casualt|crash|disaster",
+        "\\bharm.?\\b|\\bharmed\\b|hazard|emergenc|traged", 
+        sep = "|"))
 SDG3_6_y = "\\bTZD program|\\bTZD National Strategy|\\bTZD Strateg|Toward Zero Deaths|Road to Zero"
 
 
@@ -599,7 +666,12 @@ SDG3_c_y <- func_AND_plus(SDG3_c_y)
 
 SDG3_d_x = c("health", 
              "early warning|manag|risk reduction|emergency|\\burgen",
-             increase_ls)
+             paste("preparedness", increase_ls, sep = "|"))
+# SDG3_d_x  <- func_AND_plus(SDG3_d_x)
+temp <- SDG3_d_x
+SDG3_d_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6, third_AND_string = temp[3])
+
+
 SDG3_d_y = c("International Health Regulations|\\bIHR\\b|health risk",
              "capacity")
 SDG3_d_z1 = c("blood", 
@@ -643,7 +715,7 @@ SDG3_9_x <- func_AND_plus(SDG3_9_x)
 SDG3_9_y <- func_AND_plus(SDG3_9_y)
 
 
-SDG3_d_x  <- func_AND_plus(SDG3_d_x)
+
 SDG3_d_y  <- func_AND_plus(SDG3_d_y)
 SDG3_d_z1 <- func_AND_plus(SDG3_d_z1)
 SDG3_d_z2 <- func_AND_plus(SDG3_d_z2)
@@ -720,7 +792,8 @@ SDG4_4_y = c("financial literacy",
 SDG4_5 = c(
   "education|vocational|\\btraining|school",
   "disparit|parit|equal access|equit|equalit|inclusi|exclus|inequalit|discrimin",
-  paste("disabilit|disabled|handicap|wounded|indigen|aboriginal|vulnerable|\\bgender|female|women|rural", 
+  paste(disability_ls,
+        "wounded|indigen|aboriginal|vulnerable|\\bgender|female|women|rural", 
         # urban_ls,              ## -> can be too broad --> removed
         # "bottom|top|conflict", ## -> can be too broad
         "underrepresented|wealth|low.?income",
@@ -999,18 +1072,6 @@ SDG6_b <- func_AND_plus(SDG6_b)
 
 ## 7. Affordable and Clean Energy ----------------------------------------------------------------
 
-renewable_ls_x = c(paste("\\badvanc|alcohol|modern|\\bclean|\\brenewable|alternat|ethanol|biorefinery|\\bwind\\b|solar|biomass|nuclear|\\bsun\\b|\\btide\\b|tidal",
-                         "\\bwave.?\\b|\\bwood.?\\b|thermal|geothermal|algae|\\balgal|\\bHydro|hybrid|hydrogen|synthetic|\\bgreen\\b|\\bgreener\\b|sustainable",
-                         "enviroment.?friendly|eco.?friendly", sep = "|"),
-                   "energy|\\bfuel.?\\b|\\bpower\\b")
-
-renewable_ls_y = paste("(\\brenewables|biofuel|bioenergy|biodiesel|biogas|bioethanol|hydropower", 
-                       "hydroelectric|electrofuel|\\be.?fuel|photovoltaic|wind farm|offshore wind|wind turbine|solar panel)", sep = "|")
-renewable_ls_x <- func_AND_vector(renewable_ls_x) ## not suitable to use `func_AND_plus` here
-renewable_ls   <- func_OR_vector(c(renewable_ls_y, renewable_ls_x))
-
-
-
 SDG7_1_x = c(paste('energy|\\bfuel|\\bpower\\b', "electricity", sep = "|"), 
              "reliable|affordab|modern|\\clean\\b|sustainable",
              "access|availab")
@@ -1035,7 +1096,7 @@ SDG7_2_y = paste("energy transition", "smart grid|smart meter|hybrid vehicle", s
 
 
 
-SDG7_2_z = c("fossil.?fuel|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|methane|crude oil|gasoline|kerosene|non.?renewable|traditional energy", 
+SDG7_2_z = c("fossil.?fuel|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|methane|crude oil|gasoline|kerosene|non.?renewable|traditional energy|Conventional energy", 
              reduce_ls)
 ### Option 1: use `func_AND_plus` function
 # SDG7_2_z <- func_AND_plus(SDG7_2_z) 
@@ -1046,7 +1107,7 @@ SDG7_2_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
 
 SDG7_3_x = c("energy|\\belectric|\\bfuel|\\bpower\\b|\\butilit",
-             "\\befficien|intens|pollut|footprint|\\bleak.?\\b|\\bleakage|\\bper GDP|\\bper capita")
+             "\\befficien|\\bintens|pollut|footprint|\\bleak.?\\b|\\bleakage|\\bper GDP|\\bper capita")
 SDG7_3_y = c("energy consumption|energy use",
              reduce_ls)
 
@@ -1107,11 +1168,6 @@ SDG7_b <- func_AND_plus(SDG7_b)
 
 ## 8. Decent Work and Economic Growth --------------------------------------------------------------
 
-economic_ls = paste("econom|\\bGDP\\b|gross domestic product",
-                    "fiscal|monetary", 
-                    sep = "|")
-## taking away these synonyms due to excessive matches: (financ|profit|revenue|income|\\bgain|proceed|yield|dividend|\\bearning|\\bmonies|budget|return|\\bvalu) 
-
 SDG8_1 = c(economic_ls, 
            "per capita",
            paste("Sustain|develop|prosper", increase_ls, sep = "|")) ## ,"nation|countr|state"
@@ -1129,7 +1185,7 @@ SDG8_3_x = c("development",
              increase_ls)
 
 SDG8_3_y = c("\\bemploy|\\bjob|\\bwork", 
-             "decent|quality|stable|stabili|inclusiv",
+             "\\bdecent\\b|\\bseemly\\b|respectable|quality|stable|stabili|inclusiv",
              paste("\\bcreate|\\bcreati|support", increase_ls, sep = "|"))
 # SDG8_3_y  <- func_AND_plus(SDG8_3_y)
 ### Option 3: to use look around + AND function ----
@@ -1181,52 +1237,59 @@ temp <- SDG8_4_z
 SDG8_4_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
 
-SDG8_5_x1 = c(paste("\\bfull\\b|\\bdecent|productiv", "inclusi|medical benefit|health benefit", sep = "|"),
+SDG8_5_x1 = c(paste("\\bfull\\b|\\bdecent\\b|\\bseemly\\b|respectable|productiv", 
+                    "inclusi|medical benefit|health benefit|healthcare benefit|insurance benefit", 
+                    sep = "|"),
               "\\bemployment|\\bhiring|\\bemployee|\\bjob|\\bwork\\b|\\bworker|\\bstaff")
 ### Option 1: use `func_AND_plus` function
 # SDG8_5_x1 <- func_AND_plus(SDG8_5_x1)
 ### Option 2: to use look around function ----
 temp <- SDG8_5_x1
 ex_ls <- c('full meeting', 'full potential', 'full Supervisory', 'full implement', 'full year', 'full integration')
-SDG8_5_x1 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 3, exclude = ex_ls)
+SDG8_5_x1 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, exclude = ex_ls)
 
 
-SDG8_5_x2 = c("discrimin|informal|precarious|inequal|inequit|disparit",
+SDG8_5_x2 = c(paste(discrimination_ls, "informal|precarious", sep = "|"),
               "\\bemployment|\\bhiring|\\bemployee|\\bjob|\\bworker|\\bwork\\b|\\bworking")
 
-SDG8_5_x3 = c("equal|\\bequitab|\\bEquality", 
+SDG8_5_x3 = c(equal_ls, 
               "\\bwage|\\bpay|\\bsalary|\\bsalaries|\\bearning|\\bstipend")
 temp <- SDG8_5_x3
 ### Option 1
 ### Option 2 ----
-SDG8_5_x3 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 3)
+SDG8_5_x3 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
 
-SDG8_5_x4 = c("equal|\\bequitab|\\bEquality", 
+SDG8_5_x4 = c(equal_ls, 
               "opportunit",
               paste("people|person|\\bemployee|\\bstaff|\\bworker|\\bwork\\b|\\bworking|\\bgender|\\bsex|ethni|\\brace|racial",
-                    "\\breligion|Disabled|disabilities|handicapped|incapacitated|crippled|disadvantaged",
+                    "\\breligion",
+                    disability_ls, 
+                    "disadvantaged",
                     female_ls, 
                     LGBT_ls,
                     sep = "|"))
 
 SDG8_5_x5 = c("\\bwage|\\bpay|\\bsalary|\\bsalaries|\\bearning|\\bstipend", 
-              "\\bgap\\b|difference|inequalit|disparit",
+              paste("\\bgap\\b|difference|discrepan|dissimilarit|disproport|divergen|imbalance", discrimination_ls, sep = "|"),
               reduce_ls)
 temp <- SDG8_5_x5
 SDG8_5_x5 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, third_AND_string = temp[3])
 
 
 SDG8_5_x6 = c("Share of|proportion|\\bpercent|discrimination",
-              paste("Disabled|disabilities|handicapped|incapacitated|crippled|disadvantaged|\\breligion|\\bgender", 
+              paste(disability_ls, 
+                    "disadvantaged|\\breligion|\\bgender", 
                     female_ls,
                     LGBT_ls,
                     sep = "|"),
               "workforce|employment|\\bemployee")
 SDG8_5_x7 = c("unemployment|dismissal",
-              reduce_ls)
-SDG8_5_x8 = c("employment|\\bhiring|\\bemployee|\\bjob|\\bworker",
-              "Disabled|disabilities|handicapped")
+              paste("\\baddress|tackle|response to|cope.?with|coping with|deal.?with|dealing with|handl|measure.?\\b|\\bbelow\\b|\\blower\\b|\\less\\b", 
+                    reduce_ls, sep = "|"))
+SDG8_5_x8 = c("employment|\\bhiring|\\bemployee|\\bjob|\\bworker|\\blabor\\b|\\blabour\\b|coverage",
+              disability_ls)
+SDG8_5_x9 = "disability benefit"
 
 
 SDG8_6 = c("youth|young people|\\bteens\\b", 
@@ -1254,9 +1317,12 @@ SDG8_8_x2 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, 
 ## ------------------------------------------------------------------------------------ ##
 
 SDG8_8_x3 = c("\\bsafe|\\bsecure", 
-              "\\bwork|\\bworker|\\bworking|\\bjob.?\\b",
+              "\\bwork\\b|\\bworker|\\bworking|\\bjob.?\\b|occupational",
               "environment\\b")
-SDG8_8_x3 <- func_AND_plus(SDG8_8_x3)
+# SDG8_8_x3 <- func_AND_plus(SDG8_8_x3)
+temp <- SDG8_8_x3
+SDG8_8_x3 <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[3], n = 4, third_AND_string = temp[1])
+
 
 SDG8_8_x4 <- paste("zero incident",
                    "retirement fund|secure retirement", sep = "|")
@@ -1267,12 +1333,14 @@ SDG8_8_x5 = c(paste(death_ls, "injur|\\bharm.?\\b|\\bharmed\\b|danger|\\binciden
               reduce_ls)
 temp <- SDG8_8_x5
 w_ex <- c('alcohol', 'Drinking', '\\bNo\\.')
-### Option 4 ----
-SDG8_8_x5 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, exclude = w_ex, third_AND_string = temp[3])
+SDG8_8_x5 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8, exclude = w_ex, third_AND_string = temp[3])
+
 
 SDG8_8_x6 <- c(paste("ensure|prioritiz|\\bstimulat|management", increase_ls, sep = "|"),
                "employee benefit|employment benefit|occupational health|occupational safe")
-SDG8_8_x6 <- func_AND_plus(SDG8_8_x6)
+# SDG8_8_x6 <- func_AND_plus(SDG8_8_x6)
+temp <- SDG8_8_x6
+SDG8_8_x6 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 10)
 
 
 
@@ -1358,16 +1426,6 @@ SDG8_b   <- func_AND_plus(SDG8_b)
 
 ## 9. Industry, Innovation, and Infrastructure ------------------------------------------
 
-infrastructure_ls = paste(
-  "infrastructure|\\bhouse\\b|\\bhouses\\b|\\bhousing\\b|architecture|construction|freight|transport|\\broad.?\\b|\\broadway|\\brail|\\bport.?\\b|power plant|\\bdams",
-  "bridge|airport|aviation|sewer|broadband|cellular infrastructure|internet|telecommunication|electricity|power grid|electrical grid|\\bpark.?\\b",
-  "tunnel|water supply|Canal|Hospital|Irrigation scheme|Levee|Lighthouse",
-  "Pipeline|\\btransit.?\\b|Public space|Sewage treatment|Sewerage|Sluice|Solid waste|Utilities|\\bWeir|waterway|harbor|harbour|\\bdock|\\bdike|\\bdyke", sep = "|")
-
-company_ls <- "\\bcompany\\b|\\bcompanies|\\bfirm.?\\b|\\bcorporate\\b|\\bcorporation|business|enterprise"
-
-###
-
 SDG9_1   = c("quality|reliab|sustainable|resilien|afford|equitab|inclus",
              infrastructure_ls)
 temp <- SDG9_1
@@ -1382,28 +1440,27 @@ SDG9_1 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
 SDG9_2_x = c("inclusiv|sustainab|cradle to cradle|circular",
              "\\bindustr")
 temp <- SDG9_2_x
-### Option 1: use `func_AND_plus` function
-# SDG9_2_x <- func_AND_plus(SDG9_2_x)
-
-### Option 2: to use look around function ----
 SDG9_2_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
 
 
-SDG9_2_y = c('manufactur', 
+SDG9_2_y = c('manufactur|\\bindustr', 
              '\\bvalue', 
              'per capita|\\bGDP\\b|gross domestic product')
-SDG9_2_z = c('manufactur', 
-             'employ')
+SDG9_2_z = c('manufactur|\\bindustr', 
+             '\\bemployment|\\bhiring|\\bemployee|\\bworker|\\bstaff',
+             "Share of|proportion|\\bpercent")
 
 SDG9_2_y <- func_AND_plus(SDG9_2_y)
-SDG9_2_z <- func_AND_plus(SDG9_2_z)
+# SDG9_2_z <- func_AND_plus(SDG9_2_z)
+temp <- SDG9_2_z
+SDG9_2_z <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[3], n = 4, third_AND_string = temp[1])
 
 
 SDG9_3_x = c("\\bindustr|enterprise|entrepreneur",
              "access|availab|\\breach",
-             "\\bfinanc|fiscal|\\bcredit|\\bloan|value chain|\\bfund.?\\b|\\bfunding\\b|micro.?credit|micro.?financ")
-SDG9_3_y = c("small.?scale industr|micro.?enterprise", 
+             "financial service|fiscal|\\bcredit|\\bloan|value chain|\\bbanking|\\binsurance|\\bfund.?\\b|\\bfunding\\b|micro.?credit|micro.?financ")
+SDG9_3_y = c("small.?scale industr|micro.?enterprise|small.?sized business", 
              "Share of|proportion|\\bpercent")
 SDG9_3_z = c("\\bsmall|\\bmicro.?\\b|starting|startup|kickstart", 
              paste("entrepren", company_ls, sep = "|"),
@@ -1412,7 +1469,10 @@ SDG9_3_z = c("\\bsmall|\\bmicro.?\\b|starting|startup|kickstart",
 SDG9_3_x <- func_AND_plus(SDG9_3_x)
 SDG9_3_x <- gsub("\\.\\+", "(?!.*Access Bank)", SDG9_3_x) ## to exclude
 SDG9_3_y <- func_AND_plus(SDG9_3_y)
-SDG9_3_z <- func_AND_plus(SDG9_3_z)
+
+# SDG9_3_z <- func_AND_plus(SDG9_3_z)
+temp <- SDG9_3_z
+SDG9_3_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, third_AND_string = temp[3])
 
 
 SDG9_4_x = c("upgrad|retrofit",
@@ -1435,7 +1495,7 @@ temp     <- SDG9_4_w
 SDG9_4_w <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
 
-SDG9_5_x = c("technolog|innov|research", 
+SDG9_5_x = c("technolog|innov|\\binvention|research", 
              paste(increase_ls, 
                    "upgrad|\\bencourag|prioritiz|\\bfurther\\b|\\bfortifie|drive.?\\b|driving|leverag|\\bcontinue|\\binculcat", 
                    "\\bobtain|\\badapt|\\bdevelop",
@@ -1451,12 +1511,13 @@ w_ex <- c('incremental cost')
 SDG9_5_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6, exclude = w_ex, third_AND_string = temp[3])
 
 
-SDG9_5_y = c("\\bresearch\\b|Researcher|\\bR&D\\b|\\bR & D\\b|\\bR-D\\b|\\bRTD\\b|\\bR\\+D\\b", 
+SDG9_5_y = c(paste("\\bresearch\\b|Researcher|scientist|\\bscholar\\b|specialist|\\bexpert.?\\b",
+                   "\\bsavant.?\\b|academician|\\bR&D\\b|\\bR & D\\b|\\bR-D\\b|\\bRTD\\b|\\bR\\+D\\b", sep = "|"),
              increase_ls)
 temp <- SDG9_5_y
 # SDG9_5_y <- func_AND_plus(SDG9_5_y)
 ### Option 2 ----
-SDG9_5_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
+SDG9_5_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
 
 
 SDG9_a <- c("resilient|sustainable", 
@@ -1467,9 +1528,9 @@ SDG9_a <- c("resilient|sustainable",
 SDG9_a <- func_AND_plus(SDG9_a)
 
 
-SDG9_b_x = c("\\btechnolog|innovation|research|medium.?tech|high.?tech|\\bR&D\\b|\\bR & D\\b|\\bR-D\\b|industrial diversification",
+SDG9_b_x = c("technolog|innovation|research|medium.?tech|high.?tech|\\bR&D\\b|\\bR & D\\b|\\bR-D\\b|industrial diversification",
             paste(increase_ls, support_ls, sep = "|"),
-            paste("performance|operational efficiency|domestic", developing_country_ls, sep = "|"))
+            paste("operational efficiency|domestic", developing_country_ls, sep = "|"))
 SDG9_b_x <- func_AND_plus(SDG9_b_x)
 SDG9_b_x <- gsub("\\.\\+", "(?!.*Award)(?!.*Financial Report)(?!.*Annual Report)", SDG9_b_x) ## to exclude 
 
@@ -1512,16 +1573,20 @@ SDG10_1 = c("income|livelihood|expenditure|earning|\\bpay\\b|\\bwage",
             paste("empower", increase_ls, sep = "|"))
 
 SDG10_2_x = c("inclusi",
-              paste("empower|\\breform|Prioritiz|\\bstimulat|strengthen|\\bfortif|support|\\bcommitment|provid", increase_ls, sep = "|"),
+              paste("empower|\\breform|Prioritiz|\\bstimulat|strengthen|support|\\bcommitment|provid", increase_ls, sep = "|"),
               paste("social|economic|socio.?economic|political|\\bage\\b|\\bsex|\\bgender",
                     female_ls,
                     LGBT_ls,
-                    "Disabled|disabilities|handicapped|incapacitated|crippled|disadvantaged",
-                    "\\brace|racial|ethnic|origin|religi|low.?income|demographic", sep = "|"))
+                    disability_ls,
+                    "disadvantaged|\\brace|racial|ethnic|origin|religi|low.?income|demographic", sep = "|"))
 SDG10_2_y = c("financial inclusion",
-              paste("empower|\\breform|Prioritiz|\\bstimulat|strengthen|\\bfortif|support|\\bcommitment|provid", increase_ls, sep = "|"))
+              paste("empower|\\breform|Prioritiz|\\bstimulat|strengthen|support|\\bcommitment|provid", increase_ls, sep = "|"))
 SDG10_2_x <- func_AND_plus(SDG10_2_x)
+SDG10_2_x <- gsub("\\^", "^(?!.*(?:financial inclusion))", SDG10_2_x) ## exclude "financial inclusion"
+
 SDG10_2_y <- func_AND_plus(SDG10_2_y)
+
+
 
 SDG10_3_x = c("inequalit|discrimin|harass|homophobia|racism|sexism|prejudice",
               reduce_ls)
@@ -1744,13 +1809,20 @@ SDG11_a_y = c(urban_ls,
 
 SDG11_b_x = c(paste(urban_ls, "local government", sep = "|"),
               policy_ls,
-              "inclusi|resilien|resource efficien|mitigation|adaptation", 
+              "inclusi|resource efficien")
+
+SDG11_b_y = c(paste(urban_ls, "local government", sep = "|"),
+              policy_ls,
+              "mitigation|adaptation|resilien",
               paste("climate change", disaster_ls, sep = "|"))
-SDG11_b_y <- c("risk management|risk reduction",
+SDG11_b_x <- func_AND_plus(SDG11_b_x)
+SDG11_b_y <- func_AND_plus(SDG11_b_y)
+
+SDG11_b_z <- c("risk management|risk reduction",
                paste('climate change', disaster_ls, sep = "|"))
-# SDG11_b_y <- func_AND_plus(SDG11_b_y)
-temp      <- SDG11_b_y
-SDG11_b_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
+# SDG11_b_z <- func_AND_plus(SDG11_b_z)
+temp      <- SDG11_b_z
+SDG11_b_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 
 
 
@@ -1769,17 +1841,12 @@ SDG11_3_x <- func_AND_plus(SDG11_3_x)
 
 SDG11_5_x <- func_AND_plus(SDG11_5_x)
 
-
-
 SDG11_7_x <- func_AND_plus(SDG11_7_x)
 SDG11_7_y <- func_AND_plus(SDG11_7_y)
 
 
 SDG11_a_x <- func_AND_plus(SDG11_a_x)
 SDG11_a_y <- func_AND_plus(SDG11_a_y)
-
-
-SDG11_b_x <- func_AND_plus(SDG11_b_x)
 
 SDG11_c <- func_AND_plus(SDG11_c)
 
@@ -1801,7 +1868,7 @@ SDG11_c <- func_AND_plus(SDG11_c)
 ## 12. Responsible Consumption and Production ---------------------------------------------------
 
 
-SDG12_1_x1 = c("sustainab|\\bgreen\\b|\\bgreener\\b|\\bclean|Responsible|Eco.?Friendly/Environmentally.?Friendly|Recyclable",
+SDG12_1_x1 = c("sustainab|\\bgreen\\b|\\bgreener\\b|\\bclean|Responsible|Eco.?Friendly/Environmentally.?Friendly|Recyclable|\\befficien",
                "consum|\\bproduc|manufactur")
 temp <- SDG12_1_x1
 
@@ -1825,8 +1892,9 @@ SDG12_2_y = c("manag|conserv|protocol",
                     "\\btimber|land resource|forest resource|mineral resource", sep = "|"))
 SDG12_2_z = c("resource.?efficien|efficient resource",
               increase_ls)
-SDG12_2_w = c("material.?\\b|resource|\\bland\\b|biomass|fossil fuel|metal ores|Fossil energy|industrial mineral", 
-              "footprint|\\bflow\\b|\\bflows\\b|consum|depletion|overconsumption",
+SDG12_2_w = c("material.?\\b|resource|\\bland\\b|biomass|fossil fuel|Fossil energy|metal ores|industrial mineral", 
+              "\\bcoal\\b|\\bpetroleum\\b|natural gas|oil shale|\\bbitumen|\\btar sand|heavy oil",
+              "footprint|\\bintensity|\\bflow\\b|\\bflows\\b|consum|depletion|overconsumption",
               paste("manag|per GDP|per capita|\\befficien", reduce_ls, sep = "|"))
 
 
@@ -1839,12 +1907,13 @@ temp    <- SDG12_3
 SDG12_3 <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[2], n = 4, third_AND_string = temp[1])
 
 
-SDG12_4_x = c(paste("manag|\\btreat|agreement|responsi|collected|controlled|handled|life cycle|safe handl|per capita", 
+SDG12_4_x = c(paste("manag|\\btreat|agreement|responsi|collected|controlled|handled|removal|disposal|life cycle|safe handl|per capita", 
                     "environmentally.?sound|Responsible|Eco.?Friendly|Environmentally.?Friendly",
                     reduce_ls, sep = '|'),
               paste(waste_ls, 
-                    "chemical|contaminat|pesticide|pollut|\\bpoison|hazard|toxin|toxic", 
-                    "virulent|radioactive|Chlorinated aliphatic hydrocarbons|\\bWood preserv|Multisource leachate|Petroleum refin|Explosives manufactur",
+                    "chemical|contaminat|pesticide|pollut|air emission|\\bpoison|hazard|toxin|toxic", 
+                    "virulent|radioactive|Chlorinated aliphatic hydrocarbons|\\bWood preserv",
+                    "Multisource leachate|Petroleum refin|Explosives manufactur",
                     "\\bPFOA\\b|\\bPFOS\\b|\\bPFAS\\b|olatile organic compound|\\bVOC\\b",
                     ls_hazardous_waste_chemicals,
                     sep = "|"))
@@ -1856,7 +1925,9 @@ SDG12_4_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
 SDG12_4_y = "environmental permit"
 
 SDG12_4_z = c("environmental impact|environmental issue|environmental risk",
-             paste(reduce_ls, "decoupl|informed", sep = "|"))
+             paste(reduce_ls, "de.?coupl|informed", 
+                   "\\baddress|tackle|response to|cope.?with|coping with|deal.?with|dealing with|handl|measure.?\\b|\\blower\\b|\\less\\b",
+                   sep = "|"))
 temp <- SDG12_4_z
 w_ex <- c("Limiting Our Environmental Impact")
 ### Option 1
@@ -1865,19 +1936,24 @@ w_ex <- c("Limiting Our Environmental Impact")
 SDG12_4_z <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6, exclude = w_ex)
 
 
-SDG12_5_x = c(paste("recycl|\\bre.?us|re.?utilize|re.?possess|circular", "\\breduc", sep = "|"), 
+SDG12_5_x = c(paste("recycl|\\bre.?us|re.?utilize|re.?possess|\\bregenerate|circular", 
+                    "circulate|circulating|reclaimed|reclamation",
+                    "\\breduc", sep = "|"), 
               waste_ls)
 temp <- SDG12_5_x
 ### Option 1
 # SDG12_5_x <- func_AND_plus(SDG12_5_x)
 ### Option 2 ----
-SDG12_5_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
+SDG12_5_x <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 10)
 
 
-SDG12_5_y = c("recycl|\\bre.?us|re.?utilize|re.?possess|circular", 
-              "material.?\\b|resource|\\bpaper\\b")
+SDG12_5_y = c(paste("recycl|\\bre.?us|re.?utilize|re.?possess|\\bregenerate|circular", 
+                    "circulate|circulating|reclaimed|reclamation",
+                    "\\brepair|\\brefurbish", sep = "|"),
+              paste("material.?\\b|resource|\\bpaper\\b",
+                    "packaging|\\bfibre|plastic|\\bglass\\b|\\bresidue.?\\b|by.?product", sep = "|"))
 temp      <- SDG12_5_y
-SDG12_5_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 8)
+SDG12_5_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 10)
 
 
 
@@ -1954,7 +2030,7 @@ SDG12_b = c("sustainab|green",
             "touris",
             "monitor|manag|accounting|\\btrack|\\bregulat|administer|govern")
 
-SDG12_c = c("fossil|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|crude oil|gasoline|kerosene|non.?renewable|traditional energy",
+SDG12_c = c("fossil|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|crude oil|gasoline|kerosene|non.?renewable|traditional energy|Conventional energy",
             "\\bsubsidy|\\bsubsidies|\\bsubsidiz|\\bsubsidis|expenditure|expens")
 
 
@@ -2020,7 +2096,8 @@ SDG13_2_x = paste(climate_good_ls, 'kyoto protocol|\\bunfccc|tipping point', sep
 
 SDG13_2_y = c(
   paste("ocean acidification|deforestation|desertificati|animal farming|farming livestock|fertilizer",
-        "air pollut|fossil.?fuel|fossil gas|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|traditional energy|typhoons|hurricane", sep = "|"), 
+        "air pollut|fossil.?fuel|fossil gas|\\bcoal\\b|\\bcoals\\b|petrol|natural gas|traditional energy|Conventional energy|typhoons|hurricane", 
+        sep = "|"), 
   reduce_ls)
 temp <- SDG13_2_y
 
@@ -2038,7 +2115,7 @@ SDG13_2_z = c(paste(climate_ls, climate_good_ls, sep = "|"),
                     "response to|cope.?with|coping with|deal.?with|dealing with|handl|measure",
                     policy_ls, reduce_ls, sep = '|')) 
 SDG13_2_w1 <- c(emission_ls, 
-                paste("captur|sequest|\\blimit.?\\b|remov|absorb", reduce_ls, sep = "|"))
+                paste("captur|sequest|\\blimit.?\\b|\\bremov|absorb", reduce_ls, sep = "|"))
 SDG13_2_z  <- func_AND_plus(SDG13_2_z)
 SDG13_2_w1 <- func_AND_plus(SDG13_2_w1)
 
@@ -2394,13 +2471,15 @@ SDG16_4_y <- "unauthorized acquisition|money.?launder|money.?washing|launder mon
 
 
 SDG16_5_x = c("corrupt|\\bbrib|Tax evasion|extortion", 
-              paste("implement|identif|takes into account|aware of|\\bpolicy|\\bpolicies|legislation|\\bregulat|manag",
+              paste("implement|identif|takes into account|aware of|\\bpolicy|\\bpolicies|legislation|\\bregulat|manag|\\brule.?\\b",
                     "\\bagainst\\b|\\bAnti.?\\b|\\bcombat|\\bavoid", 
                     "\\baddress|fight|tackle|response to|cope.?with|coping with|deal.?with|dealing with|handl|measure.?\\b",
                     reduce_ls, sep = "|"))
 SDG16_5_y = c("contact|asked|\\bpay\\b|\\bpaid|extort", 
               "public official")
 SDG16_5_z = c('miscarriage', 'justice')
+
+SDG16_5_w = "anticorruption"
 
 
 SDG16_6_x = c(paste("institut|\\bgovern|legislat|judicia|public service|civil service|organization.?\\b|association.?\\b",
@@ -2637,14 +2716,14 @@ SDG17_8 = c("technolog|\\bscience|innovation|information|communication|internet"
 SDG17_9_x = c("capacity building|international support",
               developing_country_ls)
 
-SDG17_9_y = c("financ|technical",
-              "assistance", 
+SDG17_9_y = c("financ|\\btechnical|technolog",
+              "assistance|\\baid\\b", 
               developing_country_ls)
 SDG17_9_y <- func_AND_plus(SDG17_9_y)
 SDG17_9_y <- gsub("\\.\\+", "(?!.*financial statement)", SDG17_9_y) ## to exclude 'financial statement'
 
 SDG17_9_z = c("North.?South|South.?South|triangular", 
-              "cooperation|collaboration|partnership",
+              "cooperat|collaborat|joint effort|partnership",
               developing_country_ls)
 
 
