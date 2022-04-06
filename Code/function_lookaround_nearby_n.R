@@ -104,14 +104,15 @@ docstring(lookaround_nearby_n)
 ###                                                                                    ###
 ### -----------------------------------------------------------------------------------###
 
-lookaround_nearby_n_plus1AND <- function(word_ls1, word_ls2, n, third_AND_string = "", exclude = "") {
-  
-  px <- lookaround_nearby_n(word_ls1, word_ls2, n, exclude);
-  
-  aANDstring  <- paste0('^(?=.*(?:', third_AND_string, ')).+')
-  
-  pat <- paste(aANDstring, px, sep = "")
-  
-  return(pat)
-}
+# lookaround_nearby_n_plus1AND <- function(word_ls1, word_ls2, n, third_AND_string = "", exclude = "") {
+#   
+#   px <- lookaround_nearby_n(word_ls1, word_ls2, n, exclude);
+#   
+#   aANDstring  <- paste0('^(?=.*(?:', third_AND_string, ')).+')
+#   
+#   pat <- paste(aANDstring, px, sep = "")
+#   
+#   return(pat)
+# }
 
+## --> this has been included in the updated `lookaround_nearby_n`
