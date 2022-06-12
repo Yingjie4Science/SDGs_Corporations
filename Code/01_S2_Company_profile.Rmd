@@ -1,0 +1,665 @@
+---
+title: "Company info"
+author: "Yingjie Li"
+date: "6/11/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+# Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+dir_root <- dirname(dir)
+setwd(dir_root)
+getwd()
+
+dir.raw     <- paste0(dir_root, '/Data/data_raw/')
+dir.results <- paste0(dir_root, '/Data/data_results/')
+dir.figures <- paste0(dir_root, '/Data/figures/'); dir.figures
+
+
+source('./Code/_packages.R')
+source('./Code/helper_theme_NS_map.R')
+
+
+version <- '_R1'
+```
+
+
+
+
+# 1. Company info from UNGSII
+```{r}
+## company info
+xls <- paste0(dir.raw, 'UNGSII/', 'Yingjie_Companies_190930_updateYL.xlsx')
+excel_sheets(xls)
+sheet <- "Companies"
+df.co <- readxl::read_excel(path = xls, sheet = sheet) 
+names(df.co)
+head(df.co,2)
+
+### cleaning data --------------------------------------------------------------
+names(df.co) <- c("Company", 'Industry', 'Industry2', 
+                  "Country", 'Continent', 
+                  "Location",  "name_specifc", "ISIN")
+df.co <- df.co %>% ## create a new name col for the country
+  as.data.frame() %>%
+  mutate(Country = gsub(' in general', '', Country)) %>%
+  dplyr::select(-c(Industry2, Location))
+
+### detect rows containing NA values in any column 
+df.co %>% filter_all(any_vars(is.na(.))) 
+n.industry <- unique(df.co$Industry); #n.industry
+print(paste0('There are total ', length(n.industry), ' industries.'))
+
+
+### number of countries by industry --------------------------------------------
+ls_industry <- df.co %>%
+  group_by(Industry) %>% tally() %>% arrange(n)
+## write to local and tidy this list
+# writexl::write_xlsx(x = ls_industry, path = './data_raw/_ls_industry.xlsx')
+
+
+### read in again after cleaning up Industry info ----------------------------
+df.industry <- 
+  readxl::read_excel(path = paste0(dir.raw,'/_ls_industry_manualTidy.xlsx')) %>%
+  dplyr::select(Industry, ind_agg) %>%
+  dplyr::mutate(ind_agg = str_to_title(ind_agg))
+unique(df.industry$ind_agg)
+
+
+df.co2 <- merge(df.co, df.industry, by = 'Industry', all.x = T)
+
+df.co2 %>%
+  group_by(ind_agg) %>% tally() %>% arrange(n) %>%
+  ggplot() +
+  geom_col(aes(x= reorder(ind_agg, n), y = n)) +
+  coord_flip() + theme_bw()
+print(paste0('There are total ', length(unique(df.co2$ind_agg)), ' industries.'))
+```
+
+
+
+
+#  2. Other datasets
+
+## 2.1 Company info by Zilong
+
+```{r}
+### read data from zilong (zl)
+xls <- paste0(dir.raw, '/company_info_Zilong/zilong5_zhenghe_0612.xls')
+excel_sheets(xls)
+sheet <- "Companies"
+zl <- readxl::read_excel(path = xls, sheet = sheet) %>% as.data.frame()
+nm <- names(zl)
+sort(nm)
+# str(zl)
+
+## new name for the cols
+nm_new <- nm %>% 
+  str_to_lower(.) %>%
+  gsub(' |\\-|\\(|\\)', '_', .) %>% ## special strings
+  gsub('\\__', '_', .) %>%          ## double underline to single 
+  gsub('\\_$', '', .) %>%           ## remove the underline at the end of the string
+  gsub('number_of_|\\\n|companies|as_of_3/29/19_', '', .) %>%
+  gsub('lndustry', 'industry', .) %>%
+  gsub('revenues', 'revenue', .) %>%
+  gsub('total_assets\t', 'assets', .) %>%
+  gsub('employees', 'employee', .) %>%
+  gsub('profits', 'profit', .) %>%
+  gsub('headquarters', 'headquarter', .) %>%
+  gsub('assets', 'asset', .) %>%
+  gsub('net_income', 'income_net', .) %>%
+  gsub('operating_income', 'income_operating', .) %>%
+  gsub('introduction_fortune', 'website_fortune_intro', .) %>%
+  gsub('fortune_global1000', 'fortune_us1000', .) %>%
+  gsub('\\$m', '\\_musd', .) %>%  ## million USD
+  gsub('\\__', '_', .) %>%        ## double underline to single     
+  # sort() %>% 
+  str_to_lower(.)
+nm_new
+sort(nm_new)
+
+### rename the df
+names(zl) <- nm_new
+
+### by data source
+str_subset(string = nm_new, pattern = 'fortune') 
+str_subset(string = nm_new, pattern = 'forbes') %>% sort()
+str_subset(string = nm_new, pattern = 'wiki') 
+
+### by col info
+str_subset(string = nm_new, pattern = 'country')
+str_subset(string = nm_new, pattern = 'headquarter') ## no forbes global 2000?
+str_subset(string = nm_new, pattern = 'industry')
+str_subset(string = nm_new, pattern = 'sector')
+str_subset(string = nm_new, pattern = 'profit')
+str_subset(string = nm_new, pattern = 'employee')
+
+### separate kaggle's HQ info and left_join to the main data
+country_kaggle <- zl %>% 
+  dplyr::distinct(id, headquarter_kaggle)
+
+country_kaggle <- data.frame(
+  country_kaggle, do.call(rbind, str_split(country_kaggle$headquarter_kaggle,','))) %>%
+  select(-headquarter_kaggle)
+names(country_kaggle) <- c("id",
+                           paste0(c("city", "state", 'country'), "_kaggle"))
+
+zl <- zl %>% left_join(., country_kaggle, by = 'id') %>%
+  mutate_if(is.factor, as.character)
+
+
+### add info from the raw data
+com_raw <- df.co2 %>%
+  mutate(id = row_number())
+names(com_raw)
+
+com_all <- com_raw %>% 
+  left_join(., zl, by= 'id')
+
+names(com_all)
+str(com_all)
+
+
+```
+
+
+### - data cleaning by column
+```{r}
+### country info ---------------------------------------------------------------
+country <- com_all %>% 
+  select(matches(match = 'id|name|countr|city|headquarters|tude', ignore.case = T)) %>%
+  select(matches(match = 'id|name|countr', ignore.case = T)) %>%
+  dplyr::mutate(
+    country = ifelse(
+      ### decide the info choice based on data quality: Forbes, Fortune, Kaggle
+      country_forbes_global2000_2020 != 'NA', country_forbes_global2000_2020, 
+      ifelse(
+        country_fortune_global500_2019 != 'NA', country_fortune_global500_2019, 
+        ifelse(
+          country_forbes_global2000_2019 != 'NA', country_forbes_global2000_2019, 
+          ifelse(
+            country_kaggle != 'NA', country_kaggle, NA
+          )
+        ))
+      ),
+    country = trimws(country),
+    country = gsub('\\.', '', country),
+    country = gsub('US', 'United States', country),
+    country = str_to_title(country),
+    ) %>%
+  select(id, name, country, Country)
+  
+names(country)
+
+
+### Industry  ------------------------------------------------------------------
+industry <- com_all %>% as.data.frame() %>%
+  dplyr::select(matches(match = 'id|name|industry|sector', ignore.case = T)) %>%
+  dplyr::mutate(
+    industry = ifelse(
+      industry_forbes_global2000_2020 != 'NA', industry_forbes_global2000_2020, 
+      ifelse(
+        industry_fortune_global500_2019 != 'NA', industry_fortune_global500_2019, 
+        ifelse(
+          industry_wiki != 'NA', industry_wiki, 
+          ifelse(
+            industry_kaggle != 'NA', industry_kaggle, 
+            ifelse(
+              industry_fortune_us1000_2018 != 'NA', industry_fortune_us1000_2018,
+              ifelse(
+                industry_forbes_global2000_2019 != 'NA', industry_forbes_global2000_2019, NA
+              )
+              ))
+          ))
+      )) %>%
+  dplyr::select(id, name, industry, Industry)
+
+names(industry)
+
+
+### Revenue/profits  -----------------------------------------------------------
+###   may choose profit for use.
+# profit = net income
+profit <- com_all %>% as.data.frame() %>%
+  dplyr::select(matches(match = 'id|name|revenue|profit|income', ignore.case = T)) %>%
+  dplyr::mutate(
+    profit = ifelse(
+      profit_musd_forbes_global2000_2020 != 'NA', profit_musd_forbes_global2000_2020, 
+      ifelse(
+        profit_musd_fortune_global500_2019 != 'NA', profit_musd_fortune_global500_2019,
+        ifelse(
+          profit_musd_fortune_us1000_us_2019 != 'NA', profit_musd_fortune_us1000_us_2019,
+          ifelse(
+            profit_musd_forbes_global2000_2019 != 'NA', profit_musd_forbes_global2000_2019,
+            ifelse(
+              profit_musd_fortune_us1000_2018 != 'NA', profit_musd_fortune_us1000_2018, NA
+            )
+          )
+          )))) %>%
+  dplyr::mutate(profit = as.numeric(profit)) %>%
+  dplyr::arrange(!is.na(profit), profit)
+  
+sort(names(profit))
+# str(profit)
+
+
+
+### Assets ---------------------------------------------------------------------
+asset <- com_all %>% 
+  dplyr::select(matches(match = 'id|name|asset', ignore.case = T)) %>%
+  dplyr::mutate(
+    asset = ifelse(
+      asset_musd_forbes_global2000_2019 != 'NA', asset_musd_forbes_global2000_2019, 
+      ifelse(
+        asset_musd_fortune_global500_2019 != 'NA', asset_musd_fortune_global500_2019, 
+        ifelse(
+          asset_musd_fortune_us1000_us_2019 != 'NA', asset_musd_fortune_us1000_us_2019,
+          ifelse(
+            asset_musd_fortune_us1000_2018 != 'NA', asset_musd_fortune_us1000_2018,
+            ifelse(
+              asset_musd_forbes_global2000_2020 != 'NA', asset_musd_forbes_global2000_2020,
+              NA
+              # ifelse(
+              #   asset_wiki != 'NA', asset_wiki, NA
+              # )
+            )
+          )
+        ))
+      ),
+    asset = as.numeric(asset)
+    ) %>%
+  dplyr::select(id, name, asset, asset_wiki) %>%
+  dplyr::arrange(!is.na(asset), asset)
+
+names(asset)
+# str(asset)
+
+
+### Employees ------------------------------------------------------------------
+employee <- com_all %>% as.data.frame() %>%
+  dplyr::select(matches(match = 'id|name|employee', ignore.case = T)) %>%
+  dplyr::mutate(
+    employee_wiki_num   = as.numeric(gsub("\\D", "", employee_wiki)),
+    employee_kaggle_num = as.numeric(gsub("\\D", "", employee_kaggle)),
+    employee_kaggle_num = ifelse(employee_kaggle_num > 10, employee_kaggle, NA)) %>%
+  as.data.frame() %>%
+  dplyr::mutate(
+    # small number might be wrong for kaggle data
+    employee = ifelse(
+      employee_forbes_global2000_2019 != 'NA', employee_forbes_global2000_2019,
+      ifelse(
+        employee_fortune_global500_2019 != 'NA', employee_fortune_global500_2019,
+        ifelse(
+          employee_fortune_us1000_us_2019 != 'NA', employee_fortune_us1000_us_2019,
+          ifelse(
+            employee_fortune_us1000_2018 != 'NA', employee_fortune_us1000_2018,
+            ifelse(
+              employee_forbes_global2000_2020 != 'NA', employee_forbes_global2000_2020,
+              ifelse(
+                !is.na(employee_wiki_num), employee_wiki_num,
+                ifelse(
+                  !is.na(employee_kaggle_num), employee_kaggle_num, NA)))))))) %>%
+  dplyr::mutate(employee = as.numeric(employee)) %>%
+  dplyr::arrange(!is.na(employee), employee)
+
+sort(names(employee))
+# str(employee)
+# unique(employee$employee)
+
+```
+
+
+
+
+### * geo-coding lat/lon
+  1. using info from https://www.forbes.com/global2000/; e.g., Walmart
+      - Country/Territory: United States
+      - Headquarters:      Bentonville, Arkansas
+      
+  2. Then, fill data gap for those  that are not included in www.forbes.com
+    (1) forbes global2000 (in 2019, I saw you have this data)
+    
+    (2) https://fortune.com/global500/2020/; e.g., Walmart
+      - Country: U.S.
+      - Headquarters: Bentonville, Ark. (city, state)
+      
+    (3) https://fortune.com/global500/2019/; e.g., Walmart
+      - HQ Location: Bentonville, Ark. (city, state)
+      - (NO Country INFO, SAME AS 2018)
+      
+    (4) https://en.wikipedia.org/wiki/Walmart (an example)
+      - Headquarters:	Bentonville, Arkansas, U.S.
+      
+  3. Geo-coding and generate lat/lon info for mapping
+
+#### - data cleaning
+```{r}
+getwd()
+xls <- './Data/data_raw/company_info_Zilong/geo_location_coms/geo_location_en_v0906.xlsx'
+excel_sheets(xls)
+geodf <- readxl::read_excel(path = xls, sheet = 1) %>%
+  dplyr::select(ID:lat)
+# names(geodf)
+# head(geodf,2)
+
+### load the final 500 com list - "com_final"
+load('./Data/data_results/com_final_500_scr.RData')
+com_final_ctr <- com_final %>%
+  dplyr::select(company_name:Country)
+geodf500 <- geodf %>%
+  ### link with the company info provided by UNGSII, and double-check on the location info (country location)
+  merge(x = ., y = com_final, by.x = 'name', by.y = 'company_name', all.y = T)
+str(geodf500)
+
+### by manually check the data, we need to revise some of the info
+xls <- './Data/data_raw/company_info_Zilong/geo_location_coms/geo_location_en_need_revision_done.xlsx'
+geosi <- readxl::read_excel(path = xls, sheet = 1) %>%
+  dplyr::select(ID:lat, -ID) 
+com_list_to_update  <- unique(geosi$name);  com_list_to_update ### get the list that needs to be updated
+### subset the ones that need to be updated
+geodf_to_update0 <- geodf500 %>% 
+  dplyr::filter(name %in% com_list_to_update | is.na(lat)) %>%
+  dplyr::select(name:lat, -ID)
+### subset the ones that are correct
+geodf_to_update1 <- geodf500 %>% 
+  dplyr::filter(!name %in% com_list_to_update & !is.na(lat)) %>%
+  dplyr::select(name:lat, -ID)
+### update the geo-location df by combining the correct ones and updated ones
+geodf500_update <- rbind(geodf_to_update1, geosi) %>%
+  distinct(name, .keep_all = T) %>%
+  # merge(x = ., y = com_final, by.x = 'name', by.y = 'company_name', all = T) %>%
+  arrange(name)
+
+### check if there are missing companies from the SDG coding data (that not included in the 500 list)
+### load the average commitments and evenness at company level
+load(paste0(dir.results, 'com_cmt_evenness_all.RData'))
+### link with the geo-location data
+geo_all <- merge(x = geodf500_update, y = com_cmt_evenness_all, by.x = 'name', by.y = 'Company', all = T) %>%
+  arrange(!is.na(lat))
+### get the list that needs to be updated
+geosi2 <- geo_all %>%
+  dplyr::filter(is.na(location))
+com_list_to_update2  <- unique(geosi2$name);  com_list_to_update2 
+### return to the 'data cleaning' section and add these companies  
+geodf_to_update2 <- geodf %>% 
+  dplyr::filter(name %in% com_list_to_update2) %>%
+  dplyr::select(name:lat)%>%
+  arrange(name)
+
+### update the geo-location df AGAIN by combining the correct ones and updated ones
+geodf500_update <- rbind(geodf_to_update1, geosi, geodf_to_update2) %>%
+  distinct(name, .keep_all = T) %>%
+  # merge(x = ., y = com_final, by.x = 'name', by.y = 'company_name', all = T) %>%
+  arrange(!is.na(location), name)
+```
+
+
+
+#### - map
+```{r}
+library(sf)
+library(ggrepel)
+library(rnaturalearthdata)
+library(rnaturalearth)
+library(sf)
+shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
+  dplyr::select(name, type, iso_a3, economy, income_grp) %>%
+  dplyr::filter(name != 'Antarctica')
+
+geodf500_update1 <- geodf500_update %>%
+  dplyr::filter(!is.na(lat)) %>%
+  # dplyr::select(name:Country) %>% 
+  mutate(lat1 = case_when(
+    str_detect(lat, "S") ~ as.numeric(as.character(gsub('°S', '', lat)))*(-1),
+    TRUE ~ as.numeric(as.character(gsub('°N', '', lat)))
+  )) %>% 
+  mutate(lon1 = case_when(
+    str_detect(lon, "W") ~ as.numeric(gsub('°W', '', lon))*(-1),
+    TRUE ~ as.numeric(gsub('°E', '', lon))
+  )) %>%
+  ### some locations are the same, and here we make a small adjustment to the lat/lon to avoid overlaps
+  ### the result look not change much - may not useful
+  # dplyr::mutate(
+  #   i = runif(n = nrow(.), min= -0.5, max = 0.5),
+  #   j = runif(n = nrow(.), min= -0.5, max = 0.5),
+  #   lat2 = lat1 + i,
+  #   lon2 = lon1 + j
+  #   ) %>%
+  arrange(!is.na(lat1)) 
+geodf_sf <- st_as_sf(geodf500_update1, coords = c("lon1", "lat1"), remove = F, crs = 4326)
+
+
+### Link geo-location with commitments and evenness data -------------------------------------------------------------
+### load the average commitments and evenness at company level
+load(paste0(dir.results, 'com_cmt_evenness_all.RData'))
+### link with the geo-location data
+geo_all <- merge(x = geodf_sf, y = com_cmt_evenness_all, by.x = 'name', by.y = 'Company', all = T) %>%
+  arrange(!is.na(lat1))
+### get the list that needs to be updated
+geosi2 <- geo_all %>%
+  dplyr::filter(is.na(location))
+com_list_to_update2  <- unique(geosi2$name);  com_list_to_update2 
+### return to the 'data cleaning' section and add these companies
+###
+### plot commitment and evenness at company level
+map_com <- ggplot() +
+  geom_sf(data = shp, fill = 'gray90', color='gray70', size = 0.1) +
+  geom_sf(data = geo_all, aes(size = cmt_mean, color = (evenness)), alpha = 0.6) +
+  scale_size_continuous(range = c(0.1, 5)) +
+  # scale_color_continuous(direction = -1) +
+  # scale_color_continuous(trans = 'reverse') +
+  scale_color_viridis(option = "D", direction = 1, na.value = "grey50")+
+  #edit legends
+  guides(
+    #reverse color order (higher value on top)
+    color = guide_colorbar(reverse = F),
+    #reverse size order (higher diameter on top) 
+    size = guide_legend(reverse = TRUE))+
+  # geom_text_repel(data = geodf500_test, aes(x = lon1, y = lat1, label = name)) +
+  labs(color = "Evenness", size = 'Number of \ncommitments') +
+  theme_bw() +
+  theme_ns+
+  theme(
+    legend.position = c(0.12, 0.4),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # panel.border = element_rect(colour = 'transparent'),
+    panel.border = element_blank()); map_com
+  
+
+### save as jpg
+fname <- paste0(dir.figures, 'company_location_map', version, '.jpg');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_2col/2.2, units = unit_ns, dpi = 1200)
+
+```
+
+
+
+```{r}
+zoom_to <- c(5.38, 52.52)  # EU
+zoom_level <- 3
+lon_span <- 360 / 2^zoom_level
+lat_span <- 180 / 2^zoom_level
+lon_bounds <- c(zoom_to[1] - lon_span / 2, zoom_to[1] + lon_span / 2)
+lat_bounds <- c(zoom_to[2] - lat_span / 2, zoom_to[2] + lat_span / 2)
+
+map_com +
+  geom_sf(data = st_sfc(st_point(zoom_to), crs = 4326), color = 'transparent', size = 0.1) +
+  coord_sf(xlim = lon_bounds, ylim = lat_bounds) +
+  theme(legend.position = "none", 
+        panel.border = element_rect(colour = "black", fill=NA, size=.5))
+### save as jpg
+fname <- paste0(dir.figures, '/company_location_map_EU', version, '.jpg');fname
+ggsave(fname, plot = last_plot(), 
+       width = width_2col/2.2, 
+       height = width_2col/2.2, units = unit_ns, dpi = 1200)
+
+
+zoom_to <- c(126.9780, 37.5665) ## Seoul
+zoom_to <- c(-90.8033, 40.5428) ## Pennsylvania in US
+lon_bounds <- c(zoom_to[1] - lon_span / 2, zoom_to[1] + lon_span / 2)
+lat_bounds <- c(zoom_to[2] - lat_span / 2, zoom_to[2] + lat_span / 2)
+map_com +
+  geom_sf(data = st_sfc(st_point(zoom_to), crs = 4326), color = 'transparent', size = 0.1) +
+  coord_sf(xlim = lon_bounds, ylim = lat_bounds) +
+  theme(legend.position = "none", 
+        panel.border = element_rect(colour = "black", fill=NA, size=.5))
+### save as jpg
+fname <- paste0(dir.figures, '/company_location_map_asia', version, '.jpg');fname
+ggsave(fname, plot = last_plot(), 
+       width = width_2col/2.2, 
+       height = width_2col/2.2, units = unit_ns, dpi = 1200)
+```
+
+
+
+
+
+
+
+### * revenue
+  1. using info from https://www.forbes.com/global2000/
+      - Sales: $Billion
+  2. Then, fill data gap
+    (1) forbes global2000 (in 2019)
+    (2) https://fortune.com/global500/2020/; 
+      - Fortune: Revenues ($M)
+    (3) https://fortune.com/global500/2019/; e.g., Walmart
+    (4) https://en.wikipedia.org/
+    (5) google
+    
+  - *Revenue* = sales = total income by sale of goods and services that brefore accounting for any expenses
+    GDP = the *revenue* of a country
+  - Profit = net income, after accounting for all expenses
+```{r}
+getwd()
+xls <- './Data/data_raw/zilong/geo_location_coms/revenue.xlsx'
+excel_sheets(xls)
+rvn <- readxl::read_excel(path = xls, sheet = 1) %>%
+  dplyr::select(1:3)
+names(rvn) <- c('ID', 'name', 'revenue_usd_mil') ## million USD
+
+### load the final 500 com list - "com_final"
+load('./data_raw/com_final_500_scr.RData')
+com_final_ctr <- com_final %>%
+  dplyr::select(company_name:Country)
+
+### link with the company info provided by UNGSII
+rvn500 <- rvn %>%
+  merge(x = ., y = com_final, by.x = 'name', by.y = 'company_name', all.y = T) %>%
+  arrange(!is.na(revenue_usd_mil), name)
+
+### fill data gap manually 
+writexl::write_xlsx(x = rvn500, path = './data_raw/zilong/geo_location_coms/revenue_fillna.xlsx')
+
+### update the data
+xls <- './data_raw/zilong/geo_location_coms/revenue_update.xlsx'
+rvn500new <- read_excel(path = xls, sheet = 1) %>%
+  dplyr::mutate(revenue_usd_mil = as.numeric(revenue_usd_mil)) %>%
+  arrange(!is.na(revenue_usd_mil), revenue_usd_mil, name)
+str(rvn500new)
+
+### total revenue (million USD)
+rvn500_total <- sum(rvn500new$revenue_usd_mil); 
+print(paste0(round(rvn500_total/1000/1000, digits = 2), ' trillion'))
+
+global_gdp <- 87751541 ## (million USD) in 2019 World bank data
+percent(rvn500_total/(global_gdp), accuracy = 0.01) ## 17.43%
+
+# The United States is the world's largest economy with a GDP of approximately $21.43 trillion; 24.42% of the World's GDP
+# China is the world's SECOND largest economy with a GDP of approximately $14.34 trillion; 16.34 % of the World's GDP
+```
+
+
+
+### * employee
+  (1) forbes global2000 in 2020 and then 2019
+  (2) Fortune in 2020 --> 2019
+  (3) Wikipedia
+  (4) Google search: "company name, number of employees"
+  (5) linkedin
+```{r eval=FALSE, include=FALSE}
+getwd()
+xls <- './data_raw/zilong/geo_location_coms/employee.xlsx'
+excel_sheets(xls)
+emp <- readxl::read_excel(path = xls, sheet = 1) %>%
+  dplyr::select(1:3)
+names(emp) <- c('ID', 'name', 'employee') ## people
+
+### load the final 500 com list - "com_final"
+### link with the company info provided by UNGSII
+employee500 <- emp %>%
+  merge(x = ., y = com_final, by.x = 'name', by.y = 'company_name', all.y = T) %>%
+  arrange(!is.na(employee), name)
+
+### fill data gap manually 
+writexl::write_xlsx(x = emp500, path = './data_raw/zilong/geo_location_coms/employee500_with_na.xlsx')
+
+### update the data
+xls <- './data_raw/zilong/geo_location_coms/employee500_with_na_filled.xlsx'
+employee500new <- read_excel(path = xls, sheet = 1, trim_ws = T) %>%
+  as.data.frame() %>%
+  dplyr::mutate(
+    employee = as.character(employee),
+    employee = trimws(employee),
+    employee = as.numeric(gsub("\\D", "", employee))
+    ) %>%
+  arrange(!is.na(employee), employee, name)
+str(employee500new)
+
+
+### total employees
+employee500_total <- sum(employee500new$employee); print(paste0(employee500_total, ' employees, in total'))
+global_pop <- 7.674*10^9        ## 2019 World bank data
+pop_china  <- 1.397715 * 10^9   ## 2019 World bank data
+pop_usa <- 328.239523 *10^6
+pop_usa * 0.59765 /10^6         ## Employment to population ratio
+pop_usa_employed <- 156.92*10^6
+
+percent(pop_china/(global_pop), accuracy = 0.01)         ## 18.21%
+percent(employee500_total/(global_pop), accuracy = 0.01) ## 0.57%
+percent(employee500_total/(pop_china), accuracy = 0.01)  ## 3.14%
+
+percent(employee500_total/(pop_usa_employed), accuracy = 0.01)  ## 27.98%
+```
+
+
+
+
+
+## 2.2 The 7 million
+```{r eval=FALSE, include=FALSE}
+# 7 million info ----------------------------------------------------------
+getwd()
+dir.7m <- './data_raw/company-dataset/free-7-million-company-dataset'
+# com7m <- read.csv(paste0(dir.7m, '/companies_sorted.csv'), 
+#                   stringsAsFactors = F)
+# save(csv7m, file = paste0(dir.7m, '/companies_sorted.RData'))
+load(paste0(dir.7m, '/companies_sorted.RData'))
+
+com7m <- csv7m
+### view data
+head(com7m)
+
+
+test <- 
+  com7m %>%
+  filter(str_detect(name, 'arconic')) ## boeing|
+
+```
+
+
+
+

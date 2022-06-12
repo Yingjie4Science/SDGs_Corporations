@@ -1,0 +1,492 @@
+---
+title: "Company info"
+author: "Yingjie Li"
+date: "6/11/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+# Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+dir_root <- dirname(dir)
+setwd(dir_root)
+getwd()
+
+dir.raw     <- paste0(dir_root, '/Data/data_raw/')
+dir.results <- paste0(dir_root, '/Data/data_results/')
+dir.figures <- paste0(dir_root, '/Data/figures/'); dir.figures
+
+
+source('./Code/_packages.R')
+```
+
+
+
+# Data
+
+
+```
+
+
+  "2019 Fortune" --------------
+        ^                     |
+        |                     |
+        |                     V               (to match names in coded data)
+        | (name match)      `Fortune` (529) ----------------------------------> `com500ft_ToMatchName`
+        |                     ^
+        |                     |
+        |                     |
+  "2018 Fortune" --------------
+  
+  
+```
+
+
+
+## 2019 Fortune 500
+```{r - load data and naming function, warning=FALSE}
+### merge with Fortune-Global500 to get the ranking 
+xls <- paste0(dir.raw, '/company_info_Zilong/zilong5_zong_0612/fortune-Global500Companies-(2019).xlsx')
+raw19 <- readxl::read_excel(path = xls) %>%
+  dplyr::rename(company_name = Name,
+                industry = lndustry,
+                rank = Rank) %>%
+  janitor::clean_names()
+names(raw19)  
+
+### to be matched with the company names in data, we need to create a function to align the Fortune19 names with the names shown in the coded data
+func_from_Fortune19_to_NameInData <- function(df) {
+
+  df_new <- df %>% 
+    ### fix company names
+    dplyr::mutate(
+      company_name = gsub('Alibaba Group Holding', 'Alibaba', company_name),
+      company_name = gsub('Air France-KLM Group', 'Air France',company_name),
+      company_name = gsub('Airbus', 'Airbus Group',company_name),
+      company_name = gsub('American International Group', 'AIG', company_name),
+      company_name = gsub('Alphabet', 'Alphabet (Google)',company_name),
+      company_name = gsub('Amazon.com', 'Amazon.co', company_name),
+      company_name = gsub('América Móvil', 'America Movil',company_name),
+      company_name = gsub('Anheuser-Busch InBev', 'Anheuser-Busch (AB InBev)',company_name),
+      company_name = gsub('Anheuser-Busch \\(AB InBev\\)', 'AB InBev', company_name),
+      company_name = gsub('Banco Bilbao Vizcaya Argentaria', 'Banco Bilbao Vizcaya Argenaria', company_name),
+      company_name = gsub('Bank of America Corp.', 'Bank of America', company_name),
+      company_name = gsub('AEON', 'Aeon', company_name),
+      company_name = gsub('BHP Group', 'BHP Billiton', company_name),
+      company_name = gsub('BMW Group', 'BMW', company_name),
+      company_name = gsub('Costco Wholesale', 'Costco',  company_name),
+      company_name = gsub('Dell Technologies', 'Dell', company_name),
+      company_name = gsub('Deutsche Post DHL Group', 'Deutsche Post',  company_name),
+      company_name = gsub('Dongfeng Motor', 'Dongfeng Motor Group',  company_name),
+      company_name = gsub('Electricité de France', 'Electricite de France',  company_name),
+      company_name = gsub('Formosa Petrochemical', 'Formosa', company_name),
+      company_name = gsub('Goldman Sachs Group', 'Goldman Sachs',  company_name),
+      company_name = gsub('Itaú Unibanco Holding', 'Itau Unibanco Holding', company_name),
+      company_name = gsub('JPMorgan Chase & Co.', 'JP Morgan Chase', company_name),
+      company_name = gsub('Kraft Heinz', 'Kraft-Heinz', company_name),
+      company_name = gsub('Nestlé', 'Nestle', company_name),
+      company_name = gsub('OMV Group', 'OMV AG',  company_name),
+      company_name = gsub('Philip Morris International', 'Philip Morris',  company_name),
+      company_name = gsub('Procter & Gamble', 'Procter& Gamble',  company_name),
+      
+      ### these two are different firms, but `df` do not include 'Prudential'
+      # company_name = gsub('Prudential Financial', 'Prudential',  company_name), 
+      
+      company_name = gsub('Randstad', 'Randstad Holding',  company_name),
+      company_name = gsub('Samsung Electronics', 'Samsung',  company_name),
+      company_name = gsub('Telefónica', 'Telefonica',  company_name),
+      company_name = gsub('Verizon Communications', 'Verizon',  company_name),
+      company_name = gsub('Westpac Banking', 'Westpac Bank',  company_name),
+      company_name = gsub('Woolworths Group', 'Woolworths',  company_name),
+      company_name = gsub('International Business Machines', 'IBM', company_name),
+      company_name = gsub('United Parcel Service', 'UPS', company_name),
+      # company_name = gsub('xxx', 'xxx', company_name),
+      # company_name = gsub('xxx', 'xxx', company_name),
+      # company_name = gsub('xxx', 'xxx', company_name),
+    ) %>% as.data.frame()
+  
+  return(df_new)
+}
+
+
+com_g500_19 <- func_from_Fortune19_to_NameInData(df = raw19)
+
+```
+
+
+
+
+
+## 2018 Fortune 500
+```{r warning=FALSE}
+file <- paste0(dir.raw, 'company-dataset/', 'Fortune-Global-500-List-2018-Someka-V1F.xlsx') 
+raw18 <- readxl::read_excel(file, skip = 7) 
+raw18 <- raw18 %>%
+  dplyr::mutate_at(c(4:ncol(.)), as.numeric) %>%
+  janitor::clean_names()
+
+# skimr::skim(raw18)
+
+
+(sum(raw18$revenues_millions, na.rm = T)/10^6) %>% round(., digits = 2) %>% cat('revenues\t', ., 'Trillion in total by the Global 500.')
+(sum(raw18$assets_millions,   na.rm = T)/10^6) %>% round(., digits = 2) %>% cat('assets\t\t', ., 'Trillion in total by the Global 500.')
+
+global_gdp <- 86274296671018.8/10^6 ## (million USD) in 2018 World bank data
+# global_gdp <- 87568054060440.9/10^6 ## (million USD) in 2019 World bank data
+percent(sum(raw18$revenues_millions, na.rm = T)/(global_gdp), accuracy = 0.01) ## 34.77%
+```
+
+
+
+  To fix the 2018 names in order to align with the 2019 data. 
+```{r - to match 2019 Names}
+com_g500_18 <- raw18 %>%
+  dplyr::mutate(
+    company_name = gsub('AIG', 'American International Group', company_name),
+    company_name = gsub('Airbus Group', 'Airbus', company_name),
+    # company_name = gsub("Air France-KLM Group", "Air France", company_name),
+    # company_name = gsub('Alibaba Group Holding', 'Alibaba', company_name),
+    # company_name = gsub("Alphabet", "Alphabet (Google)",  company_name),
+    # company_name = gsub("Amazon.com", "Amazon.co", company_name),
+
+    company_name = gsub('America Movil', 'América Móvil', company_name),
+    company_name = gsub('Archelor Mittal', 'ArcelorMittal', company_name),
+    company_name = gsub('BHP Billiton', 'BHP Group', company_name),
+    company_name = gsub('BMW', 'BMW Group', company_name),
+    company_name = gsub('Bosch', 'Bosch Group', company_name),
+    company_name = gsub('China North Industries', 'China North Industries Group', company_name),
+    company_name = gsub('China Pacific Insurance', 'China Pacific Insurance (Group)', company_name),
+    company_name = gsub('China Railway Engineering', 'China Railway Engineering Group', company_name),
+    company_name = gsub('China Resources National', 'China Resources', company_name),
+    company_name = gsub('Costco', 'Costco Wholesale', company_name),
+    company_name = gsub('Credit Agricole', 'Crédit Agricole', company_name),
+    company_name = gsub('CRRC', 'CRRC Group', company_name),
+    company_name = gsub('Dai-ichi Life Insurance', 'Dai-ichi Life Holdings', company_name),
+    company_name = gsub('Deutsche Post', 'Deutsche Post DHL Group', company_name),
+    company_name = gsub('Dongfeng Motor Group', 'Dongfeng Motor', company_name),
+    company_name = gsub('Électricité de France', 'Electricité de France', company_name),
+    company_name = gsub('Energy Transfer Equity', 'Energy Transfer', company_name),
+    company_name = gsub('Fomento Economico Mexicano', 'Fomento Económico Mexicano', company_name),
+    company_name = gsub('Groupe Auchan', 'Auchan Holding', company_name),
+    company_name = gsub('HCA Holdings', 'HCA Healthcare', company_name),
+    company_name = gsub('IBM', 'International Business Machines', company_name),
+    company_name = gsub('Industrial & Commer. Bank of China', 'Industrial & Commercial Bank of China', company_name),
+    company_name = gsub('JD.Com', 'JD.com', company_name),
+    company_name = gsub('JP Morgan Chase', 'JPMorgan Chase & Co.', company_name),
+    company_name = gsub('JX Holdings', 'JXTG Holdings', company_name),
+    company_name = gsub('Koc Holding', 'Koç Holding', company_name),
+    company_name = gsub("L’Oreal", "L'Oréal", company_name),
+    company_name = gsub('Louis Dreyfus Commodities', 'Louis Dreyfus', company_name),
+    company_name = gsub("Macy’s", "Macy's", company_name),
+    company_name = gsub('Mitsubishi Corp.', 'Mitsubishi', company_name),
+    company_name = gsub('MS&AD Insurance', 'MS&AD Insurance Group Holdings', company_name),
+    company_name = gsub('Munich Re', 'Munich Re Group', company_name),
+    company_name = gsub('Nippon Steel & Sumitomo Metal', 'Nippon Steel Corporation', company_name),
+    company_name = gsub('Nippon Tel. & Tel.', 'Nippon Telegraph & Telephone', company_name),
+    company_name = gsub('Power China', 'PowerChina', company_name),
+    company_name = gsub('Prudential plc', 'Prudential', company_name), ## add country to double-check
+    company_name = gsub('Randstad Holding', 'Randstad', company_name),
+    company_name = gsub('Royal Ahold', 'Royal Ahold Delhaize', company_name),
+    company_name = gsub('Shandong Weiqiao Pioneering', 'Shandong Weiqiao Pioneering Group', company_name),
+    company_name = gsub('Shanghai Pudong Devel. Bank', 'Shanghai Pudong Development Bank', company_name),
+    company_name = gsub('Sinochem', 'Sinochem Group', company_name),
+    company_name = gsub('SNCF Mobilites', 'SNCF Mobilités', company_name),
+    company_name = gsub('Societe Generale', 'Société Générale', company_name),
+    company_name = gsub('Telefonica', 'Telefónica', company_name),
+    company_name = gsub('Trafigura Beheer', 'Trafigura Group', company_name),
+    company_name = gsub('UPS', 'United Parcel Service', company_name),
+    company_name = gsub('United Services Auto. Assn.', 'USAA', company_name),
+    company_name = gsub('Verizon', 'Verizon Communications', company_name),
+    company_name = gsub('Walgreens', 'Walgreens Boots Alliance', company_name),
+    company_name = gsub('Woolworths', 'Woolworths Group', company_name),
+    
+    
+    company_name = gsub('DowDuPont', 'DuPont', company_name),
+    # company_name = gsub('xxx', 'xxx', company_name),
+    # company_name = gsub('xxx', 'xxx', company_name),
+  ) %>%
+  dplyr::mutate(
+    country = ifelse(company_name=="EXOR Group", "Netherlands", country),
+    country = ifelse(company_name=="Flex", "Singapore", country),
+    country = ifelse(company_name=="Trafigura Group", "Singapore", country),
+    )
+  
+
+# "Aetna" - Since November 28, 2018, the company has been a subsidiary of CVS Health
+# "Express Scripts Holding" - Since December 20, 2018, the company has been a subsidiary of Cigna.
+# "Walgreens" - Parent company:	"Walgreens Boots Alliance"
+
+
+```
+
+
+
+
+
+## Merge 2018 and 2019
+
+  We combine Fortune 2018 and 2019, and then use this to match UNGSII. 
+
+```{r - merge}
+### The following codes are used to check and update company names in the 2018 list ------
+
+Fortune <- rbind(
+  com_g500_18 %>% select(company_name, rank, country) %>% mutate(year = 2018), 
+  raw19       %>% select(company_name, rank, country) %>% mutate(year = 2019))  %>%
+  dplyr::mutate(country = gsub("U.S.", "USA", country),
+                country = gsub("Britain/Neth\\.", "Britain/Netherlands", country),
+                country = gsub("U.A.E", "United Arab Emirates", country)
+                ) %>%
+  # distinct(company_name, country, .keep_all = T) %>%
+  ### long to wide format to see the changes in ranking 
+  dplyr::mutate(year = paste0('rank', year)) %>%
+  spread(key = year, value = rank) %>%
+  as.data.frame()
+
+
+Fortune_anyNA <- Fortune %>%
+  dplyr::filter(is.na(`rank2018`)|is.na(`rank2019`))
+
+
+
+
+## enrich company profile ---------------------------------------------------------------
+
+### format data in 2019
+com_g500_19_format <- raw19 %>% 
+  dplyr::rename(profits_millions  = `profits_m`,
+                revenues_millions = `revenues_m`,
+                assets_millions   = `assets_m`)
+### format data in 2018
+com_g500_18_format <- com_g500_18 %>%
+  dplyr::rename(rank2017  = previous_rank)
+
+x1 <- names(com_g500_19_format)%>% sort(); x1
+x2 <- names(com_g500_18_format)%>% sort(); x2
+setdiff(x1, x2)
+setdiff(x2, x1)
+
+### merge the two and fill the missing with info from each year
+com500ft <- merge(x = com_g500_19_format, y = com_g500_18_format, by = 'company_name', all = T) %>%
+  dplyr::select(order(colnames(.))) %>%
+  dplyr::mutate(
+    assets_millions = ifelse(!is.na(assets_millions.x), assets_millions.x, assets_millions.y),
+    profits_millions = ifelse(!is.na(profits_millions.x), profits_millions.x, profits_millions.y),
+    revenues_millions = ifelse(!is.na(revenues_millions.x), revenues_millions.x, revenues_millions.y),
+    number_of_employees = ifelse(!is.na(number_of_employees.x), number_of_employees.x, number_of_employees.y)
+    ) %>%
+  
+  ## remove the info we do not need
+  dplyr::select(order(colnames(.))) %>%
+  dplyr::select(!dplyr::ends_with('.x')) %>%
+  dplyr::select(!dplyr::ends_with('.y')) %>%
+  dplyr::select(!dplyr::ends_with('_change')) %>%
+  
+  ### add info on `country, rank2018, rank2019`
+  merge(., y = Fortune, by = 'company_name', all.x = T) %>%
+  
+  ### clean `industry` names
+  dplyr::mutate(industry = gsub('&amp;', '&', industry),
+                industry = gsub("\\s*\\([^\\)]+\\)\\s*$","", as.character(industry)), ## Remove parentheses and text within
+                sector = gsub('&amp;', '&', sector)) %>%
+  
+  ### check sector with NA
+  arrange(!is.na(industry), company_name) %>%
+  as.data.frame()
+
+
+### further check the NA 
+com500ft_indNA <- com500ft %>%
+  dplyr::filter(is.na(industry)) %>%
+  ## use `com700` to match industry info
+  merge(x = ., y = com700, by.x = 'company_name', by.y = 'Company', all.x = T) %>%
+  dplyr::mutate(
+    industry = ifelse(is.na(industry), Industry, industry)) %>%
+  dplyr::select(-c(Country:iso3))
+
+### write to local and tidy this list 
+# writexl::write_xlsx(x = com500ft_indNA, path = './Data/data_raw/com500ft_indNA.xlsx')
+
+
+
+### read in the manually NA-filled `industry` and `headquarters` info in data
+com500ft_indNAfillna <- readxl::read_excel('./Data/data_raw/com500ft_indNA_manualTidy.xlsx')
+
+
+### add this NA-filled data to profile
+com500ft_profile <- com500ft %>%
+  dplyr::filter(!is.na(industry)) %>%
+  rbind(com500ft_indNAfillna, .)
+  
+
+unique(com500ft_profile$industry)
+unique(com500ft_profile$sector) %>% sort()
+str(com500ft_profile)
+```
+
+
+```{r - industy reclassification}
+
+### industry names in the raw data, but need to be unified with other data, e.g., UNGSII
+ind_ft <- com500ft_profile %>% 
+  group_by(sector, industry) %>%
+  arrange(sector) %>%
+  # distinct(industry, sector) %>%
+  tally() %>%
+  group_by(sector) %>%
+  dplyr::mutate(n_total = sum(n, na.rm = T)) %>%
+  as.data.frame()
+
+## write to local and tidy this list 
+writexl::write_xlsx(x = ind_ft, path = './Data/data_raw/_ls_industry_Fortune.xlsx')
+
+
+
+### read in the cleaned data to reclassify `industry`
+ind_ft_reclass <- readxl::read_excel('./Data/data_raw/_ls_industry_Fortune_manualReclass.xlsx') %>%
+  dplyr::select(-n, -n_total) %>%
+  dplyr::mutate(ind_agg = str_to_sentence(ind_agg),
+                ind_7sys= str_to_sentence(ind_7sys))
+
+com500ft_profile2 <- com500ft_profile %>%
+  merge(x = ., y = ind_ft_reclass, by = c('sector', 'industry'), all.x = T) %>%
+  arrange(!is.na(ind_7sys))
+names(com500ft_profile2)
+
+### save this for future use
+com500ft_profile_df <- com500ft_profile2
+
+
+
+
+## plot to view the industry numbers -----------------------------------------------------
+### in the raw data
+ind_ft %>%
+  ggplot(aes(x = reorder(sector, n_total), y = n, fill = industry)) +
+  geom_col(show.legend = F) +
+  coord_flip()
+
+### in the new reclassified data
+ind_ft2 <- com500ft_profile2 %>%
+  group_by(ind_7sys, ind_agg) %>%
+  arrange(ind_7sys) %>%
+  tally() %>%
+  group_by(ind_7sys) %>%
+  dplyr::mutate(n_total = sum(n, na.rm = T)) 
+unique(ind_ft2$ind_agg)
+ind_ft2$ind_agg <- factor(x = ind_ft2$ind_agg, levels = unique(ind_ft2$ind_agg))
+n_ind <- unique(ind_ft2$ind_agg) %>% length(); n_ind
+
+ind_ft2 %>%
+  ungroup() %>%
+  as.data.frame() %>%
+  dplyr::mutate(labelname = ifelse(n_total > n, as.character(ind_agg), '')) %>%
+  ggplot(aes(x = reorder(ind_7sys, n_total), y = n, fill = ind_agg)) +
+  geom_col(show.legend = F) +
+  scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Paired"))(n_ind)) +
+  geom_text(aes(label = labelname, size = n), 
+            position = position_stack(vjust = 0.6),
+            # size=3, 
+            check_overlap = F, show.legend = F, angle = 20)+
+  scale_radius(range = c(2,3)) +
+  coord_flip() +
+  theme_bw() +
+  guides(fill=guide_legend(ncol=1)) +
+  theme(legend.position = c(.8, .4), 
+        legend.background = element_rect(fill='transparent'))
+f <- paste0(dir.figures, 'industry_fortune.jpg');f
+ggsave(filename = f, plot = last_plot(), width = 9, height = 8, units = 'in', dpi = 300)
+
+```
+
+
+
+```{r - to match names in coded data}
+com500ft_ToMatchName <- Fortune %>% 
+  ## make a copy of the names used in 2019 data
+  dplyr::mutate(company_name_Fortune19 = company_name) %>%
+  ## revised the names to be the same in the UNGSII data
+  func_from_Fortune19_to_NameInData(df = .) %>%
+  dplyr::select(company_name_Fortune19, everything()) %>%
+  dplyr::rename(company_name_tomatch = company_name) %>%
+  as.data.frame()
+```
+
+
+
+
+```{r - Save R data}
+f <- paste0(dir.results, 'company_Fortune_Global500.RData');  ## 'Fortune_Global_500.RData'
+save(com500ft_ToMatchName, com500ft_profile_df, file = f) ## Fortune_matchName
+```
+
+
+
+
+
+
+
+
+## Revenue
+  1. using info from https://www.forbes.com/global2000/
+      - Sales: $Billion
+  2. Then, fill data gap
+    (1) forbes global2000 (in 2019)
+    (2) https://fortune.com/global500/2020/; 
+      - Fortune: Revenues ($M)
+    (3) https://fortune.com/global500/2019/; e.g., Walmart
+    (4) https://en.wikipedia.org/
+    (5) google
+    
+  - *Revenue* = sales = total income by sale of goods and services that brefore accounting for any expenses
+    GDP = the *revenue* of a country
+  - Profit = net income, after accounting for all expenses
+```{r eval=FALSE, include=FALSE}
+getwd()
+xls <- './data_raw/zilong/geo_location_coms/revenue.xlsx'
+excel_sheets(xls)
+rvn <- readxl::read_excel(path = xls, sheet = 1) %>%
+  dplyr::select(1:3)
+names(rvn) <- c('ID', 'name', 'revenue_usd_mil') ## million USD
+
+### load the final 500 com list - "com_final"
+load('./data_raw/com_final_500_scr.RData')
+com_final_ctr <- com_final %>%
+  dplyr::select(company_name:Country)
+
+### link with the company info provided by UNGSII
+rvn500 <- rvn %>%
+  merge(x = ., y = com_final, by.x = 'name', by.y = 'company_name', all.y = T) %>%
+  arrange(!is.na(revenue_usd_mil), name)
+
+### fill data gap manually 
+writexl::write_xlsx(x = rvn500, path = './data_raw/zilong/geo_location_coms/revenue_fillna.xlsx')
+
+### update the data
+xls <- './data_raw/zilong/geo_location_coms/revenue_update.xlsx'
+rvn500new <- read_excel(path = xls, sheet = 1) %>%
+  dplyr::mutate(revenue_usd_mil = as.numeric(revenue_usd_mil)) %>%
+  arrange(!is.na(revenue_usd_mil), revenue_usd_mil, name)
+str(rvn500new)
+
+### total revenue (million USD)
+rvn500_total <- sum(rvn500new$revenue_usd_mil); print(paste0(round(rvn500_total/1000/1000, digits = 2), ' trillion'))
+global_gdp <- 87751541 ## (million USD) in 2019 World bank data
+percent(rvn500_total/(global_gdp), accuracy = 0.01) ## 17.43%
+
+# The United States is the world's largest economy with a GDP of approximately $21.43 trillion; 24.42% of the World's GDP
+# China is the world's SECOND largest economy with a GDP of approximately $14.34 trillion; 16.34 % of the World's GDP
+```
+
+
+
