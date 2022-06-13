@@ -7,9 +7,9 @@ library(tidyverse)
 library(splitstackshape)
 library(reshape2)   ## colsplit
 library(reshape)
-# library(xlsx)
 library(readxl)
 library(writexl)
+
 ## shapefiles
 library(rnaturalearthdata)
 library(rnaturalearth)

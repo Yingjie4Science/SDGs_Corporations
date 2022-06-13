@@ -1,0 +1,184 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Dir and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+# directories
+  dir.raw     <- './Data/data_raw/'
+  # dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.reports <- 'D:/_papers/SDGs/SDGs_Corporations/Data/data_TextMining/annual_reports/' ## PDFs are stored here to save space
+  dir.results <- './Data/data_results/'
+  dir.figures <- './Data/figures/'
+  dirpath     <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
+
+# load packages
+  source('./Code/_packages.R')
+
+  library(tm)        # text mining: readPDF(), Corpus()
+  library(tidyverse) # piping and wrangling
+  library(tabulizer) # importing PDFs
+  #library(remotes)  # installing from remote repositories
+  
+  ## for parallel computing
+  library(parallel)
+  library(doParallel)
+  library(foreach)
+  
+today <- format(Sys.time(), "%Y%m%d_%H%M"); today
+```
+
+
+
+
+# 1. PDF to clean TXT
+  
+  Conversion to text --> and save .txt with name from list and move to another folder. 
+  
+  (1) get the list of the downloaded PDFs. 
+  
+```{r - 356 company}
+## read the company information list from XLS file. 
+f <- paste0(dir.raw, "com_list_HumanCoded_URL.xlsx")
+com_download <- readxl::read_excel(f) %>%
+  dplyr::filter(str_starts(string = url, pattern = "NA", negate = T))
+com_download_ls <- unique(com_download$Company)
+
+
+## get the PDF names of all the downloaded company 
+files <- list.files(dirpath_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
+com_name_ls <- gsub("\\--.*", "", basename(files))
+
+cat('There are', length(files), "PDF reports."); ## 356
+
+
+## identify the difference between the two list
+a <- com_download_ls
+b <- com_name_ls
+setdiff(a, b)
+setdiff(b, a)
+union(setdiff(a,b), setdiff(b,a)) %>% sort()
+```
+
+
+```{r - 146 not human-coded}
+### for the not-human-coded PDF
+files <- list.files(path = paste0(dir.reports, 'pdf_not_coded'), 
+                    pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
+com_name_ls <- gsub("\\--.*", "", basename(files))
+
+cat('There are', length(files), "PDF reports.") ## 146 --> 394
+
+
+### count how many companies have more than one documents --------------------------------
+n_unique <- com_name_ls %>% unique() %>% length() 
+cat('There are', n_unique, 'unique companies.')
+
+cat('There are', (length(files)-n_unique), 'unique companies.')
+```
+
+
+
+  (2) Convert each PDF to text format
+```{r - Batch Convert, eval=FALSE, include=FALSE}
+
+### Custom function
+source('./Code/function_pdf2text.R') # `pdf2text`
+
+
+company_name_checker <- '' ## initially, this is blank
+
+### loop all the PDF ---------------------------------------------------------------------
+for (pdf in files) {
+  
+  ## --> get company name 
+  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
+  company_name <- company_name[1]
+  print(company_name)
+
+  
+  ## --> read and clean the pdf ---------------------------------------------------------#
+  txt_sentence_df <- pdf2text(filename = pdf) %>%
+    ## remove sentences that are too short
+    dplyr::filter(nchar(statement) > 5) %>%
+    ## replace the company names to avoid string mismatch
+    dplyr::mutate(statement = gsub(pattern = paste0("\\b", company_name, "\\b"), "XXXNAME", statement)) %>%
+    ## again, exclude sentences that are too short
+    dplyr::filter(nchar(statement) > 5) %>%
+    ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
+    dplyr::distinct(statement, .keep_all = T) %>%
+    as.data.frame()
+  
+  
+  ## --> if new file is for the same company, then append the data
+  if (company_name == company_name_checker) {
+    cat('\t More than one, need to append data.\t\t', company_name, '\n') 
+    txt_sentence_df <- rbind(txt_sentence_df, txt_sentence_df_forAppend)
+  } else {
+    txt_sentence_df <- txt_sentence_df
+  }
+  
+  
+  ## --> save as R data
+  fname <- paste0(dirname(pdf), '/DF/',  company_name[1], '.RData'); print(fname)
+  save(txt_sentence_df, file = fname)
+
+  ## --> update the PDF list, if error occurs
+  remove <- pdf
+  files  <- setdiff(files, remove)
+  company_name_checker      <- company_name     ## keep this information for checking the next loop
+  txt_sentence_df_forAppend <- txt_sentence_df  ## keep this data in case we need to append the multiple files for 1 company
+  
+  
+  ## --> To clear up the memory
+  # gc()
+}
+
+```
+
+
+**To-do**: (if any files failed - need to re-process these files)
+  "Kia Motors"
+  
+  ## cannot open compressed file
+  "Koç Holding"           
+  "Société Générale"
+  
+
+
+
+
+
+```{r - Make a copy to project dir}
+## for data 1
+files <- list.files(path = paste0(dir.reports, 'pdf_coded_human/DF'), pattern = '*.RData$', full.names = T); #files
+toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir
+file.copy(from = files, to = toDir, overwrite = T, copy.date = T)
+
+
+## for data 2
+files <- list.files(path = paste0(dir.reports, 'pdf_not_coded/DF'), pattern = '*.RData$', full.names = T); #files
+toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir
+file.copy(from = files, to = toDir, overwrite = T, copy.date = T)
+```
+

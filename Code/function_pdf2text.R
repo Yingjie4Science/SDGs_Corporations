@@ -1,6 +1,15 @@
 
+
+# remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), force = TRUE)
+
 library(dplyr)
 library(stringr)
+library(tabulizer)
+library(tabulizerjars)
+
+packageVersion('tabulizer')
+packageVersion('tabulizerjars')
+packageVersion('rJava')
 
 ### Custom function
 pdf2text <- function(filename){

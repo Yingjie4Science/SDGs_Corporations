@@ -42,6 +42,11 @@ getwd()
   library(tabulizer) # importing PDFs
   #library(remotes)  # installing from remote repositories
   
+  ## for parallel computing
+  library(parallel)
+  library(doParallel)
+  library(foreach)
+  
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ```
 
@@ -63,138 +68,14 @@ goals_df <- ls_un_id %>%
 
 ## save to `SDG_TM` for R package development
 fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
-save(goals_df, file = fname)
+# save(goals_df, file = fname)
 ```
 
 
 
 # 1. PDF to clean TXT
-  
-  Conversion to text --> and save .txt with name from list and move to another folder. 
-  
-  (1) get the list of the downloaded PDFs. 
-```{r - 350 +}
-## read the company information list from XLS file. 
-com_download <- readxl::read_excel("./Data/data_TextMining/com_list_HumanCoded_URL.xlsx") %>%
-  dplyr::filter(str_starts(string = url, pattern = "NA", negate = T))
-com_download_ls <- unique(com_download$Company)
 
-
-## get the PDF names of all the downloaded company 
-files <- list.files(dirpath, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
-com_name_ls <- gsub("\\--.*", "", basename(files))
-
-cat('There are', length(files), "PDF reports.");
-
-
-## identify the difference between the two list
-a <- com_download_ls
-b <- com_name_ls
-setdiff(a, b)
-setdiff(b, a)
-union(setdiff(a,b), setdiff(b,a)) %>% sort()
-```
-
-
-```{r - 146 not human-coded}
-### for the not-human-coded PDF
-files <- list.files(path = paste0(dir.reports, 'pdf_not_coded'), pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
-com_name_ls <- gsub("\\--.*", "", basename(files))
-
-cat('There are', length(files), "PDF reports."); ## 146
-```
-
-
-
-  (2) Convert each PDF to text format
-```{r - Convert, eval=FALSE, include=FALSE}
-
-### Custom function
-source('./Code/function_pdf2text.R') # `pdf2text`
-
-
-### loop all the PDF
-for (pdf in files) {
-  
-  ## --> get company name 
-  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
-  company_name <- company_name[1]
-  print(company_name)
-  
-  ## --> read and clean the pdf ---------------------------------------------------------------- #
-  txt_sentence_df <- pdf2text(filename = pdf) %>%
-    ## remove sentences that are too short
-    dplyr::filter(nchar(statement) > 5) %>% 
-    ## replace the company names to avoid string mismatch 
-    dplyr::mutate(statement = gsub(pattern = paste0("\\b", company_name, "\\b"), "XXXNAME", statement)) %>%
-    ## again, exclude sentences that are too short
-    dplyr::filter(nchar(statement) > 5) %>% 
-    ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
-    dplyr::distinct(statement, .keep_all = T) %>%
-    as.data.frame()
-  
-  ## --> save as r data
-  fname <- paste0(dirname(pdf), '/DF/',  company_name[1], '.RData'); print(fname)
-  save(txt_sentence_df, file = fname)
-  
-  ## --> update the PDF list, if error occurs
-  remove <- pdf
-  files <- setdiff(files, remove)
-  
-  ## --> To clear up the memory
-  gc()
-}
-
-```
-
-
-
-  (3) Run this chunk if any files failed - need to re-read in the list. 
-
-```{r eval=FALSE, include=FALSE}
-# files_todo <- c()
-
-files_todo <- c(
-  "Akzo Nobel"
-  # "Aegon" ## need to use "https://smallpdf.com/unlock-pdf" to unlock this file. 
-  # "Assicurazioni Generali",
-  # "Associated British Foods",
-  # "Banpu",
-  # "BCE",
-  # "Caixa Bank",
-  # "Capricorn Investment Group", "Cardinal Health", "Colgate-Palmolive", "Commonwealth Bank of Australia", 
-  # "Minas Buenaventura", "Deutsche Telekom", "Gerdau", "Hermes", "Hindustan Unilever", "Julius"
-  )
-
-
-for (i in files_todo) {
-  pdf <- list.files(dirpath, pattern = i, ignore.case = T, full.names = T, recursive = F); print(pdf)
-  
-  ## --> get company name 
-  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
-  company_name <- company_name[1]
-  print(company_name)
-  
-  ## --> read and clean the pdf ---------------------------------------------------------------- #
-  txt_sentence_df <- pdf2text(filename = pdf)
-  
-  ## --> save as r data
-  fname <- paste0(dirpath, 'DF/',  company_name[1], '.RData'); print(fname)
-  save(txt_sentence_df, file = fname)
-  
-  ## --> update the PDF list, if error occurs
-  remove <- pdf
-  files <- setdiff(files, remove)
-  
-  ## --> To clear up the memory
-  gc()
-  
-}
-
-```
-
-
-
+  This was processed in a separate script. 
 
 
 
@@ -202,14 +83,16 @@ for (i in files_todo) {
 
   To match the keywords to each corpus and format results
 
-  The analysis will return the number of commitments to different SDGs by sentence. This requires pattern searching where every sentence has to end with a period (.). Limitations/problems for: figure text, bullet points, anything without a period.
+  The analysis will return the number of commitments to different SDGs by sentence. This requires pattern searching where every sentence has to end with a period (.). 
+  
+  Limitations/problems for: figure text, bullet points, anything without a period.
   
 
 ## 2.1. Load cleaned reports
 
   **Choose one of the following as input**
 
-```{r - 350 + reports with human data, eval=FALSE, include=FALSE}
+```{r - 350 + reports with human data}
 dir_input <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
 
 ## 1. load the `txt` data
@@ -223,23 +106,75 @@ cat('There are', ls %>% length(), 'corporate reports were converted.') ## 352
 
 
 
-```{r - Test on top 20, eval=FALSE, include=FALSE}
-ls[1]
-fname <- paste0('./Data/data_TextMining/database/', 'ls_com_top20.RData'); fname
-load(fname)
-selected <- paste(ls_com_top20, collapse = "|")
 
-ls <- str_subset(string = ls, pattern = selected)
-ls <- ls[1:10]
+
+```{r - Quick test on 1 report, eval=FALSE, include=FALSE}
+
+## test 
+ls <- "./Data/data_TextMining/annual_reports/pdf_coded_human/DF/Total.RData"
+# ls <- "./Data/data_TextMining/annual_reports/pdf_coded_human/DF/Cemex.RData"
 ```
 
 
 
-```{r - 146 + reports without human data, eval=FALSE, include=FALSE}
+
+```{r - Test on top 10, eval=FALSE, include=FALSE}
+# ls[1]
+# fname <- paste0('./Data/data_TextMining/database/', 'ls_com_top20.RData'); fname
+# load(fname)
+# selected <- paste(ls_com_top20, collapse = "|")
+# 
+# ls <- str_subset(string = ls, pattern = selected)
+# ls <- ls[1:10]
+
+
+## a few more
+ls.my <- c(
+  'Schneider Electric', 'BNP Paribas', "Grupo Financiero Banorte",
+  'Cemex',
+  'Industria de Diseno Textil',
+  
+  'Total',
+  "Valeo", 'Legrand', "Banco Bilbao Vizcaya Argenaria", 
+  'Akzo Nobel',
+  
+  "Vivendi",
+  "Diageo", 'Mondi', 'Volvo', 
+  'Access Bank',
+  
+  'Bayer',
+  'Sanofi', 'Pfizer', "Toyota Motor", "Danone",
+  
+  "CMPC Empresas", 'Roche Group', "BASF", "Novartis",
+  "Grindrod Limited"
+  )
+ls.my <- list.files(path = paste0(dir_input, 'DF/'), pattern = paste0(ls.my, collapse = "|"), ignore.case = T, full.names = T)
+
+
+## final list for coding
+# ls <- c(ls.my)
+# ls
+```
+
+
+```{r}
+d2 = setdiff(ls, ls.my)
+d2
+
+ls <- d2
+```
+
+
+
+
+```{r - 300 + reports without human data, eval=FALSE, include=FALSE}
+## 2022-04-01: 146 + reports without human data
+## 2022-06-01: 391 reports without human data (use Fortune 500)
+
 dir_input <- paste0(dir.reports, "pdf_not_coded/"); dir_input
 ls  <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
 
-cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146
+cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146 => 391
 ```
 
 
@@ -268,7 +203,7 @@ load(fname) ## --> SDG_keys_drc, SDG_keys_indrc, SDG_keys
 
   For every row in the corpus (ideally only 1 sentence in each row), have a column 1-17 and 1/0 or y/n if matching the SDG. This would be a for-loop and i 1:17 is linked to the columns being filled
     
-```{r - run, eval=FALSE, include=FALSE}
+```{r - run [NOT USE], eval=FALSE, include=FALSE}
 ## load the function
 source('./Code/function_sdg_detector.R') ## `sdg_detector()`
 
@@ -332,7 +267,7 @@ system.time({
     save(coded, file = fname)
     
     ## --> To clear up the memory for next loop
-    gc()
+    # gc()
   }
 })
 
@@ -354,7 +289,7 @@ stopImplicitCluster()
 
 
 
-## 2.4. Format results
+# 3. Format results
 ```{r - function}
 
 func_format <- function(coded) {
@@ -372,8 +307,9 @@ func_format <- function(coded) {
   coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
     dplyr::filter(coded_sdgs != '') %>%
     separate(col = coded_sdgs, into = c('goal', 'target_id'), sep = '_', remove = F) %>%
-    dplyr::mutate(goal_id   = as.numeric(gsub("\\D", "", goal)),
-                  target_id = gsub('^.{3}', "", coded_sdgs)) %>%
+    dplyr::mutate(
+      goal_id   = as.numeric(gsub("\\D", "", goal)),
+      target_id = gsub('^.{3}', "", coded_sdgs)) %>%
     arrange(goal_id, target_id) %>%
     dplyr::select(1:2, goal_id, everything()) %>%
     dplyr::rename(n_statements = Freq)
@@ -385,14 +321,23 @@ func_format <- function(coded) {
 
   
   ### --> merge data 
-  coded_sdgs_df_format <- merge(coded_sdgs_df, goals_df, 
-                          by.x = c('goal', 'coded_sdgs'), by.y = c('goalname', 'target_id_un'), all = T) %>%
+  coded_sdgs_df_format <- 
+    merge(x = coded_sdgs_df, ## the coded data
+          y = goals_df,      ## the UN goal and target id for formatting
+          by.x = c('goal', 'coded_sdgs'), 
+          by.y = c('goalname', 'target_id_un'), all = T) %>%
     dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
     arrange(goal, id) %>%
     dplyr::mutate(id = row_number()) %>%
     dplyr::mutate(coded_sdgs = gsub('general', 'g', coded_sdgs),
                   coded_sdgs = factor(coded_sdgs, levels = unique(coded_sdgs)),
                   coded_sdgs = reorder(coded_sdgs, id)) %>%
+    ## for the NA in `goal_id` and `target_id`, fill the info
+    dplyr::mutate(
+      goal_id   = ifelse(is.na(goal_id),   gsub('SDG|\\_.*$','',coded_sdgs), goal_id),
+      # target_id = ifelse(is.na(target_id), gsub('.*_','',coded_sdgs), target_id), ## Remove all text before '_'
+      target_id = ifelse(is.na(target_id), gsub('SDG','',coded_sdgs), target_id) ## Remove all text before '_'
+    ) %>%
     as.data.frame()
   
   # str(coded_sdgs_df_format)
@@ -437,5 +382,7 @@ save(dfs, file = fname)
 
 
 
-# 3. Compare Machine to Human
+# 4. Compare Machine to Human
+
+  See next script. 
 
