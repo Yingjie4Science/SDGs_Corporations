@@ -7,6 +7,7 @@ editor_options:
   chunk_output_type: console
 ---
 
+Last update: 11/17/2022
 
 # Directories and packages
 
@@ -121,7 +122,7 @@ fname <- paste0(dirname(getwd()), '/SDG_TM/data/SDG_keys.RData'); fname
 save(SDG_keys, file = fname)
 
 ### 3. for Meng Cai's repo
-fname <- paste0('./Code/findSDGs/data/', 'SDG_keys.RData'); fname
+fname <- paste0('./Code/SDGdetector/data/', 'SDG_keys.RData'); fname
 save(SDG_keys, file = fname)
 ```
 
