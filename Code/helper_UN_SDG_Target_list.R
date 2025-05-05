@@ -16,7 +16,7 @@ ls_un <- read.csv('./Data/data_raw/_ls_un_goal_target.csv', stringsAsFactors = F
 
 ls_un_id <- ls_un %>%
   dplyr::select(GoalID, target_id_un) %>%
-  separate(target_id_un, c('target_id_un1', 'target_id_un2'), sep = '\\.', remove = F) %>%
+  tidyr::separate(target_id_un, c('target_id_un1', 'target_id_un2'), sep = '\\.', remove = F) %>%
   dplyr::select(-target_id_un1) %>%
   dplyr::mutate(goalname = paste0('SDG', GoalID),
                 goalname = factor(goalname, levels = goals_ls))

@@ -1,0 +1,656 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Dir and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+# directories for Yingjie
+  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.results <- './Data/data_results/'
+  dir.figures <- './Data/figures/'
+  dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+
+# directories for Veronica
+  # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
+  # dir.results <- '../Data/data_results/'                   # VF added another '.'
+  # dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
+
+# load packages
+  source('./Code/_packages.R')
+
+  library(tm)        # text mining: readPDF(), Corpus()
+  library(tidyverse) # piping and wrangling
+  library(tabulizer) # importing PDFs
+  #library(remotes)  # installing from remote repositories
+  
+  library(hydroGOF)  ## for `rmse`
+  
+today <- format(Sys.time(), "%Y%m%d_%H%M"); today
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+```
+
+
+## Helper data
+```{r - UN SGD target list}
+source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
+
+goals_df <- ls_un_id %>%
+  dplyr::select(goalname, target_id_un, target_id_un2) %>%
+  # group_by(goalname) %>%
+  # arrange(goalname, target_id_un2) %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un),
+                target_id_un = paste0('SDG', target_id_un)) %>%
+  dplyr::mutate(id = row_number()) %>%
+  dplyr::mutate(target_id_un = factor(target_id_un, levels = unique(target_id_un)),
+                target_id_un = reorder(target_id_un, id)) %>%
+  as.data.frame()
+
+## save to `SDG_TM` for R package development
+fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
+save(goals_df, file = fname)
+```
+
+```{r - colors}
+source('./Code/function_UN_SDG_logo_color.R')
+color_hex
+```
+
+
+
+
+
+
+
+# 3. Compare Machine to Human
+
+## Data
+
+### 1. machine-coded results
+```{r}
+## load data
+ls_f <- list.files(path = paste0(dir.tm, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
+tail(ls_f, n = 1)
+load(tail(ls_f, n = 1)) ## load the latest/last data
+
+## machine-coded data
+dfs_m <- dfs %>%
+  dplyr::rename(target = coded_sdgs)
+
+
+## company list
+com_ls <- unique(dfs_m$company); #com_ls
+cat('There are', com_ls %>% length(), 'companies.')
+```
+
+
+
+
+
+### 2. human-coded results by UNGSII
+```{r }
+fname <- paste0(dir.results, 'df.RData'); fname
+load(fname)
+dfs_human <- df %>%
+  dplyr::filter(yr == 2018)
+names(dfs_human)
+
+cat('There are', unique(dfs_human$Company) %>% length(), 'companies.')
+
+## a subset of data
+# company_name <- 'Cemex'
+# xls <- paste0('./Data/data_TextMining/df_', company_name, '_reference.xlsx'); xls
+# human <- readxl::read_excel(xls) 
+# cols_selected <- names(human)[1:6]; cols_selected
+
+
+dfs_h <- dfs_human %>%  
+  dplyr::filter(Company %in% com_ls) %>%
+  ### some duplicated Target ids ------------------------------
+  ungroup() %>%
+  group_by(Company, iso3, goal_id, Target_id, goal) %>%
+  dplyr::summarise(n_statements = sum(n_statement, na.rm = T)) %>%
+  dplyr::filter(goal_id != 'SDGs') %>%
+  dplyr::mutate(target = gsub('\\.', '_', Target_id),
+                target = paste0('SDG', target)) %>%
+  ### link with all SDG and targets ---------------------------
+  merge(., goals_df,
+        by.x = c('goal', 'target'), by.y = c('goalname', 'target_id_un'), all = T) %>%
+  dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
+  arrange(goal, id) %>%
+  dplyr::mutate(id = row_number()) %>%
+  # arrange(goal, id) %>%
+  dplyr::mutate(target = factor(target, levels = unique(target)),
+                target = reorder(target, id)) %>%
+  dplyr::rename_all(tolower) %>%
+  as.data.frame()
+
+
+## data description
+## - which companies have the most SDG commitments? 
+dfs_h_desc <- dfs_h %>%
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%  
+  group_by(company) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T)) %>%
+  arrange(desc(n)) %>%
+  as.data.frame()
+
+## - the list of companies with no more than 20 commitments
+ls_com_fewCmt <- dfs_h_desc %>%
+  dplyr::filter(n<=100, !is.na(company)) %>%  
+  as.data.frame()
+ls_com_fewCmt <- unique(ls_com_fewCmt$company)
+
+
+## - the top 20
+ls_com_top20 <- dfs_h_desc %>% slice(1:25) %>% dplyr::select(1) %>% unlist() %>% unname(); ls_com_top20
+
+fname <- paste0('./Data/data_TextMining/database/', 'ls_com_top20.RData'); fname
+save(ls_com_top20, file = fname)
+```
+
+
+## Compare
+
+```{r}
+### plot correlation 
+library(ggpmisc)  ## for `stat_poly_eq`
+formula <- y ~ x  ## needed for ggpmisc's equation and R2 text
+# myformat <- "Intercept: %s\nSlope: %s\nR²: %s"
+myformat <- "Slope: %s\nR²: %s"  ##not sure how to extract slope
+myformat <- "R²: %s"
+```
+
+
+```{r - data}
+names(dfs_m)
+names(dfs_h)
+
+
+dfs_m_format <- dfs_m %>% 
+  dplyr::select(company, goal, target, n_statements) %>%
+  group_by(company, goal, target) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T))%>%
+  dplyr::mutate(coder = 'machine')
+
+dfs_h_format <- dfs_h %>% 
+  dplyr::select(company, goal, target, n_statements) %>%
+  group_by(company, goal, target) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T)) %>%
+  dplyr::mutate(coder = 'human')
+
+dfs_2 <- rbind(dfs_m_format, dfs_h_format) %>%
+  dplyr::filter(!is.na(company))
+
+
+library(hydroGOF)  ## for `rmse`
+## data in a wide format
+dfs_2w_targ <- dfs_2 %>%
+  ## remove SDG general 
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%  
+  spread(key = 'coder', value = 'n') %>%
+  dplyr::group_by(company) %>%
+  dplyr::mutate(RMSE = round(hydroGOF::rmse(obs = human, sim = machine, na.rm=TRUE), 3)) %>%
+  ungroup() %>%
+  as.data.frame()
+
+
+
+## aggregate the coded results to the 'Goal' level
+dfs_2w_goal <- dfs_2 %>%
+  ## remove SDG general
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%
+  ungroup() %>%
+  group_by(company, goal, coder) %>%
+  dplyr::summarise(n = sum(n, na.rm = T)) %>%
+  spread(key = 'coder', value = 'n') %>%
+  as.data.frame()
+# factor(dfs_2w_goal$goal)
+```
+
+
+```{r - R2 overall}
+## function 
+# rsq <- function (x, y) cor(x, y) ^ 2
+# rsq <- function(x, y) summary(lm(y~x, na.action=na.omit))$r.squared # na.exclude
+rsq <- function(x, y) summary(lm(y~x, na.action=na.exclude))$r.squared # 
+
+## input data
+df <- dfs_2w_targ %>% dplyr::filter(!company %in% ls_com_fewCmt)
+# df <- dfs_2w_goal %>% dplyr::filter(!company %in% ls_com_fewCmt)
+
+r2 <- rsq(x = df$human, y = df$machine) %>% round(., digits = 2); r2 ## 0.56
+```
+
+
+
+
+  First, we tested the alignment of the coded results between by human and machine at company level. 
+```{r - R2 - by company}
+## input data
+df <- dfs_2w_targ %>% dplyr::filter(!company %in% ls_com_fewCmt)
+# df <- dfs_2w_goal %>% dplyr::filter(!company %in% ls_com_fewCmt)
+df <- dfs_2w_targ %>% dplyr::filter(company %in% ls_com_top20) 
+
+## a new dataframe
+r2_bycom <- data.frame()
+
+## loop each 
+for (com in com_ls) {
+  # print(com)
+  c <- df %>%
+    dplyr::filter(company == com)
+  
+  ## if the results by human are all NA, then, assign 'NA' value to its R2. 
+  count_nonNA <- sum(!is.na(c$human)); count_nonNA
+  
+  c2 <- c %>%
+    dplyr::mutate(r2 = ifelse(
+      count_nonNA > 0, rsq(x = human, y = machine) %>% round(., digits = 2), NA)) %>%
+    distinct(company, r2) %>%
+    as.data.frame()
+  r2_bycom <- rbind(r2_bycom, c2)
+}
+
+r2_bycom <- r2_bycom %>% arrange(r2)
+hist(r2_bycom$r2)
+
+
+ls_com_smallR2 <- r2_bycom$company[1:25]; ls_com_smallR2
+```
+
+
+
+
+```{r - R2 - by goal}
+
+## input data
+df <- dfs_2w_targ %>% dplyr::filter(!company %in% ls_com_fewCmt)
+# df <- dfs_2w_goal %>% dplyr::filter(!company %in% ls_com_fewCmt)
+df <- dfs_2w_targ %>% dplyr::filter(!company %in% ls_com_smallR2)
+
+ls <- df %>% dplyr::filter(!is.na(goal)) %>% distinct(goal) %>% unlist(); ls
+
+## a new dataframe
+r2_bygoal <- data.frame()
+
+## loop each
+for (i in ls) {
+  # print(i)
+  c <- df %>% dplyr::filter(goal == i) 
+  
+  ## if the results by human are all NA, then, assign 'NA' value to its R2. 
+  count_nonNA <- sum(!is.na(c$human)); count_nonNA
+  
+  c2 <- c %>%
+    dplyr::mutate(r2 = ifelse(
+      count_nonNA > 0, rsq(x = human, y = machine) %>% round(., digits = 2), NA)) %>%
+    distinct(goal, r2) %>%
+    as.data.frame()
+  r2_bygoal <- rbind(r2_bygoal, c2)
+}
+
+r2_bygoal <- r2_bygoal %>% arrange(r2)
+hist(r2_bygoal$r2)
+
+
+
+
+g_goal <- dfs_2w_goal %>%
+  dplyr::filter(!is.na(goal)) %>%
+  ggplot(aes(x = human, y = machine)) +
+  geom_point(aes(color = goal, alpha = company), show.legend = F) +
+  # geom_text(aes(label = goal, color = goal), nudge_x = -2, nudge_y = -25, show.legend = F) +
+  scale_colour_manual(values = color_hex) +
+  geom_smooth(method = 'lm', formula = y~x, show.legend = F) +
+  stat_poly_eq(
+    formula = formula, output.type = "numeric",
+    aes(label = sprintf(myformat, formatC(stat(r.squared), format = 'f', digits = 2))),
+    label.x.npc = "left", label.y.npc = 0.95, color = 'black')+
+  geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
+  facet_wrap(~goal, scales = 'free') +
+  theme_bw()
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_byGoal_', ymd, '.png'); fname
+# ggsave(filename = fname, plot = g_goal, width = 12, height = 9, units = 'in', dpi = 300)
+
+
+dfs_2w_targ %>%
+  dplyr::filter(!is.na(goal), !is.na(target)) %>%
+  ggplot(aes(x = human, y = machine, group = goal)) +
+  geom_point(aes(color = goal), show.legend = F) +
+  scale_colour_manual(values = color_hex) +
+  geom_smooth(method = 'lm', formula = y~x, show.legend = F) +
+  stat_poly_eq(
+    formula = formula, output.type = "numeric",
+    aes(label = sprintf(myformat, formatC(stat(r.squared), format = 'f', digits = 2))),
+    label.x.npc = "left", label.y.npc = 0.95, color = 'black')+
+  geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
+  facet_wrap(~goal, scales = 'free') +
+  theme_bw()
+
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_byTarget_', ymd, '.png'); fname
+# ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+```
+
+
+
+*Test interactive figures*
+```{r eval=FALSE, include=FALSE}
+library(plotly)
+ggplotly(g_goal) + theme(legend.position='none')
+```
+
+
+```{r eval=FALSE, include=FALSE}
+library(ggiraph)
+
+my_gg <- dfs_2w_goal %>%
+  dplyr::filter(!is.na(goal)) %>%
+  ggplot(aes(x = human, y = machine)) +
+  geom_point_interactive(aes(color = goal), show.legend = F) +
+  # geom_text(aes(label = goal, color = goal), nudge_x = -2, nudge_y = -25, show.legend = F) +
+  scale_colour_manual(values = color_hex) +
+  geom_smooth_interactive(method = 'lm', formula = y~x, show.legend = F) +
+  stat_poly_eq(
+    formula = formula, output.type = "numeric",
+    aes(label = sprintf(myformat, formatC(stat(r.squared), format = 'f', digits = 2))),
+    label.x.npc = "left", label.y.npc = 0.95, color = 'black')+
+  geom_abline_interactive(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
+  facet_wrap(~goal, scales = 'free') +
+  theme_bw()
+girafe(code = print(my_gg) )
+
+```
+
+
+
+
+```{r - Plot at target level}
+
+### 1. take the raw value
+dfs_2w_targ %>%
+  ## random sample 10 companies 
+  dplyr::filter(company %in% sample(x = com_ls, size = 10)) %>%
+  dplyr::mutate(goal_id = (gsub("SDG", "", target))) %>%
+  ggplot(aes(x = human, y = machine, color = company, group = company)) +
+  geom_point(show.legend = F) +
+  geom_text(aes(label = goal_id), 
+            # hjust=-0.20, vjust=-0.2,
+            nudge_x = -2, nudge_y = -25, color = 'black', size = 2,
+            show.legend = F) +
+  geom_smooth(method = 'lm', formula = y~x, show.legend = F) +
+  # stat_poly_eq(
+  #   aes(label = paste(..eq.label.., ..rr.label.., sep = "*\",\"~~~")),  ## paste0("RMSE==", RMSE)  ## sep = "*\",\"~~~"
+  #   label.x.npc = "left", label.y.npc = 0.95, color = 'black',
+  #   formula = formula, parse = TRUE, size = 3) + 
+
+  stat_poly_eq(
+    formula = formula, output.type = "numeric",
+    aes(label = sprintf(myformat,
+                        # formatC(stat(coef.ls)[[x]][[2, "Estimate"]]),   ## , format = 'f', digits = 2
+                        formatC(stat(r.squared), format = 'f', digits = 2))),
+    label.x.npc = "left", label.y.npc = 0.95, color = 'black')+
+  
+  geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
+  facet_wrap(~company, scales = 'free') +
+  theme_bw()
+
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_target_raw_', today, '.png'); fname
+# ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+
+
+
+### 2. take the log value
+# dfs_2w_targ %>%
+#   ggplot(aes(x = human, y = machine, color = company)) +
+#   geom_point(show.legend = F) +
+#   geom_smooth(method = 'lm', formula = y~x, show.legend = F) +
+#   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+#                 labels = trans_format("log10", math_format(10^.x))) +
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+#                 labels = trans_format("log10", math_format(10^.x))) +
+#   facet_wrap(~company, scales = 'free') +
+#   theme_bw()
+# 
+# fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_target_log_', today, '.png'); fname
+# ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+
+
+
+
+```
+
+
+
+```{r - Plot at goal level}
+
+### plot correlation 
+### --> 1. input raw data
+dfs_2w_goal %>%
+  ## random sample 10 companies 
+  # dplyr::filter(company %in% sample(x = com_ls, size = 10)) %>%
+  ## plot the top 20 companies 
+  dplyr::filter(company %in% ls_com_top20) %>% ## 
+  dplyr::mutate(company = factor(company, levels = ls_com_top20)) %>% ## 
+  dplyr::mutate(goal_id = as.numeric(gsub("\\D", "", goal))) %>%
+  ggplot(aes(x = human, y = machine)) + # color = company
+  geom_point(aes(color = goal), show.legend = F) +
+  geom_text(aes(label = goal_id, color = goal), 
+            # hjust=-0.20, vjust=-0.2,
+            nudge_x = -2, nudge_y = -25, 
+            show.legend = F) +
+  scale_colour_manual(values = color_hex) +
+  geom_smooth(method = 'lm', formula = y~x, show.legend = F) +
+  stat_poly_eq(
+    formula = formula, output.type = "numeric",
+    aes(label = sprintf(myformat, formatC(stat(r.squared), format = 'f', digits = 2))),
+    label.x.npc = "left", label.y.npc = 0.95, color = 'black')+
+  geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
+  facet_wrap(~company, scales = 'free') +
+  theme_bw()
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_goal_byComp_', today, '.png'); fname
+ggsave(filename = fname, plot = last_plot(), width = 10, height = 10, units = 'in', dpi = 300)
+
+
+### --> 2. input log data
+# dfs_2w_goal %>%
+#   ggplot(aes(x = human, y = machine, color = company)) +
+#   geom_point(show.legend = F) +
+#   geom_smooth(method = 'lm', formula = y~x, show.legend = F) +
+#   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+#                 labels = trans_format("log10", math_format(10^.x))) +
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+#                 labels = trans_format("log10", math_format(10^.x))) +
+#   geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
+#   facet_wrap(~company, scales = 'free') +
+#   theme_bw()
+# 
+# fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_goal_byComp_log_', today, '.png'); fname
+# ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+```
+
+
+
+
+## Inspection and validation
+
+  * check the alignment with human-coded results in *H_M_goal_byComp_yymmdd_hhmm.png* under the folder `text_mining_figs`;
+  
+  * look into the companies whose "R2" is low, and the specific SDG with large errors;
+  
+  * run code bellow to inspect which goal or target contributed to the large errors;
+    - compare the plots by machine-coder and by human-coder (plots under the folder `text_mining_figs`)
+    - inspect the spreadsheet (*inspect_XXX.xlsx*) under `coded_inspection` folder (Filters the sdg and inspect the text)
+    - may test specific search string in *test_pattern_grepl.Rmd*
+  
+  * revise the CodeBook accordingly if necessary
+  
+  * revise the keywords database in *R* and update to *GitHub*
+  
+  * re-run text mining 
+    - start with one report for a quick test
+    - then another trial test on 10 report; if no obvious large error, then
+    - run code on all the report data
+  
+
+```{r - Single company, eval=FALSE, include=FALSE}
+# company_name <- 'Cemex'
+# company_name <- '3M'
+# company_name <- 'Akzo Nobel'
+# company_name <- 'Access Bank'
+# company_name <- "Alibaba"                  ## 16
+# company_name <- "Banco Bilbao Vizcaya Argenaria"
+# company_name <- 'BASF'
+# company_name <- 'BNP Paribas'
+# company_name <- 'Bayer'                    ## 3.6, 3.8, 3.b wrong by human
+# company_name <- "Reliance Industries"
+# company_name <- "Bank Mandiri"
+# company_name <- "British American Tobacco" ## 3
+# company_name <- "Cemex"
+# company_name <- "CMPC Empresas"
+
+
+# company_name <- "Diageo"
+# company_name <- 'Legrand'
+# company_name <- "Novartis"
+
+
+# company_name <- "Grupo Financiero Banorte" ## in total 42 "innov*" in the pdf report, how can they get 242 SDG9_5?; for SDG11_5, only 22 "safe" words
+
+# company_name <- "Pfizer"
+
+# company_name <- "Roche Group"
+# company_name <- 'Sanofi'
+# company_name <- 'Toyota Motor'
+# company_name <- "Total"
+company_name <- "Vivendi"
+# company_name <- "Valeo"
+
+
+### other test -----------
+# company_name <- "Austrian Post"
+# company_name <- "AXA"
+# company_name <- "CITIC Group"
+# company_name <- "Denso"
+# company_name <- "Banpu"
+# company_name <- "BMW"
+# company_name <- "Deutsche Telekom"
+# company_name <- "Astra Zeneca"
+
+
+
+### machine ----------------------------------------
+g_m <- dfs_2w_targ %>%
+  dplyr::mutate(n = machine, n = ifelse(n ==0, NA, n)) %>%
+  dplyr::filter(company == company_name) %>%
+  dplyr::filter(str_detect(target, '_g', negate = T)) %>%  ## remove SDG general 
+  ggplot(aes(x = fct_rev(target))) +
+  geom_col(aes(y = n), alpha = 0.6) +
+  geom_text(aes(y = n, label = n), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y', ncol = 6) +
+  coord_flip() +
+  theme_bw() +
+  ggtitle(company_name) +
+  ylab('Number of SDG statements') + xlab('')
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'Test_', company_name, '_M_', today, '.png'); fname
+ggplot2::ggsave(filename = fname, plot = g_m, width = 16, height = 9, units = 'in', dpi = 300)
+
+
+
+### human ------------------------------------------
+g_h <- dfs_2w_targ %>%
+  dplyr::mutate(n = human) %>%
+  dplyr::filter(company == company_name) %>%
+  ggplot(aes(x = fct_rev(target))) +
+  geom_col(aes(y = n), alpha = 0.6) +
+  geom_text(aes(y = n, label = n), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y', ncol = 6) +
+  coord_flip() +
+  theme_bw() +
+  ggtitle(company_name) +
+  theme(strip.background = element_rect(fill="orange")) +
+  ylab('Number of SDG statements') + xlab('')
+fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'Test_', company_name, '_H_', 
+                # today, 
+                '.png'); fname
+ggsave(filename = fname, plot = g_h, width = 16, height = 9, units = 'in', dpi = 300)
+
+
+
+### to screen the coded data for refining --------
+f <- list.files(path = paste0(dir.tm, 'DF_coded'), pattern = company_name, full.names = T); f
+load(f) ## `coded`
+fname <- paste0('./Data/data_TextMining/coded_inspection/inspect_', company_name, '.xlsx'); fname
+writexl::write_xlsx(x = coded, path = fname)
+```
+
+
+
+
+
+  .............. THE END .................
+  
+  
+  
+  
+  
+  
+```{r eval=FALSE, include=FALSE}
+# get sums for each SDG
+  # colSums(corpus$SDG1)
+
+
+# coded_sdgs <- dplyr::pull(coded, sdgs)   ## the same as below one
+coded_sdgs <- as.vector(unlist(coded['sdgs_n'])) %>%
+  paste(sep = " ", collapse = " ")
+
+# coded_sdgs
+
+
+# table formatting ---------------------------------------------------------------------------------
+coded_sdgs <- unlist(strsplit(coded_sdgs, split = "\\,")) %>% trimws();
+  
+coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
+  dplyr::filter(coded_sdgs != '') %>%
+  separate(col = coded_sdgs, into = c('goal', 'target_id'), sep = '_', remove = F) %>%
+  dplyr::mutate(goal_id   = as.numeric(gsub("\\D", "", goal)),
+                target_id = gsub('^.{3}', "", coded_sdgs)) %>%
+  separate(col = target_id, into = c('target_id', 'target_n'), sep = '-', remove = F) %>%
+  dplyr::mutate(target_n = as.numeric(target_n),
+                n_total  = Freq * target_n) %>%
+  arrange(goal_id, target_id) %>%
+  group_by(goal, goal_id, target_id) %>%
+  dplyr::summarise(n_statements = sum(n_total, na.rm = T))  %>%
+
+  # dplyr::select(1:2, goal_id, everything()) %>%
+  # dplyr::rename(n_statements = n_total) %>%
+  as.data.frame()
+
+sum(coded_sdgs_df$n_statements)
+
+coded_sdgs_df %>%
+  ggplot(aes(x = fct_rev(target_id))) +
+  geom_col(aes(y = n_statements), alpha = 0.6) +
+  geom_text(aes(y = n_statements + 2, label = n_statements), size = 5, color = 'red') +
+  facet_wrap(~goal, scales = 'free_y') +
+  coord_flip() +
+  theme_bw()
+```

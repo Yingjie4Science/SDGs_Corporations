@@ -98,7 +98,7 @@ writexl::write_xlsx(x = shp, path = fname)
 ```{r}
 dirname(getwd())
 
-xlsx <- paste0(dirname(getwd()), '/SDGs_Metacoupling/Data/', '_ctr_iso2_iso3.xlsx'); xlsx
+xlsx <- paste0(dirname(getwd()), '/SDGs_Metacouplings_private/Data/', '_ctr_iso2_iso3.xlsx'); xlsx
 xls2 <- paste0('./Data/country/', 'naturalearth_country_names.xlsx')
 
 excel_sheets(xlsx)
@@ -203,6 +203,9 @@ country_region_names <- rbind(ctr_names, ctr_iso3, regions) %>%
 
 ## save to database
 save(country_region_names, file = paste0('./Data/data_TextMining/database/', 'country_region_names.RData'))
+
+## save to `SDGdetector` package
+save(country_region_names, file = paste0('./Code/SDGdetector/data/', 'country_region_names.RData'))
 ```
 
 

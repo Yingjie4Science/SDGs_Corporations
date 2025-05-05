@@ -1,0 +1,4175 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "3/26/2022"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+dir.raw     <- './Data/data_raw/'
+dir.results <- './Data/data_results/'
+dir.figures <- './Data/figures/'
+
+
+source('./Code/_packages.R')
+library(stringr)
+# install.packages("devtools")
+# devtools::install_github("ropensci/skimr") ## summary statistics
+library(skimr)
+
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+```
+
+
+```{r Theme and font}
+### plot settings
+
+source('./Code/helper_theme_NS_map.R')
+
+```
+
+
+
+```
+#  1.  Data
+
+## 1.1 SDG info
+
+## 1.2 Company info cleaning
+
+## 1.3 Merge table data
+
+## 1.4 Shapefile data
+```
+
+
+```
+
+  df1  (coded data at Goal level)
+   |
+   |   (coded data at target level)
+   |  /
+   v /
+  df2 -----------
+                |               (rename)
+                | ---> dfcom ---------------> df (443 coded companies)
+                |
+  com700 --------
+
+
+  `com_final` (508 companies)
+
+```
+
+# 2. Data summary
+
+## - Load data
+
+
+  The human-coded results - won't used in this script. 
+```{r}
+## 1. coded data: `df1`, `df2`, `df`
+load(file = paste0(dir.results, 'df1_df2.RData'))
+load(file = paste0(dir.results, 'df.RData'))
+
+## rename the old data so that we can refer to it later
+df_old <- df
+
+## the Region info of UltraTech, Emirates Group is wrong, should use the `Continent`, which is correct. 
+# df_old_test <- df_old %>% distinct(Region, Continent, .keep_all = T)
+```
+
+
+  Other data.
+```{r}
+## load company profiles in the UGSII data -----------------------------------------------
+load(file = paste0(dir.results, 'com_final_500_scr.RData'))
+## --> this includes "com_final, com700, ctr, ind_levels, ind_labels"
+
+## fix a few company names to ensure good dataframe merge. 
+com700 <- com700 %>%
+  dplyr::mutate(
+    Company = gsub('Taiwan Semicondctor Manufacturing', 'Taiwan Semiconductor Manufacturing', Company),
+    Company = gsub('Julius Bär', 'Julius Baer', Company),
+    Company = gsub('Compañía de Minas Buenaventura', 'Compania de Minas Buenaventura', Company),
+  ) %>%
+  as.data.frame()
+
+## load company profiles in the Fortune Global 500 data ----------------------------------
+f <- paste0(dir.results, 'company_Fortune_Global500.RData'); 
+load(f) ## `com500ft_ToMatchName`, and `com500ft_profile_df`
+com500ft_profile_df_edit <- com500ft_profile_df %>%
+   dplyr::mutate(
+    company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
+    company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
+    company_name = gsub("L'Oréal", "L'Oreal", company_name),
+    company_name = gsub('Fomento Económico Mexicano', 'Fomento Economico Mexicano', company_name),
+    company_name = gsub('SNCF Mobilités', 'SNCF Mobilites', company_name),
+    company_name = gsub('Société Générale', 'Societe Generale', company_name),
+    company_name = gsub('Koç Holding', 'Koc Holding', company_name),
+  )
+  
+
+
+
+## merge `com700` and `com500ft_profile_df` for later use for matching -------------------
+names(com700)
+names(com500ft_profile_df)
+
+helper_industry <- rbind(
+  com700 %>% 
+    dplyr::mutate(source = 'com700') %>%
+    dplyr::select(Company, Industry, ind_agg, ind_7sys, ind_3, source),
+  
+  com500ft_profile_df_edit %>%
+    dplyr::mutate(source = 'com500ft') %>%
+    dplyr::rename(Company = company_name, 
+                  Industry = industry) %>%
+    dplyr::select(Company, Industry, ind_agg, ind_7sys, ind_3, source)
+) %>%
+  ### remove the duplicated records, keep the Fortune 500 as priority, as it is more accurate in industry classification
+  arrange(Company, source) %>%
+  dplyr::distinct(Company, .keep_all = T) %>%
+  as.data.frame()
+  
+
+
+## 3. other helper data ------------------------------------------------------------------
+load(file = paste0(dir.results, 'grp.RData'))      ## country income group; `grp`, `shp`
+load(file = paste0(dir.results, 'ls_un_id.RData')) ## `ls_un_id`
+ls_un_id <- ls_un_id %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un))
+```
+
+
+  The machine-coded results
+```{r - machine-coded results, include=FALSE}
+## dataset 1: the companies HAVE coded by UNGSII
+dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+ls_f <- list.files(path = paste0(dir.tm, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
+tail(ls_f, n = 1)
+load(tail(ls_f, n = 1)) ## load the latest/last data
+dfs_m1 <- dfs %>% dplyr::rename(target = coded_sdgs)
+cat('There are', unique(dfs_m1$company) %>% length(), 'companies.') ## 352
+
+
+## dataset 2: the companies NOT coded by UNGSII
+dir.tm      <- './Data/data_TextMining/annual_reports/pdf_not_coded/'
+ls_f <- list.files(path = paste0(dir.tm, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
+tail(ls_f, n = 1)
+load(tail(ls_f, n = 1)) ## load the latest/last data
+dfs_m2 <- dfs %>% dplyr::rename(target = coded_sdgs) %>%
+  dplyr::filter(company != 'US Foods Holding', ## this has been coeded in the `dfs_m1`
+                company != 'Ultrapar')         ## this has been coeded in the `dfs_m1` as "Ultrapar Participacoes"
+cat('There are', unique(dfs_m2$company) %>% length(), 'companies.') ## 390 - 1 = 389
+
+
+
+
+
+
+## combine the 2 machine-coded data, and rename/add columns as the old data did
+  names(df_old) %>% sort()
+dfs_m <- rbind(
+  dfs_m1 %>% dplyr::mutate(company_list = 'human_coded'), 
+  dfs_m2 %>% dplyr::mutate(company_list = 'human_not_coded')) %>%
+  ## change to the same names
+  dplyr::rename(Company = company, n_statement = n_statements, Target_id = target) %>%
+  ## add a column the same way as the old data
+  dplyr::mutate(yr = 2018, 
+                Target_id = gsub('^SDG', '', Target_id),
+                goal_desc = NA) %>%
+  as.data.frame()
+### company list in the data
+com_ls <- unique(dfs_m$Company); #com_ls
+cat('There are', com_ls %>% length(), 'companies.')
+
+
+## rename the data with the same name of the human-coded results (used in previous analysis), so that we can reproduce the same figures easily.
+names(df_old) %>% sort()
+names(dfs_m)  %>% sort()
+
+df_new <- dfs_m %>%
+  ## link to additional info for each company
+  merge(x = ., y = helper_industry, by = 'Company', all.x = T) %>%
+  ## add a column the same way as the old data
+  # dplyr::mutate(ns = cut(n_statement, breaks = brks, labels = NULL, include.lowest = T, right = F, dig.lab = 3)) %>%
+  dplyr::mutate(
+    Continent = '',
+    iso3      = '',
+    ind       = '',
+    Region    = Continent, 
+    ns        = NA) %>%
+  dplyr::select(names(df_old), company_list) %>%
+  as.data.frame()
+
+# setdiff(names(df_new), names(dfs_m))
+# names(df_old)
+# names(df_new)
+
+
+df_new_checkCom <- df_new %>%
+  dplyr::distinct(Company, company_list) %>%
+  arrange(Company)
+```
+
+
+
+
+
+
+```
+
+                                      (150 of which are in FT)              (part of which are in FT list)
+                                                    `com_ls1`               `com_ls2`         
+                                                        |                       |
+                                                        |                       |                
+`com_lss`     (810, all the companies considered) = UNGSII coded (356) + not-humanCoded (454)
+`com_lss_ft`  (530, both 2019 and 2018)
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**   The data files with PDF  **
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    `dfs_m1`                `dfs_m2`                    `dfs_m` ===> `df_new` ===> `df`
+    352           +         389             =           742               |
+    (human-coded)           (new coded)                 (total)           |(the same number as)
+                                                                          |
+                                                                          |
+                                                                          |
+                                                                 `com_lss_ft_pdf` (741)
+                                                                          |
+                                                                          |
+                                                                          |
+            ---------------------------------------------------------------
+            |                       |
+            |                       |
+            |                       |
+      UNGSII 500                Fortune G500
+                                    |
+                                    V
+                                `com_lss_ft_pdf` (471)
+                                
+
+```
+
+
+
+  Based on the above figure, we need to figure out which companies should be included in the final analysis. 
+  * if all in,  n = 742
+  * if Fortune, n = 471, which is a subset from the whole list
+  
+```{r - select data}
+
+### load the list of downloaded and coded company lists
+
+### 1. the list have been coded by UNGSII
+f <- paste0(dir.raw, 'com_list_HumanCoded_URL.xlsx')
+com_ls11 <- readxl::read_excel(f)
+
+### 1.2 the list coded and with Fortune500 rank labels
+f <- paste0(dir.raw, 'com_list_HumanCoded_inFortune.xlsx')
+com_ls12 <- readxl::read_excel(f)
+
+com_ls1 <- merge(x = com_ls11, y = com_ls12, by.x = 'Company', by.y = 'company_name', all = T)
+
+ 
+### 2. the list not coded by UNGSII ------------------------------------------------------
+f <- paste0(dir.raw, 'com_final_naCheckNA_UN500_2018_ManualFillna_AddFortune.xlsx')
+com_ls2 <- readxl::read_excel(f) %>%
+  dplyr::mutate(
+    company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
+    company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
+    company_name = gsub("L'Oréal", "L'Oreal", company_name),
+    company_name = gsub('Fomento Económico Mexicano', 'Fomento Economico Mexicano', company_name),
+    company_name = gsub('SNCF Mobilités', 'SNCF Mobilites', company_name),
+    company_name = gsub('Société Générale', 'Societe Generale', company_name),
+    company_name = gsub('Koç Holding', 'Koc Holding', company_name),
+    company_name = gsub('Ultrapar Holdings', 'Ultrapar Participacoes', company_name),
+  )
+
+
+
+### 3. get the list of all the companies that were considered so far (checked links and recorded in excels)
+com_lss <- rbind(
+  com_ls1 %>% dplyr::select(Company, iso3, url_collection, rank2019, rank2018) %>% 
+    dplyr::mutate(humancoded = 'yes') %>%
+    as.data.frame(),
+  com_ls2 %>% dplyr::select(company_name, iso3, url_collection, rank2019, rank2018) %>% 
+    dplyr::rename(Company=company_name)%>% 
+    dplyr::mutate(humancoded = 'no') %>%
+    as.data.frame()
+) %>%
+  arrange(Company, rank2019, rank2018) %>%
+  dplyr::distinct(Company, .keep_all = T) %>%
+  arrange(rank2019, rank2018)
+
+
+unique(com_lss$rank2019) %>% length() ## 501 = 500 + 1 (NA)
+unique(com_lss$rank2018) %>% length() ## 501 = 500 + 1 (NA)
+
+
+helper_com_iso3 <- com_lss %>%
+  dplyr::distinct(Company, iso3)
+
+
+### 4. subset from the list with PDF and were coded so far 
+com_lss_pdf <- com_lss %>%
+  dplyr::filter(stringr::str_detect(string = url_collection, pattern = 'http')) %>%
+  arrange(Company, rank2019, rank2018) %>%
+  dplyr::distinct(Company, iso3, .keep_all = T) %>% ## "US Foods Holding" was in both `com_ls1` and `com_ls2`
+  as.data.frame()
+
+
+### --> the combination of fortune 2018 and 2019
+com_lss_ft <- com_lss %>%
+  dplyr::filter(!is.na(rank2019) | !is.na(rank2018)) %>%
+  arrange(desc(url_collection), Company) %>%  ## to check the company without PDF
+  # arrange(rank2019, rank2018) %>%             ##
+  as.data.frame()
+
+### --> with PDF and listed in Fortune (ft)
+com_lss_ft_pdf <- com_lss_ft %>%
+  dplyr::filter(stringr::str_detect(string = url_collection, pattern = 'http')) %>%
+  arrange(Company, rank2019, rank2018) %>%
+  dplyr::distinct(Company, iso3, .keep_all = T)
+
+com_lss_ft_pdf %>%
+  group_by(humancoded) %>%
+  tally()
+```
+
+
+
+
+
+
+```{r - final data for analysis}
+df_new <- df_new %>%
+  dplyr::select(-iso3) %>%
+  merge(x = ., y = helper_com_iso3, by = 'Company', all.x = T) %>%
+  dplyr::select(names(df_old), company_list) ## the same column order as the old data
+
+
+## 1. choose all the available pdf for analysis ------------------------------------------
+total_com <- length(unique(df_new$Company))
+v <- paste0('all', length(unique(df_new$Company))); v  ## 'all742'
+df <- df_new
+
+
+
+
+## 2. choose Fortune G500 for analysis ---------------------------------------------------
+total_com <- length(unique(com_lss_ft$Company))
+v <- paste0('ft', total_com); v ## 'ft529'
+df <- df_new %>%
+  dplyr::filter(Company %in% unique(com_lss_ft$Company))
+
+```
+
+
+
+
+
+
+## - Com info
+
+### * num of com by region
+
+```{r}
+
+## We use the 'region' and 'iso3' in `com_final` to match other data
+helper_ctr_region <- com_final %>% dplyr::distinct(region, iso3) %>%
+  rbind(., 
+        data.frame(region = c('Europe', 'Asia', 'Asia'), 
+                   iso3   = c('POL',    'SAU',  'TUR'))
+        )
+
+## --> if choose Fortune 500 list for analysis
+com_data <- com_lss_ft %>%
+  merge(x = ., y = helper_ctr_region, by = 'iso3', all.x = T)
+
+
+## --> update `com_final` to what we choose
+com_final_former <- com_final ## keep a copy just in case
+com_final <- com_data %>% dplyr::rename(company_name = Company)
+
+
+
+## how many companies in total this data? - 356 --------------------------------
+n.com <- com_final %>%
+  dplyr::distinct(company_name, .keep_all = T)
+
+## how many companies in each region or Continent? -----------------------------
+### 1. check if df$Region == df$Continent
+# all(df$Region == df$Continent)
+# df %>% dplyr::distinct(Region, Continent)
+
+
+### 2. number of companies in each region
+n.com %>%
+  dplyr::group_by(region) %>% 
+  dplyr::tally()
+
+```
+
+
+### * num of com by ctr (SI_3a)
+```{r}
+## how many companies in each country ------------------------------------
+n.com.country <- n.com %>%
+  group_by(iso3, region) %>% tally() %>% 
+  arrange(iso3, region, n) %>% as.data.frame() %>%
+  ungroup() 
+hist(n.com.country$n)
+sum(n.com.country$n)
+
+unique(n.com.country$region)
+str(n.com.country)
+
+(p.n.byCountry <- n.com.country %>%
+    arrange(region, n) %>%
+    dplyr::mutate(id = row_number()) %>%
+    ggplot(aes(x = reorder(iso3, id), y = n, group=region, fill = region)) +
+    geom_col() +
+    geom_text(aes(label = n), hjust = 0.5, vjust = -0.5, size = 2) +
+    # scale_fill_brewer(palette="RdYlBu", direction = -1) + ### best for 4 classes
+    # facet_wrap(~region, scales = 'free_y') +
+    # coord_flip() +
+    theme_ns +
+    # theme(legend.position = "none") +
+    theme(legend.position = c(0.08, 0.85), 
+          legend.key.width = unit(0.5, "lines"), legend.key.height = unit(0.5, "lines"),
+          legend.title = element_blank(),
+          text = element_text(size=font_size),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
+    # theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1))+
+    xlab('') + ylab('Number of companies'))
+# fname <- paste0(dir.figures, 'number of comp by country_region_new.jpg'); fname
+# ggsave(filename = fname, plot = p.n.byCountry, 
+#        width = width_2col, height = width_2col/2, units = unit_ns, dpi = 300)
+```
+
+
+
+## - Industry summary
+  Industry info in the final data list. 
+  
+### * num of com by ind  (si 2ab)
+```{r}
+### revised industry classification for Fortune 500
+
+com_dt <- 
+  ### this was used before 7/27/2020
+  # df %>%
+  # distinct(Company, .keep_all = T) %>%
+  com_final %>%
+  merge(x = ., y = helper_industry, by.x = 'company_name', by.y = 'Company', all.x = T) %>%
+  dplyr::distinct(company_name, .keep_all = T) %>%
+  dplyr::mutate(ind = ind_7sys) %>%
+  ungroup() #%>%
+  
+
+
+
+
+### 8 industry ------------------------------------
+num_ind <- length(unique(com_dt$ind_7sys)); num_ind
+palette_ind <- 'YlGnBu'
+colors_ind  <- colorRampPalette((brewer.pal(9, palette_ind)))(num_ind)
+
+(p8 <- com_dt %>% 
+  dplyr::group_by(ind) %>% 
+  dplyr::tally() %>% 
+  arrange(n) %>%
+    ggplot() +
+    geom_col(aes(x= reorder(ind, n), y = n, fill = ind), color = 'gray90', show.legend = F) +
+    # scale_fill_brewer(palette = palette_ind) +
+    scale_fill_manual(values = colors_ind, na.value = 'gray') +
+    coord_flip() + theme_bw() +
+    theme_ns +
+    ylab('Number of companies') + xlab('Industry')
+)
+print(paste0('There are total ', length(unique(com_dt$ind)), ' industries.'))
+
+# fname <- paste0(dir.figures, 'num of com by ', num_ind, ' industry_500coms_new.jpg'); fname
+# ggsave(fname, last_plot(), width = width_2col, height = width_2col/3, units = unit_ns, dpi = 300)
+
+
+
+
+### doughnut chart with ggplot2 -------------------------------------------------------------
+com_dt8 <- com_dt %>% 
+  dplyr::group_by(ind) %>% 
+  dplyr::tally() %>% 
+  arrange(n) #%>%
+# Compute percentages
+com_dt8$fraction = com_dt8$n / sum(com_dt8$n)
+
+# Compute the cumulative percentages (top of each rectangle)
+com_dt8$ymax = cumsum(com_dt8$fraction)
+
+# Compute the bottom of each rectangle
+com_dt8$ymin = c(0, head(com_dt8$ymax, n=-1))
+ 
+# Compute label position
+com_dt8$labelPosition <- (com_dt8$ymax + com_dt8$ymin) / 2
+
+# Compute a good label
+library(scales)
+com_dt8$label <- percent(com_dt8$fraction)
+
+# Make the plot
+doughnut <- 
+  ggplot(com_dt8, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=ind)) +
+  geom_rect(show.legend = F) +
+  # scale_fill_brewer(palette = palette_ind) +
+  # scale_color_brewer(palette= palette_ind) +
+  scale_fill_manual(values = colors_ind, na.value = 'gray') +
+  scale_color_manual(values = colors_ind, na.value = 'gray') +
+  # geom_label(x = 3.5, aes(y = ymax, label = fraction * 100), show.legend = F) +
+  geom_text(x=2.7, aes(y=labelPosition, label=label), size=2) + # x here controls label position (inner / outer)
+  coord_polar(theta="y") + # Try to remove that to understand how the chart is built initially
+  xlim(c(1, 4)) + # Try to remove that to see how to make a pie chart  
+  labs(fill = 'Industry') +
+  theme_void()
+
+# doughnut
+
+
+### 4 levels industry -----------------------------
+com_dt %>% as.data.frame() %>%
+  dplyr::count(ind_3) %>% dplyr::arrange(n) 
+
+
+
+### 20+ industry ----------------------------------
+
+com_dt_i <-  com_dt %>% as.data.frame() %>% 
+  group_by(ind, 
+           # ind_7sys, 
+           ind_agg) %>%
+  dplyr::mutate(ind_agg = str_to_sentence(ind_agg)) %>%
+  dplyr::tally() #%>%
+i_ind <- length(unique(com_dt_i$ind_agg)); i_ind
+
+(p24 <- com_dt_i %>%
+  ggplot() +
+    geom_col(aes(x= reorder(ind_agg, n), y = n, fill = ind), color = 'gray90',show.legend = F) +
+    # scale_fill_brewer(palette = palette_ind) +
+    scale_fill_manual(values = colors_ind, na.value = 'gray') +
+    coord_flip() + theme_bw() + theme_ns +
+    ylab('Number of companies') + xlab('Industry') +
+    annotation_custom(grob = ggplotGrob(doughnut), xmin = -5, ymin = 15, ymax = 65) ## ymax = 55
+)
+# fname <- paste0(dir.figures, 'num of com by ', i_ind, ' industry_500_new.jpg'); fname
+# ggsave(fname, last_plot(), width = width_2col, height = width_2col, units = unit_ns, dpi = 300)
+
+
+
+ggarrange(p8, p24,
+          nrow = 2, ncol = 1, align = 'hv', labels = panel_labels, heights = c(1,2.5),
+          common.legend = F, legend = 'none')
+fname <- paste0(dir.figures, 'SM_Fig2ab_', v, '.jpg'); fname
+ggsave(fname, plot = last_plot(), 
+       width = width_2col, height = width_2col, units = unit_ns, dpi = 300)
+
+
+### save as pdf
+# fname <- gsub('\\.jpg', '\\.pdf', fname); fname
+# ggsave(fname, plot = last_plot(), width = width_2col, height = width_2col, units = unit_ns, dpi = 600)
+
+```
+
+
+
+## - Goal level
+###   - barplot ranks (1a)
+```{r}
+## total number of company
+total_com <- total_com
+total_tar <- 169 ## total number of targets
+total_sdg <- 17  ## total number of SDGs
+
+unique(df$goal) %>% sort()
+unique(df$Target_id) %>% sort()
+n_sdg    <- length(unique(df$goal));      #n_sdg
+n_target <- length(unique(df$Target_id)); #n_target
+print(paste0('There are total ', n_sdg,    ' goals.'))
+print(paste0('There are total ', n_target, ' SDG targets.'))
+
+
+# skim(df)
+df_check_nStatement <- df %>% 
+  dplyr::filter(!is.na(n_statement)) %>%
+  group_by(Company, goal_id) %>%
+  dplyr::summarise(n_goal = sum(n_statement, na.rm = T)) %>%
+  as.data.frame()
+skim(df_check_nStatement)
+
+n_threshold_countable <- 4
+
+### how many times each goal was mentioned by unique companies
+unique_company <- df %>% distinct(Company, Region)
+cat('There are', unique_company %>% nrow(), 'unique companies.')
+
+goal_cmt_by_com <- df %>% 
+  dplyr::filter(n_statement > n_threshold_countable) %>%
+  dplyr::distinct(Company, Region, goal) %>%
+  dplyr::filter(!goal %in% c('noSDG')) %>%
+  ungroup() %>% dplyr::group_by(Company) %>% tally() 
+sort(unique(goal_cmt_by_com$n))
+n_com_cmt_goal <- nrow(goal_cmt_by_com); n_com_cmt_goal
+cat('There are', percent(n_com_cmt_goal/total_com, accuracy = 0.1), 'of the 500 companies have info on SDGs.')
+
+goal_cmt_by_com_spe <- df %>% 
+  dplyr::filter(n_statement > n_threshold_countable) %>%
+  dplyr::distinct(Company, Region, goal) %>%
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  dplyr::group_by(Company) %>%  tally() 
+sort(unique(goal_cmt_by_com_spe$n))
+n_com_cmt_goal_spe <- nrow(goal_cmt_by_com_spe); n_com_cmt_goal_spe
+
+
+### which goal is most committed by, in terms of company number or pct?
+goal_n_com <- df %>% 
+  dplyr::filter(n_statement > 0) %>%
+  dplyr::distinct(Company, Region, goal) %>%
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  ungroup() %>%
+  dplyr::group_by(goal) %>% 
+  tally() %>% 
+  dplyr::mutate(goal = factor(goal, levels = unique(goal)),
+         pct  = n/n_com_cmt_goal_spe,
+         pct500  = n/total_com) %>%
+  arrange(desc(pct))
+# unique(goal_pct_com$goal)
+(pgoal_n_com <- goal_n_com %>%  ## goal_count_com
+    ggplot() +
+    geom_col(aes(x = reorder(goal, pct), y = pct500)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    coord_flip() +
+    theme_bw() + 
+    # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+    xlab(NULL) + ylab('Percent of companies')
+)
+
+
+### how many times each goal was mentioned (in total, regardless unique company) ------------
+goal_n_cmt <- df %>% 
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  dplyr::group_by(goal) %>% 
+  dplyr::summarise(n_cmt = sum(n_statement, na.rm = T)) %>%
+  # dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::mutate(goal = factor(goal, levels = unique(goal))) %>%
+  arrange(desc(n_cmt))
+(pgoal_n_cmt <- goal_n_cmt %>% 
+    ggplot() +
+    geom_col(aes(x = reorder(goal, n_cmt), y = n_cmt)) +
+    coord_flip() +
+    theme_bw() + 
+    # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+    xlab(NULL) + ylab('Number of commitments')
+)
+
+
+ggarrange(pgoal_n_com, pgoal_n_cmt,
+          nrow = 1, ncol = 2, align = 'hv', labels = panel_labels, vjust = 1,
+          common.legend = F, legend = 'none')
+
+# f <- paste0(dir.figures, 'Fig1ab_goal_count_bar_new.jpg')
+# ggsave(filename = f, plot = last_plot(),
+#        width = width_2col, height = width_2col/1.2, units = unit_ns, dpi = 300)
+
+
+### another way to show both
+###   - number of companies
+###   - number of statements
+bar_goal_n <- merge(goal_n_com, goal_n_cmt, by='goal') %>%
+  mutate(
+    # fillby = n_cmt,
+    # fillby = rank(n_cmt),
+    fillby = log10(n_cmt),
+    ) %>%
+  ggplot() +
+  # geom_col(aes(x = goal, y = pct, fill = rank_cmt), show.legend = F) +
+  geom_col(aes(x = reorder(goal, pct), y = pct500, fill = fillby), show.legend = T) +
+  theme_bw() + 
+  scale_fill_gradient(low = "#c7e9c0",  high = "#00441b", 
+                      na.value = '#ffffd9') + ## #d0d1e6, #023858 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     # trans = 'reverse',  ## labels on the right
+                     # position = "left"   ## labels on the right
+                     ) +
+  # scale_x_discrete(position = 'top') +   ## labels on the right
+  
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  coord_flip() + theme_ns +
+  # scale_y_reverse() +
+  labs(fill = (expression('Frequency of \ncommitments (10'^{x}*')'))) +
+  theme(legend.position = c(0.8, 0.2),
+        legend.key.size = unit(0.7, "line"),) + 
+  xlab('') + ylab('Percentage of the companies'); 
+bar_goal_n
+
+### no need to save, will be combined with fig 1 ab cd later. 
+# f <- paste0(dir.figures, 'Fig1a_goal_n_company_commitment_bar_new.jpg')
+# ggsave(filename = f, plot = bar_goal_n, width = width_1col, height = width_1col, units = unit_ns, dpi = 300)
+```
+
+
+
+## - Target level
+### - Data `targ_n_com`
+```{r}
+### how many companies mentioned the target ############################
+# skim(df)
+targ_n_com <- df %>%
+  dplyr::filter(n_statement > n_threshold_countable) %>%
+  # dplyr::mutate(Target_id = gsub('_', '.', Target_id)) %>%
+  dplyr::distinct(Company, goal, Target_id, target_id) %>%
+  dplyr::group_by(goal, Target_id, target_id) %>% 
+  tally() %>% 
+  as.data.frame() %>%
+  ### add the full list of SDG targets by UN; right join can help remove 'sdg_general'
+  right_join(x = ., y = ls_un_id, by = c('Target_id' = 'target_id_un')) %>%
+  dplyr::mutate(count = n, 
+                pct = n/total_com) %>% ## total_com = 500
+  dplyr::select(goalname, goal, Target_id, target_id_un2, count, pct) %>%
+  dplyr::mutate(goal = ifelse(is.na(goal), as.character(goalname), goal)) %>%
+  # mutate(count_val = ifelse(is.na(count), 0, count))
+  arrange(goal, desc(pct))
+
+# str(targ_n_com)
+
+sort(unique(targ_n_com$target_id_un2))
+lv <- c(paste0('', seq(1,19,1)), "a",  "b", "c", 'd'); #lv
+targ_n_com$target_id_un2 <- factor(targ_n_com$target_id_un2, levels = lv)
+# str(targ_n_com)
+```
+
+
+
+### - Data `targ_n_cmt`
+
+```{r include=FALSE}
+
+### total/average commitment at target level
+targ_n_cmt <- df %>%
+  dplyr::filter(n_statement > n_threshold_countable) %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::mutate(goal = as.character(goal)) %>%
+  ### check on the data
+  # dplyr::count(Company, Target_id) #%>% 
+  # filter(Company == 'Enel' & Target_id == '7.1')
+  # dplyr::group_by(Company, iso3, Region, ind, goal, Target_id) %>%
+  # dplyr::summarise(cmt_tar = sum(n_statement, na.rm = T)) %>%
+  
+  ungroup() %>%
+  group_by(goal, Target_id, target_id) %>%
+  dplyr::summarise(
+    cmt_sum = sum(n_statement, na.rm = T),
+    cmt_avg = mean(n_statement, na.rm = T)) %>%
+  as.data.frame() %>%
+  
+  ### add the full list of SDG targets by UN
+  right_join(., ls_un_id, by=c('Target_id' = 'target_id_un')) %>%
+  dplyr::mutate(
+    # goalname  = as.character(goalname),
+    goal      = ifelse(is.na(goal), as.character(goalname), goal),
+    target_id = ifelse(is.na(target_id), as.character(Target_id), target_id)) %>%
+  ungroup() %>%
+  # arrange(goal, target_id)
+  arrange(goalname, desc(cmt_avg), desc(cmt_sum))
+
+### level order for un target id
+targ_n_cmt$target_id_un2 <- factor(targ_n_cmt$target_id_un2, levels = lv)
+str(targ_n_cmt)
+
+```
+
+
+
+
+
+
+#   3. Data analysis
+### 3.1 Heatmap by target
+```{r include=FALSE}
+
+### SDG icons
+getwd()
+image_png <- sort(sample(dir("./Data/data_raw/SDG-Icons-2019_WEB", full.names = TRUE), 18))
+image_png
+img_sur   <- "./Data/data_raw/SDG-Icons-2019_WEB/E-WEB-Goal-"
+
+
+### ~ heatmap
+# str(targ_n_com)
+
+theme_ht <- 
+  theme(axis.title =element_blank(),
+        axis.text  =element_blank(),
+        axis.ticks =element_blank(),
+        # panel.background = element_rect(fill = NA),
+        panel.grid.major.x = element_blank(),
+        # panel.grid.major = element_blank(),
+        # panel.grid.minor = element_line(colour = "red", size = 1)
+        text = element_text(size=font_size)
+        )
+```
+
+
+#### - pct_com
+```{r}
+levels(targ_n_com$goalname)
+hist(targ_n_com$count)
+hist(targ_n_com$pct)
+
+### data distribution, to use class? --------------------------------------
+### find the intervals for classifying the raw data
+### jenks - will be very slow; quantile - better
+nclass = 5
+classint_qt <- classIntervals(targ_n_com$pct, n=nclass, style="quantile");
+classint_qt
+### look at the data distribution and cut location
+pal <- c("red", "blue") #'yellow', 
+# plot(classint_qt, pal=pal)
+
+### breaks based on 'Quantile'
+classint    <- classint_qt
+brks <- classint$brks; brks
+
+
+### breaks self-defined: 10%, ..., 50%, ... max% -------------------------
+###   in this case, the max % is 55%.
+ceiling_dec <- function(x, level=1) round(x + 5*10^(-level-1), level)
+max <- ceiling_dec(max(targ_n_com$pct, na.rm = T), level = 1); max
+brks <- seq(0, max, 0.1); brks
+
+
+### colors --------------------------------------------------------------
+myPalette <- colorRampPalette((brewer.pal(9, "Blues")));# myPalette; rev
+n1 <- 12
+n2 <- length(brks); n2
+colors <- myPalette(n1)[(n1-n2):(n1-1)]; colors
+
+
+### equal --------------------------------------------------------------
+nclass = 6
+classint_eq <- classIntervals(targ_n_com$pct, n=nclass, 
+                              style='fixed', fixedBreaks=brks);
+classint_eq
+classint_eq1 <- classIntervals(targ_n_com$pct*100, n=nclass, 
+                              style='fixed', fixedBreaks=brks*100); classint_eq1
+
+
+freq <- as.data.frame(table(cut(targ_n_com$pct, breaks=seq(0, max, 0.1), include.lowest = T))) %>%
+  dplyr::mutate(var = gsub('\\[|\\(|\\)|\\]', '', Var1)) %>%
+  separate(var, c('lower', 'upper'), sep = ',', remove = F) %>%
+  dplyr::mutate(lower = as.numeric(lower), 
+                upper = as.numeric(upper), 
+                x     = (upper - 0.05) * 100,
+                pct   = Freq/169,
+                xfac  = as.factor(x))
+
+n <- (freq$x) %>% length()
+
+# lb <- c('0 - 10%', '10% - 20%', '20% - 30%', '30% - 40%', '40% - 50%', '50% - 60%')
+lb <- c('  1 - 10', '11 - 20', '21 - 30', '31 - 40', '41 - 50',
+        '51 - 60',  '61 - 70', '71 - 80', '81 - 90', '91 - 100')
+freq$colorlabel <- lb[1:n]
+```
+
+
+##### cumulative frequency
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+### look at the data distribution and cut location
+pal <- c("lightblue", "blue") #'yellow', 
+fname <- paste0(dir.figures, 'fig1_Cumulative Frequency_new.jpg')
+# jpeg(filename = fname, width = width_2col-5, height = width_2col/2+1, units = unit_ns, res = 600, pointsize=6.5)
+plot(classint_eq1, pal=colors, col = alpha('#08519C', 0.4), pch = 16,
+     main = '', xlab='% of companies', ylab = "Cumulative Frequency", 
+     # pointsize=7, 
+     cex=1) 
+# dev.off()
+
+
+
+# col : color (code or name) to use for the points
+# bg : the background (or fill) color for the open plot symbols. It can be used only when pch = 21:25.
+# cex : the size of pch symbols
+# lwd : the line width for the plotting symbols
+
+### breaks based on the above
+# classint    <- classint_qt
+# brks <- classint$brks; brks
+```
+
+
+
+##### histogram (1d)
+```{r}
+
+n <- unique(freq$x) %>% length(); n
+p_hist_legend <- freq %>%
+  ggplot(data = ., aes(x = x, y = Freq, label = Freq, fill = as.factor(x))) + 
+  geom_bar(stat = "identity", colour = 'gray90', show.legend = T, size = 0.05) +  ## , alpha = 0.8
+  geom_text(nudge_y = 4, size = 2) + 
+  # scale_fill_brewer(palette="Blues", direction = 1) +
+  scale_fill_manual(values=colorRampPalette((brewer.pal(9, "Blues")))(n), guide = guide_legend(reverse = TRUE)) + 
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  theme_ns +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor.y = element_blank(), 
+    # panel.border = element_blank(),
+    panel.border = element_rect(size=0.05),
+    axis.line = element_line(size = .25),
+  ) +
+  ylab('Number of targets') +
+  xlab('Percent of committed companies') +
+  labs(fill = 'Percent of \ncommitted companies') 
+  # scale_fill_continuous(guide = "colorbar") + 
+  # theme(legend.position='bottom')
+# p_hist_legend
+
+
+### "fig 1d"
+p_hist <- p_hist_legend + theme(legend.position = "none")
+p_hist
+
+### save plot <no need to save, but will be combined with `fig 1c` later>
+# fname <- paste0(dir.figures, 'Fig1d_', ymd, '.jpg')
+# ggsave(filename = fname, plot = p_hist, width = width_2col-5, height = width_2col/2, units = unit_ns, dpi = 500)
+```
+
+
+
+
+##### heatmap (1c)
+```{r}
+
+summary(targ_n_com$pct)
+
+pct_max <- max(targ_n_com$pct, na.rm=TRUE) 
+pct_max <- ceiling(pct_max*10)/10
+pct_max
+
+### add pct level column
+targ_n_com <- targ_n_com %>%
+  arrange(pct) %>%
+  dplyr::mutate(
+    pct_level = cut(pct, breaks = seq(0, pct_max, 0.1), 
+                    # labels = NULL, 
+                    include.lowest = T, right = T, dig.lab = 2))
+unique(targ_n_com$pct_level)
+
+
+### plot ---------------------------------------------------------
+tile_size = 1;
+
+p_pct_com_level_dt <- targ_n_com %>%
+  dplyr::mutate(goalname  = factor(goalname, levels = rev(levels(goalname))),
+                pct_level = factor(pct_level, levels = rev(levels(pct_level)))) 
+
+levels(p_pct_com_level_dt$pct_level)
+n <- levels(p_pct_com_level_dt$pct_level) %>% length(); n
+colors_rev <- rev(colorRampPalette((brewer.pal(9, "Blues")))(n))
+
+
+## fig 1c - main figure
+p_pct_com_level <- p_pct_com_level_dt %>%
+  ggplot(data = ., aes(x = target_id_un2, y = goalname)) + 
+  
+  ### n com -------------------------------------------------------
+  ###   this plot will be the same as pct 
+  # geom_tile(aes(fill = n.s), colour = "white", 
+  #           size = 2, ## the space between boxes
+  #           show.legend = F) + 
+  # scale_fill_gradient(low = "#c6dbef",  high = "#08306b", 
+  #                     na.value = '#ffffd9') + ## #d0d1e6, #023858 
+  
+  ### pct levels --------------------------------------------------
+  geom_tile(aes(fill = pct_level), colour = "white", 
+            size = tile_size, ## the space between boxes
+            show.legend = T) + 
+  scale_fill_manual(values = colors_rev, 
+                    # labels = c(rev(lb), '  0'),
+                    na.value = "#ffffd9") + ## , guide = guide_legend(reverse = TRUE)
+  geom_text(aes(label = target_id_un2), size = 2) +
+  # facet_wrap(~goal, ncol = 1, scales = 'free') +
+  theme_minimal() +
+  # theme_bw() + 
+  theme(plot.margin = unit(c(0.1, 0, 0.1, -.5), "cm"))+ 
+  ## top, right, bottom, left
+  theme_ht
+
+## plot for view only
+p_pct_com_level + theme_bw()
+
+### take its legend? 
+
+
+
+
+### pct ----------------------------------------------------------------------------------
+p_pct_com <- targ_n_com %>%
+  mutate(goalname=factor(goalname, levels = rev(levels(goalname)))) %>%
+  ggplot(data = ., aes(x = target_id_un2, y = goalname)) + 
+  geom_tile(aes(fill = pct), colour = "white", 
+            size = tile_size, ## the space between boxes
+            show.legend = T) + 
+  geom_text(aes(label = target_id_un2), size = 2) +
+  scale_fill_gradient(low = "#c6dbef",  high = "#08306b", 
+                      na.value = '#ffffd9') + ## #d0d1e6, #023858 
+  theme_minimal() +
+  theme(plot.margin = unit(c(0.1, 0, 0.1, -.5), "cm"))+ 
+  theme_ht
+# p_pct_com
+
+
+p <- p_pct_com_level + theme(legend.position = "none"); suffix = '_pct_levels'
+# p
+
+
+### make the image strip ----------------------------------------------------------------- 
+### SDG icon order: top->down: 17->1
+sdg_id   <- seq(1,17,1); sdg_id
+sdg_id.y <- sdg_id - 0.5; sdg_id.y
+sdg_id.y[1]
+### reverse the order: top->down: 1->17
+sdg_id.y <- rev(sdg_id.y); sdg_id.y
+sdg_id.y[1]
+
+pimage <- axis_canvas(plot = p, axis = 'y') + 
+  draw_image(paste0(img_sur, '01', '.png'), y = sdg_id.y[1], scale = 0.9) +
+  draw_image(paste0(img_sur, '02', '.png'), y = sdg_id.y[2], scale = 0.9) +
+  draw_image(paste0(img_sur, '03', '.png'), y = sdg_id.y[3], scale = 0.9) +
+  draw_image(paste0(img_sur, '04', '.png'), y = sdg_id.y[4], scale = 0.9) +
+  draw_image(paste0(img_sur, '05', '.png'), y = sdg_id.y[5], scale = 0.9) +
+  draw_image(paste0(img_sur, '06', '.png'), y = sdg_id.y[6], scale = 0.9) +
+  draw_image(paste0(img_sur, '07', '.png'), y = sdg_id.y[7], scale = 0.9) +
+  draw_image(paste0(img_sur, '08', '.png'), y = sdg_id.y[8], scale = 0.9) +
+  draw_image(paste0(img_sur, '09', '.png'), y = sdg_id.y[9], scale = 0.9) +
+  draw_image(paste0(img_sur, 10, '.png'),   y = sdg_id.y[10], scale = 0.9) +
+  draw_image(paste0(img_sur, 11, '.png'),   y = sdg_id.y[11], scale = 0.9) +
+  draw_image(paste0(img_sur, 12, '.png'),   y = sdg_id.y[12], scale = 0.9) +
+  draw_image(paste0(img_sur, 13, '.png'),   y = sdg_id.y[13], scale = 0.9) +
+  draw_image(paste0(img_sur, 14, '.png'),   y = sdg_id.y[14], scale = 0.9) +
+  draw_image(paste0(img_sur, 15, '.png'),   y = sdg_id.y[15], scale = 0.9) +
+  draw_image(paste0(img_sur, 16, '.png'),   y = sdg_id.y[16], scale = 0.9) +
+  draw_image(paste0(img_sur, 17, '.png'),   y = sdg_id.y[17], scale = 0.9) #+
+  # draw_image(paste0(img_sur, 18, '.png'), y = 18-.5, scale = 0.9)
+
+### insert the image strip into the bar plot and draw  
+ht_targ <- ggdraw(insert_yaxis_grob(plot = p, grob = pimage, position = "left"))
+
+ht_goal <- goal_n_com %>%
+  mutate(sdg = 'SDG',
+         goal=factor(goal, levels = rev(levels(goal)))
+         ) %>%
+  ggplot(data = ., aes(x = sdg, y = goal)) + 
+  geom_tile(aes(fill = n), colour = "white", 
+            size = tile_size, ## the space between boxes
+            show.legend = T) + 
+  scale_fill_gradient(low = "#c7e9c0",  high = "#00441b", 
+                      na.value = '#ffffd9') + ## #d0d1e6, #023858 
+  theme_minimal() +
+  # theme_bw() +
+  theme(plot.margin = unit(c(0.1, -0.5, 0.1, 0), "cm"))+ # #top, right, bottom, left: 0.1, -0.5, 0.1, 0
+  theme(axis.title = element_blank(),
+        axis.text  =element_blank(),
+        axis.ticks =element_blank(),
+        # panel.background = element_rect(fill = NA),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        # panel.grid.major = element_blank(),
+        # panel.grid.minor = element_line(colour = "red", size = 1)
+        text = element_text(size=font_size)
+        )
+  # theme_ht
+# ht_goal
+# ht_goal + theme_bw()
+# ht_goal + ylab('Frequency of commitments to the Goals (the same color scheme as Fig. 1a)') #+ theme_bw()
+label <- 'Frequency of commitments to the Goals (the same color scheme as Fig. 1a)'
+# ht_goal + geom_text(aes(x = 0, label = label), angle = 90)
+  # labs(tag = "Frequency of commitments to the Goals (the same color scheme as Fig. 1a)") +
+  # theme(plot.tag.position = c(0, 0.1))
+  
+ht_goal
+# grid.text(label = label, x = unit(0, "npc"), y = unit(0.5, "npc"), rot = 90)
+
+
+
+
+### combine the two parts --------------------------------------------------
+library(ggpubr)
+fig1c_ht <- ggarrange(
+  ht_goal + theme(legend.position = "none"), ## color bar  on the left
+  ht_targ,                                   ## color bars on the right
+  nrow = 1, ncol = 2, labels = '', hjust = -0.5, #widths = c(6.8, 2), 
+  widths = c(0.05, 1), font.label = list(size = 5), #vjust = 2,
+  align = 'v', common.legend = F) +
+  font("xy.text", size = 2, color = "gray")
+
+# fig1c_ht
+grid.text(label = label, x = unit(0, "npc"), y = unit(0.5, "npc"), rot = 90)
+
+
+# fname <- paste0(dir.figures, 'Fig1c', suffix, '_new.jpg'); fname
+# ggsave(filename = fname,
+#        plot = last_plot(),
+#        # plot = fig1c_ht, 
+#        width = width_1col, height = width_1col*2400/1650, 
+#        units = unit_ns, dpi = 500)
+
+
+### combine with plot --> bar_goal_n
+# ht2 <- ggarrange(ht_goal, ht_targ, 
+#   nrow = 1, ncol = 2, labels = '', hjust = -0.5, #widths = c(6.8, 2), 
+#   widths = c(0.05, 1), font.label = list(size = 7), #vjust = 2,
+#   align = 'v', common.legend = F)
+```
+
+
+##### - legend
+Try to organize the 4 sub-plots and add legend to the Figure. 
+```{r}
+
+### get legend 
+#### legend of fig 1a -----------------------------------------------------------------------
+f1a <- bar_goal_n + 
+  theme(legend.position = c(0.6, 0.4), 
+        legend.spacing.y = unit(0.1,"cm"), 
+        legend.key.height = unit(1,"line"),
+        legend.key.size = unit(0.7, "line")) 
+legend_1a <- get_legend(f1a) 
+
+
+
+#### legend of fig 1c -----------------------------------------------------------------------
+f1c_forlegend <- p_pct_com_level + 
+  theme_ns +
+  theme(
+    panel.grid.major.x = element_blank(),
+    legend.background = element_rect(fill="transparent"),
+    text = element_text(size=font_size),
+    
+    # axis.line = element_line(size = .25),
+    legend.box.just = "left",
+    
+    legend.position = c(0.5, 0.35), 
+    # legend.spacing.y = unit(0,"line"),
+    # legend.key = element_rect(size = 10, colour = NA, fill = NA),
+    # legend.text = element_text(size = 5),
+    # legend.margin = margin(c(0,0,0,0)),
+    
+    # legend.key = element_rect(size = 3, fill = "white", colour = NA),
+    legend.key.size = unit(0.9, "line"))+
+  
+  # guides(fill=guide_legend(
+  #                keywidth=0.2, 
+  #                keyheight=0.2,
+  #                default.unit="inch"))+
+  labs(fill = 'Percent of \ncommitted companies') 
+legend_1c <- get_legend(f1c_forlegend) 
+
+
+
+#### legend of fig 1d ------------------------------------------------------------------------
+names(freq)
+
+#### this data and figure are just used for designing the legend. 
+freq_na <- data.frame(Var1 = NA, Freq = 6, var = NA, lower = NA, 
+                      upper=NA, x=65, pct=NA, xfac=NA, colorlabel=NA)
+freq2 <-rbind(freq, freq_na) %>%
+  dplyr::mutate(colorlabel = factor(colorlabel, levels = colorlabel),
+                colorlabel = factor(colorlabel, levels = rev(levels(colorlabel))))
+  
+levels(freq2$colorlabel)
+
+p_hist_legend2 <- freq2 %>%
+  ggplot(., aes(x = x, y = Freq, label = Freq, fill = colorlabel)) + 
+  geom_bar(stat = "identity", show.legend = T, colour = 'gray90', size = 0.1) +  ## , alpha = 0.8
+  geom_text(nudge_y = 4, size = 2) + 
+  # scale_fill_brewer(palette="Blues", direction = 1) +
+  scale_fill_manual(#values=colors,
+                    # guide = guide_legend(reverse = TRUE),
+                    na.value = "#ffffd9", 
+                    values = colors_rev, 
+                    labels = c(rev(lb), '  0')) + 
+  scale_x_continuous(breaks = seq(0, 70, 10)) +
+  theme_ns +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    # panel.border = element_blank(),
+    axis.line = element_line(size = .25),
+  ) +
+  ylab('Number of targets') +
+  xlab('Percent of committed companies') +
+  labs(fill = 'Percent of \ncommitted companies') 
+p_hist_legend2
+
+
+f1d_forlegend <- p_hist_legend2 + 
+  theme(legend.position = c(0.5, 0.4),
+  legend.spacing.y = unit(0.1,"cm"),
+  legend.key.size = unit(0.8, "line")) +
+  guides(fill=guide_legend(ncol=2))
+  
+legend_1d <- get_legend(f1d_forlegend)
+
+```
+
+
+
+##### combine figures (1cd)
+```{r warning=FALSE}
+
+### combine fig 1d and legends -----------------------------------------------------------
+fig1d_and_legends <- ggarrange(
+  p_hist, ## "fig 1d"
+  ggarrange(legend_1a, legend_1d, ncol = 2, heights = c(1, 1)), 
+  nrow = 2, heights = c(0.7, 0.3))
+fig1d_and_legends
+
+# fname <- paste0(dir.figures, 'test1_new.jpg')
+# ggsave(filename = fname, plot = last_plot(), 
+#        width = width_2col/2, 
+#        height = width_1col*2400/1650 + width_1col*2400/1650/4, 
+#        units = unit_ns, dpi = 500)
+
+
+
+
+#### combine fig 1c, fig 1d, and legends -------------------------------------------------
+heatmap_freq <- ggarrange(
+  fig1c_ht,          ## fig 1c
+  fig1d_and_legends, ## fig 1d and legends
+  
+  ### vertically 
+  # nrow = 2, ncol = 1, labels = c('c', 'd'),
+  # heights = c(4,1), widths = c(1, 0.95), hjust = 0.1,
+  
+  ### horizontally
+  nrow = 1, ncol = 2, labels = c('c', 'd'),
+  heights = c(1, 0.6), widths = c(1, 1), hjust = 0.1,
+  
+  # font.label = list(size = 9, color = "black", face = "bold"),
+  # align = 'h', 
+  common.legend = F) #+ 
+  # font("xy.text", size = 2, color = "white") ## 
+
+# heatmap_freq
+fname <- paste0(dir.figures, 'Fig1cd_', v, '.jpg'); fname
+ggsave(filename = fname,
+       plot = heatmap_freq, 
+       
+       ### vertically ---------------
+       # width = width_1col, height = width_1col*2400/1650 + width_1col*2400/1650/4, 
+       
+       ### horizontally -------------
+       width = width_2col, height = width_1col*2400/1650 + width_1col*2400/1650/4, 
+       
+       units = unit_ns, dpi = 300)
+
+
+### save as pdf
+# fname <- paste0(dir.figures, 'Fig1cd_new.pdf'); fname
+# ggsave(filename = fname,
+#        plot = heatmap_freq,
+#        width = width_2col, height = width_1col*2400/1650 + width_1col*2400/1650/4,
+#        units = unit_ns, dpi = 300)
+```
+
+
+
+
+
+
+
+#### - n_cmt (1ab_extend)
+
+```{r}
+### total/average commitment at target level
+names(targ_n_cmt)
+str(targ_n_cmt)
+hist(targ_n_cmt$cmt_sum)
+
+### total cmt ----------------------------------------------------------------
+# title_text <- expression(paste('Total number of \ncommitments to \nthe targets', (10^3), sep = ''))
+# title_text <- expression(paste('Total number of \ncommitments to \nthe targets',(10^3), sep = ''))
+# title_text <- expression(paste('Total number of \ncommitments to \nthe targets(10'^{x}*')', sep = ''))
+# title_text <- bquote('Total number of\ncommitments to\nthe targets('*10^3*')') ## `~` for white space, `*` for no space
+title_text <- expression('Total number of\ncommitments to\nthe targets(10'^3*')')
+
+p_cmt_sum <- targ_n_cmt %>%
+  as.data.frame() %>%
+  dplyr::mutate(cmt_sum = ifelse(cmt_sum == 0, NA, cmt_sum/1000)) %>%
+  dplyr::mutate(goalname=factor(goalname, levels = rev(levels(goalname)))) %>%
+  
+  ## plot
+  ggplot(data = ., aes(x = target_id_un2, y = goalname)) + 
+  geom_tile(aes(fill = cmt_sum), colour = "white", 
+            size = tile_size, ## the space between boxes
+            show.legend = T) + 
+  geom_text(aes(label = target_id_un2), size = 2) +
+  scale_fill_distiller(direction = 1, na.value = '#ffffd9') +
+  # scale_fill_gradient(low = "#c6dbef",  high = "#08306b", guide = 'colourbar',
+  #                     na.value = '#ffffd9') + ## #d0d1e6, #023858 
+  labs(fill = title_text)+
+  theme_minimal() +
+  theme(plot.margin = unit(c(0.1, 0, 0.1, -.5), "cm"),
+        legend.text = element_text(vjust = 0),
+        legend.text.align = 0,
+        legend.position="bottom", 
+        legend.key.width = unit(1, "line"),
+        legend.key.size = unit(0.8, "line"))+ 
+  theme_ht +
+  guides(fill = guide_colourbar(
+    label.position = "bottom",
+    title.vjust = -0.2,
+    title.position = "left"))
+p_cmt_sum
+legend_1a_ex <- get_legend(p_cmt_sum) 
+
+
+
+### average ------------------------------------------------------------------
+p_cmt_avg <- targ_n_cmt %>%
+  as.data.frame() %>%
+  mutate(goalname=factor(goalname, levels = rev(levels(goalname)))) %>%
+  ggplot(data = ., aes(x = target_id_un2, y = goalname)) + 
+  geom_tile(aes(fill = cmt_avg), colour = "white", 
+            size = tile_size, ## the space between boxes
+            show.legend = T) + 
+  geom_text(aes(label = target_id_un2), size = 2) +
+  scale_fill_gradient(#low = "#c6dbef",  high = "#08306b", 
+                      low = "#bcbddc",  high = "#3f007d", 
+                      na.value = '#ffffd9') + ## #d0d1e6, #023858 
+  labs(fill = 'Average number of \ncommitments to \nthe targets')+
+  theme_minimal() +
+  theme(plot.margin = unit(c(0.1, 0, 0.1, -.5), "cm"),
+        legend.position ="bottom", 
+        legend.key.width = unit(1, "line"),
+        legend.key.size  = unit(0.8, "line")) + 
+  theme_ht
+p_cmt_avg
+legend_1b_ex <- get_legend(p_cmt_avg)
+
+### choose one ---------------------------------------------------------------
+# p <- p_cmt_sum; suffix <- '_sum'
+# p <- p_cmt_avg; suffix <- '_avg'
+
+
+pimage_sum <- axis_canvas(plot = p_cmt_sum, axis = 'y') + 
+  draw_image(paste0(img_sur, '01', '.png'), y = sdg_id.y[1], scale = 0.9) +
+  draw_image(paste0(img_sur, '02', '.png'), y = sdg_id.y[2], scale = 0.9) +
+  draw_image(paste0(img_sur, '03', '.png'), y = sdg_id.y[3], scale = 0.9) +
+  draw_image(paste0(img_sur, '04', '.png'), y = sdg_id.y[4], scale = 0.9) +
+  draw_image(paste0(img_sur, '05', '.png'), y = sdg_id.y[5], scale = 0.9) +
+  draw_image(paste0(img_sur, '06', '.png'), y = sdg_id.y[6], scale = 0.9) +
+  draw_image(paste0(img_sur, '07', '.png'), y = sdg_id.y[7], scale = 0.9) +
+  draw_image(paste0(img_sur, '08', '.png'), y = sdg_id.y[8], scale = 0.9) +
+  draw_image(paste0(img_sur, '09', '.png'), y = sdg_id.y[9], scale = 0.9) +
+  draw_image(paste0(img_sur, 10, '.png'),   y = sdg_id.y[10], scale = 0.9) +
+  draw_image(paste0(img_sur, 11, '.png'),   y = sdg_id.y[11], scale = 0.9) +
+  draw_image(paste0(img_sur, 12, '.png'),   y = sdg_id.y[12], scale = 0.9) +
+  draw_image(paste0(img_sur, 13, '.png'),   y = sdg_id.y[13], scale = 0.9) +
+  draw_image(paste0(img_sur, 14, '.png'),   y = sdg_id.y[14], scale = 0.9) +
+  draw_image(paste0(img_sur, 15, '.png'),   y = sdg_id.y[15], scale = 0.9) +
+  draw_image(paste0(img_sur, 16, '.png'),   y = sdg_id.y[16], scale = 0.9) +
+  draw_image(paste0(img_sur, 17, '.png'),   y = sdg_id.y[17], scale = 0.9) #+
+  # draw_image(paste0(img_sur, 18, '.png'), y = 18-.5, scale = 0.9)
+
+pimage_avg <- axis_canvas(plot = p_cmt_avg, axis = 'y') + 
+  draw_image(paste0(img_sur, '01', '.png'), y = sdg_id.y[1], scale = 0.9) +
+  draw_image(paste0(img_sur, '02', '.png'), y = sdg_id.y[2], scale = 0.9) +
+  draw_image(paste0(img_sur, '03', '.png'), y = sdg_id.y[3], scale = 0.9) +
+  draw_image(paste0(img_sur, '04', '.png'), y = sdg_id.y[4], scale = 0.9) +
+  draw_image(paste0(img_sur, '05', '.png'), y = sdg_id.y[5], scale = 0.9) +
+  draw_image(paste0(img_sur, '06', '.png'), y = sdg_id.y[6], scale = 0.9) +
+  draw_image(paste0(img_sur, '07', '.png'), y = sdg_id.y[7], scale = 0.9) +
+  draw_image(paste0(img_sur, '08', '.png'), y = sdg_id.y[8], scale = 0.9) +
+  draw_image(paste0(img_sur, '09', '.png'), y = sdg_id.y[9], scale = 0.9) +
+  draw_image(paste0(img_sur, 10, '.png'),   y = sdg_id.y[10], scale = 0.9) +
+  draw_image(paste0(img_sur, 11, '.png'),   y = sdg_id.y[11], scale = 0.9) +
+  draw_image(paste0(img_sur, 12, '.png'),   y = sdg_id.y[12], scale = 0.9) +
+  draw_image(paste0(img_sur, 13, '.png'),   y = sdg_id.y[13], scale = 0.9) +
+  draw_image(paste0(img_sur, 14, '.png'),   y = sdg_id.y[14], scale = 0.9) +
+  draw_image(paste0(img_sur, 15, '.png'),   y = sdg_id.y[15], scale = 0.9) +
+  draw_image(paste0(img_sur, 16, '.png'),   y = sdg_id.y[16], scale = 0.9) +
+  draw_image(paste0(img_sur, 17, '.png'),   y = sdg_id.y[17], scale = 0.9) #+
+
+## insert the image strip into the bar plot and draw  
+ht_targ_sum <- ggdraw(insert_yaxis_grob(plot = p_cmt_sum + theme(legend.position = "none"), 
+                                        grob = pimage_sum, position = "left"))
+ht_targ_avg <- ggdraw(insert_yaxis_grob(plot = p_cmt_avg + theme(legend.position = "none"),
+                                        grob = pimage_avg, position = "left"))
+
+# ht_goal <- goal_n_com %>%
+#   mutate(sdg = 'SDG',
+#          goal=factor(goal, levels = rev(levels(goal)))) %>%
+#   ggplot(data = ., aes(x = sdg, y = goal)) + 
+#   geom_tile(aes(fill = n), colour = "white", 
+#             size = tile_size, ## the space between boxes
+#             show.legend = F) + 
+#   scale_fill_gradient(low = "#c7e9c0",  high = "#00441b", 
+#                       na.value = '#ffffd9') + ## #d0d1e6, #023858 
+#   theme_minimal() +
+#   # theme_bw() +
+#   theme(plot.margin = unit(c(0.1, -0.5, 0.1, 0), "cm"))+ # #top, right, bottom, left
+#   theme_ht
+# ht_goal
+  
+### combine the two parts
+ht_sum <- ggarrange(ht_goal+ theme(legend.position = "none"), 
+                    ht_targ_sum, 
+  nrow = 1, ncol = 2, labels = '', hjust = -0.5, #widths = c(6.8, 2), 
+  widths = c(0.05, 1), font.label = list(size = 5), #vjust = 2,
+  align = 'v', common.legend = F) +
+  font("xy.text", size = 2, color = "gray")
+ht_sum
+ht_avg <- ggarrange(ht_goal+ theme(legend.position = "none"), 
+                    ht_targ_avg, 
+  nrow = 1, ncol = 2, labels = '', hjust = -0.5, #widths = c(6.8, 2), 
+  widths = c(0.05, 1), font.label = list(size = 5), #vjust = 2,
+  align = 'v', common.legend = F) +
+  font("xy.text", size = 2, color = "gray")
+# ht_avg
+
+
+
+
+### save one single image ------------------------------------------------------------------
+# fname <- paste0(dir.figures, 'target_commitment_heatmap', suffix, '_new.jpg'); fname
+# ggsave(filename = fname,
+#        plot = ht_avg, width = width_1col, height = width_1col+2, 
+#        units = unit_ns, dpi = 500)
+
+
+### save combined images ---------------------------------------------------------
+f1a_h <- f1a + theme(legend.position="bottom", legend.key.width = unit(1, "line"),
+                     legend.key.height = unit(0.8, "line")) +
+  # labs(fill = 'Average number of \ncommitments to \nthe targets')+
+  labs(fill = (expression('Frequency of\ncommitments to\nthe goals (10'^{italic(x)}*') '))) +
+  # labs(fill = bquote('Frequency of \ncommitments to \nthe goals ('*10^x*')')) +
+  guides(fill = guide_colourbar(
+    label.position = "bottom",
+    title.vjust = -0.2,
+    title.position = "left"))
+f1a_h
+legend_1a_h <- get_legend(f1a_h)
+
+fig_1ab_ex_legend <- ggarrange(legend_1a_ex, legend_1a_h, legend_1b_ex, ncol = 3, heights = c(1, 1, 1))
+
+fig_1ab_ex_plot <- ggarrange(
+  ht_sum, ht_avg, nrow = 1, ncol = 2, labels = 'auto', align = 'h', hjust = 0.1)
+
+fig_1ab_ex <- ggarrange(fig_1ab_ex_plot, fig_1ab_ex_legend, labels = '', nrow = 2, heights = c(1, 0.1))
+
+
+### save plot - png
+fname <- paste0(dir.figures, 'Extended Data Fig_1ab_', v, '.jpg'); fname
+ggsave(filename = fname,
+       plot = fig_1ab_ex, width = width_2col, height = width_1col+3, 
+       units = unit_ns, dpi = 500)
+
+### save plot - pdf
+# fname <- paste0(dir.figures, 'Extended Data Fig_1ab_new.pdf'); fname
+# ggsave(filename = fname,
+#        plot = fig_1ab_ex, width = width_2col, height = width_1col+4, 
+#        units = unit_ns, dpi = 500)
+```
+
+
+
+### 3.2 Map of companies 
+
+#### - Number of companies map
+
+  Total number of companies in each country
+    
+##### - all the 500 companies that they selected
+
+```{r}
+#### 1) consider all selected companies --------------------------------------------
+# com_list_all  <- com700 %>% distinct(Company, iso3, Continent, ind)
+com_list_all  <- com_final %>% 
+  dplyr::mutate(Continent = region) %>%
+  dplyr::distinct(company_name, iso3, region, Continent)
+
+n.com.country <- com_list_all %>%
+  group_by(iso3, region, Continent) %>% tally() %>% 
+  arrange(iso3, region, Continent, n) %>%
+  ungroup() 
+
+### total number of companies in each country
+n_com_percountry <- n.com.country %>%
+  dplyr::mutate(n_com_ctr = n) %>%
+  dplyr::select(-c(n, Continent))
+```
+
+
+##### - only the companies that have data
+```{r}
+##### 2) consider only the companies that have coding data -------------------------
+# n_com_percountry <- n.com.country %>%
+#   mutate(n_com_ctr = n) %>%
+#   select(-c(n, Continent))
+```
+
+
+
+#####-  map (SI_Fig_3)
+```{r}
+sum(n.com.country$n)
+
+legend.title <- 'Number of\ncompanies'
+shp_n.co <- merge(x = shp,
+                  y = n.com.country, ### the 500 company list
+                  by.x='iso_a3', by.y = 'iso3', all.x = T) %>%
+  filter(name != 'Antarctica')
+                  
+
+library(RColorBrewer)
+library(classInt)
+
+col.n <- c(
+  '#ffffe5','#f7fcb9', '#d9f0a3', '#addd8e',
+  '#78c679', '#41ab5d', '#238443', '#006837', '#004529'
+)
+ 
+nclass = 8
+classint <- classIntervals(shp_n.co$n, n = nclass, style = "quantile") 
+## "jenks"; quantile
+classint
+brks <- c(unique(round(classint$brk))); brks
+# brks <- c(1,2,3,5,10,15, 110, 158)
+# brks #approximate quantiles
+labs <- c() 
+for (i in 1:length(brks)) {
+  # print(i)
+  m <- paste0(brks[i], ' - ', brks[i+1]); print(m)
+  labs <- c(labs, m)
+}
+labs <- labs[-length(labs)]; labs
+length(brks)
+length(labs)
+
+
+df.t3 <- shp_n.co %>% 
+  mutate(breaks = cut(n, breaks=brks, labels=labs, include.lowest = T)) %>% 
+  drop_na(n) %>%
+  st_drop_geometry()
+
+(map.co <- shp_n.co %>% 
+    mutate(breaks = cut(n, breaks=brks, labels=labs, include.lowest = T),
+           value = breaks) %>%
+    ggplot() + 
+    geom_sf(aes(fill = value), color='gray70', size = 0.1) +
+    scale_fill_brewer('', palette = "YlGnBu") +
+    theme_ns +
+    theme_map +
+    guides(fill = guide_legend(label.hjust = 0, label = T,
+                               reverse = T, title = legend.title)) +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      # panel.border = element_rect(colour = 'transparent'),
+      panel.border = element_blank(),
+    )+
+    theme(legend.position = c(0.09, 0.3))
+)
+
+getwd()
+dir.figures
+# fname <- paste0(dir.figures, 'map__Company_Number_new.jpg'); fname
+# ggsave(fname, map.co, width = width_2col, height = width_2col/2, units = 'cm', dpi = 300)
+
+
+### combine 
+ggarrange(p.n.byCountry, map.co, #heights = c(0.7, 1),
+          nrow = 2, ncol = 1, align = 'v', labels = panel_labels, 
+          common.legend = F) ## , legend = 'none'
+fname <- paste0(dir.figures, 'SM_Fig3_num of com by ctr_', v, '.jpg'); fname
+ggsave(fname, plot = last_plot(), width = width_2col, height = width_2col, units = unit_ns, dpi = 300)
+
+
+### way #2 ---------------------------------------------------------------------
+# myPalette <- colorRampPalette((brewer.pal(9, "Blues")))
+# ## rev(brewer.pal(11, "RdBu")); RdYlGn; RdBu; YlGn
+# sc <- scale_fill_gradientn(colours = myPalette(50), 
+#                            breaks = brks,
+#                            na.value ='gray90', 
+#                            limits=c(0, 110))
+#
+# (map.co <- ggplot(data = shp_n.co) +
+#     geom_sf(aes(fill = n)) + theme_bw() +
+#     sc +
+#     guides(fill = guide_legend())
+    # scale_fill_gradientn(colors=pal, breaks=seq, na.value ='gray60', limits=c(min,max))
+  # )
+```
+
+
+
+  (1) first, we would like to know in each country, what is the percentage of companies who are committing to each goal;
+  (2) second, we would like to know how they prioritize the goals, reflecting by the average number of statements they made. 
+
+
+
+####  - Cmt and pct map data
+##### - cmt map data
+```{r}
+### data (2) -----------------------------------------
+names(df)
+cmt_mean_goal <- df %>%
+  dplyr::select(Company, iso3,
+                goal, Target_id, n_statement) %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  arrange(goal, Company, iso3) %>%
+  group_by(iso3, Company, goal) %>%
+  ### the total number of commitment statement to each goal by each company
+  dplyr::summarise(n_cmt = sum(n_statement, na.rm = T)) %>%
+  ### the average number of commitment statement to each goal in each country
+  ungroup() %>%
+  group_by(iso3, goal) %>%
+  dplyr::summarise(n_cmt_mean = mean(n_cmt, na.rm = T)) %>%
+  arrange(iso3, goal)
+
+
+### plot ----------------------------------------------------------------
+### color and breaks
+hist(cmt_mean_goal$n_cmt_mean)
+summary(cmt_mean_goal$n_cmt_mean)
+
+nclass = 10
+classint <- classIntervals(cmt_mean_goal$n_cmt_mean, 
+                           n = nclass, style = "quantile") #"jenks"; quantile
+classint
+brks <- c(unique(as.integer(classint$brk))); brks
+
+myPalette <- colorRampPalette((brewer.pal(8, "YlGnBu")));# myPalette; rev
+colors <- myPalette(length(brks)); colors
+colors_3c_ex <- colors
+
+### brks #approximate quantiles
+# labs <- brks[-length(brks)]; labs
+labs <- brks[-1]; labs
+# length(brks)
+# length(labs)
+# brks <- brks* 1.1; brks
+
+
+cmt_mean_goal_brk <- cmt_mean_goal %>% 
+  ### change the original values to interval value levels 
+  mutate(n_cmt_mean_class = cut(x = (n_cmt_mean), breaks=brks, 
+                               labels=labs,
+                               include.lowest = T)) %>% 
+  select(-n_cmt_mean) %>%
+  spread(key = goal, value = n_cmt_mean_class) %>%
+  as.data.frame()
+  # drop_na(n)
+str(cmt_mean_goal_brk)
+  
+### link the data to shapefile
+cmt_mean_goal_brk_shp <- 
+  merge(x = shp, y = cmt_mean_goal_brk, 
+        by.x='iso_a3', by.y = 'iso3', all.x = T) %>%
+  # st_drop_geometry() %>%
+  filter(name != 'Antarctica') %>%
+  dplyr::rename(iso3 = iso_a3)
+# head(cmt_mean_goal_brk_shp)
+str(cmt_mean_goal_brk_shp)
+names(cmt_mean_goal_brk_shp)
+
+
+cmt_mean_goal_brk_shp_map <- cmt_mean_goal_brk_shp %>% 
+  # st_drop_geometry() %>%
+  gather(key = 'goal', 'n_cmt_mean_class', SDG1:SDG17) %>%
+  dplyr::filter(!is.na(goal)) %>%
+  dplyr::mutate(
+    # pt    = st_centroid(st_geometry(.)),
+    n_cmt_mean_class = as.numeric(n_cmt_mean_class),
+    n_cmt_mean_class_factor =factor(n_cmt_mean_class, 
+                                    levels = sort(unique(n_cmt_mean_class))),
+    goal = factor(goal, levels = unique(goal))
+    ) %>%
+  dplyr::mutate(
+    lon = map_dbl(geometry, ~st_point_on_surface(.x)[[1]]),
+    lat = map_dbl(geometry, ~st_point_on_surface(.x)[[2]])) 
+str(cmt_mean_goal_brk_shp_map)
+length(unique(cmt_mean_goal_brk_shp_map$iso3))
+names(cmt_mean_goal_brk_shp_map)
+```
+
+
+
+
+#####  - pct maps data
+```{r include=FALSE}
+### the number of companies that committed to each goal 
+n_com_goal_country <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::distinct(iso3, goal, Company, .keep_all = T) %>%
+  group_by(iso3, goal) %>%
+  tally(name = 'n_com_goal_country')
+  
+
+### double-check 
+test2 <- df %>%
+  dplyr::filter(iso3 == 'CHN') %>%
+  arrange(Company, goal)
+
+
+### the percentage of companies that committed to each goal, for one country
+pct_com_goal_country <- n_com_goal_country %>%
+  left_join(., n_com_percountry, 'iso3') %>%
+  dplyr::mutate(pct_com_goal_country = n_com_goal_country/n_com_ctr*100) %>%
+  arrange(iso3, goal) %>%
+  dplyr::select(-c(n_com_goal_country)) %>% ## , n_com_ctr
+  dplyr::mutate(pct_com_goal_ctr_class = 
+           cut(x = (pct_com_goal_country), 
+               breaks = seq(0,  100, 20), 
+               labels = seq(20, 100, 20),
+               include.lowest = T),
+         pct_com_goal_ctr_num = as.numeric(as.character(pct_com_goal_ctr_class))) %>%
+  as.data.frame()
+names(pct_com_goal_country)
+str(pct_com_goal_country)
+
+
+##### - both data
+nrow(cmt_mean_goal_brk_shp_map)
+nrow(pct_com_goal_country)
+# nrow(pct_com_goal_country_shp)
+
+data_both <- 
+  merge(x = cmt_mean_goal_brk_shp_map, 
+        y = pct_com_goal_country, 
+        by = c('iso3', 'goal'), all = T) #%>%  
+  # filter(goal == 'SDG3') ### test
+
+names(data_both)
+str(data_both)
+unique(data_both$pct_com_goal_ctr_class)
+unique(data_both$n_cmt_mean_class_factor)
+```
+
+
+###### - map of cmt number (3c.exd)
+```{r}
+p_cmt_goal_ctr <- data_both %>%  
+  ### plot
+  ggplot(data = .) + 
+  # geom_sf(aes(fill = n_cmt_mean_class_factor),
+  #         color='gray80', size = 0.1) +
+  geom_sf(aes(fill = n_cmt_mean_class_factor),
+          color='gray80', size = 0.1) +
+  # geom_sf(fill = 'gray80',color='gray80', size = 0.1) +
+  # geom_point(data = subset(data_both, !is.na(n_cmt_mean_class)),
+  #            mapping =
+  #              aes(x=lon, y = lat,
+  #                  size  = pct_com_goal_ctr_num,
+  #                  color = (n_cmt_mean_class)),
+  #            alpha = 0.8) +
+  # scale_size_area(breaks=seq(0, 1, 0.2))+
+  # scale_size(breaks=seq(0.2, 1, 0.2)) +
+  # scale_color_gradient(low="red", high="blue", 
+  #                      guide = 'colourbar', space = 'Lab') +
+  scale_fill_manual(values = colors_3c_ex, na.value = "gray70") +
+  theme_bw() +
+  facet_wrap(~goal, ncol = 3) +
+  guides(fill = guide_legend(label.hjust = 0, label = T, 
+                             # direction = 'horizontal',
+                             # nrow = 1,
+                             reverse = F, 
+                             title = 'SDG commitments')) +
+  theme_map + 
+  theme(legend.position = c(0.8, 0.08)) +
+  theme(strip.background = element_blank(),
+        # legend.direction="horizontal"
+        )
+# p_cmt_goal_ctr
+p_cmt_goal_ctr <- ggarrange(p_cmt_goal_ctr, labels = 'c')
+width_2col  
+
+fname <- paste0(dir.figures, 'Extended Data Fig_3c_map_cmt_by_goal_', v, '.jpg'); fname
+ggsave(fname, plot = p_cmt_goal_ctr, 
+       width = width_2col, height = width_2col, units = unit_ns, dpi = 600)
+
+
+### pdf
+# fname <- gsub('\\.jpg', '\\.pdf', fname); fname
+# ggsave(fname, plot = p_cmt_goal_ctr, width = width_2col, height = width_2col, units = unit_ns)
+
+```
+
+
+
+
+###### - map of pct (3a.ext)
+```{r}
+myPalette <- colorRampPalette((brewer.pal(5, "Blues")));# myPalette; rev
+colors <- myPalette(5); colors
+
+names(data_both)
+str(data_both)
+
+p_pct_com_goal_ctr <- data_both %>%  
+  ### remove countries with < 5 companies
+  # mutate(pct_com_goal_ctr_class=
+  #          ifelse(n_com_ctr<5, NA, pct_com_goal_ctr_num),
+  #        pct_com_goal_ctr_class=as.factor(
+  #          as.character(pct_com_goal_ctr_class))) %>%
+  # # st_drop_geometry() %>%
+  # arrange(desc(n_com_ctr)) %>%
+  
+  ### plot
+  ggplot(data = .) + 
+  # geom_sf(aes(fill = n_cmt_mean_class_factor),
+  #         color='gray80', size = 0.1) +
+  geom_sf(aes(fill = pct_com_goal_ctr_class),
+          color='gray80', size = 0.1) +
+  scale_fill_manual(values = colors, na.value = "gray70") +
+  theme_bw() +
+  facet_wrap(~goal, ncol = 3) +
+  guides(fill = guide_legend(label.hjust = 0, label = T, 
+                             # direction = 'horizontal',
+                             # nrow = 1,
+                             reverse = F, 
+                             title = '% of the companies')) +
+  theme_map + 
+  theme(legend.position = c(0.8, 0.08)) +
+  theme(strip.background = element_blank(),
+        # legend.direction="horizontal"
+        )
+# p_pct_com_goal_ctr
+# str(map_cmt_mean_goal)  
+
+fig_3a_ex <- ggarrange(p_pct_com_goal_ctr, labels = 'a')
+  
+fname <- paste0(dir.figures, 'Extended Data Fig_3a_', v, '.jpg'); fname
+ggsave(fname, plot = fig_3a_ex, width = width_2col, 
+       height = width_2col, units = unit_ns, dpi = 600)
+
+### pdf
+# fname <- paste0(dir.figures, 'Extended Data Fig_3a_new.pdf'); fname
+# ggsave(fname, plot = fig_3a_ex, width = width_2col, 
+#        height = width_2col, units = unit_ns, dpi = 600)
+```
+
+
+
+###### - map of pct, n_com >= 5 (3a)
+  Only map countries with more than 5 companies, as some of the country only have 1 company. 
+```{r}
+p_pct_com_goal_ctr5 <- data_both %>%  
+  # st_drop_geometry() %>%
+  arrange(desc(n_com_ctr)) %>%
+  ### remove countries with < 5 companies
+  dplyr::mutate(
+    pct_com_goal_ctr_class=
+      ifelse(n_com_ctr < 5, NA, pct_com_goal_ctr_num),
+    pct_com_goal_ctr_class=factor(
+      pct_com_goal_ctr_class,
+      levels = seq(20, 100, 20))) %>%
+  arrange(desc(n_com_ctr)) %>%
+# str(p_pct_com_goal_ctr5)
+  
+  ### plot
+  ggplot(data = .) + 
+  # geom_sf(aes(fill = n_cmt_mean_class_factor),
+  #         color='gray80', size = 0.1) +
+  geom_sf(aes(fill = pct_com_goal_ctr_class),
+          color='gray80', size = 0.1) +
+  scale_fill_manual(values = colors, na.value = "gray70") +
+  theme_bw() +
+  facet_wrap(~goal, ncol = 3) +
+  guides(fill = guide_legend(label.hjust = 0, label = T, 
+                             # direction = 'horizontal',
+                             # nrow = 1,
+                             reverse = F, 
+                             title = '% of the companies')) +
+  theme_map + 
+  theme(legend.position = c(0.8, 0.08)) +
+  theme(strip.background = element_blank(),
+        # legend.direction="horizontal"
+        )
+# p_pct_com_goal_ctr5
+# map_cmt_mean_goal
+# str(map_cmt_mean_goal)  
+  
+fname <- paste0(dir.figures, 'Fig3a_map_cmt_pctCom_by_goal_5moreCom_', v, '.png'); fname
+ggsave(fname, plot = p_pct_com_goal_ctr5, width = width_2col, height = width_2col, units = unit_ns, dpi = 900)
+```
+
+
+
+##### - ctr with most com
+  Look at the countries with large number of companies. 
+```{r include=FALSE}
+sum(n.com.country$n) ## 500
+
+ctr_most_com <- n.com.country %>%
+  arrange(desc(n)) %>%
+  # mutate(iso3 = replace(iso3, iso3=='HKG', 'CHN')) %>% ## Hong Kong change as China
+  group_by(iso3, region) %>%  ## Continent
+  dplyr::summarise(n = sum(n, na.rm = T)) %>%
+  arrange(desc(n)) %>%
+  dplyr::filter(n>=7|iso3 %in% c('HKG', 'CHN'))
+
+ctr_most_ls <- unique(ctr_most_com$iso3); ctr_most_ls
+
+p_pct_com_goal_ctr_most <- data_both %>%  
+  st_drop_geometry() %>%
+  arrange(desc(n_com_ctr)) %>%
+  dplyr::filter(!is.na(n_com_ctr)) %>%
+  dplyr::filter(iso3 %in% ctr_most_ls) ## choose ctr with most coms
+  
+  ### remove countries with < 5 companies
+  # dplyr::mutate(
+  #   pct_com_goal_ctr_class=
+  #     ifelse(n_com_ctr<5, NA, pct_com_goal_ctr_num),
+  #   pct_com_goal_ctr_class=factor(
+  #     pct_com_goal_ctr_class,
+  #     levels = seq(20, 100, 20))) %>%
+  # arrange(desc(n_com_ctr)) %>%
+```
+
+
+
+
+
+
+
+### 3.3 Goals complex heatmap
+#### - data
+```{r}
+# statements by company by goal -------------------------------------------
+goal_wide <- df %>%
+  dplyr::group_by(Company, iso3, Region, ind, goal) %>%
+  dplyr::summarise(num_total = sum(n_statement, na.rm = T)) %>%
+  spread(key = goal, value = num_total) %>%
+  as.data.frame()
+
+goal_long <- df %>%
+  dplyr::group_by(Company, iso3, Region, ind, goal) %>%
+  dplyr::summarise(num_total = sum(n_statement, na.rm = T)) %>%
+  arrange(Region, iso3) %>% ungroup() %>%
+  dplyr::mutate(id = row_number())
+
+hist(goal_long$num_total)
+str(goal_long)
+
+
+# Color Brewer palette
+library(viridis)
+library(hrbrthemes)
+
+## heatmap plot
+p.heatmap <- goal_long %>% 
+    filter(goal !='SDG', 
+           goal !='noSDG') %>%
+    ggplot(aes(x = goal, y =reorder(Company, id), fill= log2(num_total))) + 
+    geom_tile() +
+    
+    scale_fill_viridis(discrete=FALSE) +
+    theme_ipsum(grid="X", axis = 'XY')+
+    # theme_bw()
+    # theme_ipsum_rc(grid="X")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+# p.heatmap + facet_wrap(~Region, scales = 'free_y')
+  
+getwd()
+fname <- paste0(dir.figures, 'statement_by company_by goal_new.jpg'); fname
+# ggsave(pname, p.heatmap, width = 20, height = 20, units = 'in', dpi = 300)
+
+```
+
+
+
+#### - parameters
+```{r include=FALSE}
+# Create the heatmap annotation
+library(ComplexHeatmap)
+### parameters for legend setting -------------------------------------
+width_bar <- 2
+font_size <- 6.5
+
+
+hist(goal_long$num_total)
+### to use class levels? ---------------------------------------------------
+nclass = 10
+classint_qt <- classIntervals(goal_long$num_total, n=nclass, style="quantile");
+classint_qt
+### look at the data distribution and cut location
+pal <- c("red", "blue") #'yellow', 
+plot(classint_qt, pal=pal, main="Quantile")
+### breaks based on 'Quantile'
+classint    <- classint_qt
+brks <- unique(classint$brks); brks
+length(brks)
+### add pct level column
+goal_long_class <- goal_long %>%
+  dplyr::mutate(
+    cmt_level = cut(num_total, breaks = brks, 
+                    # labels = NULL, 
+                    labels = brks[-length(brks)],
+                    include.lowest = T, 
+                    right = T, dig.lab = 2))
+unique(goal_long_class$cmt_level)
+str(goal_long_class)
+
+df_ht1 <- (goal_long_class) %>% 
+  as.data.frame() %>% 
+  # dplyr::filter(goal != 'noSDG') %>%
+  select(-c(id, num_total)) %>%
+  dplyr::mutate(cmt_level=as.numeric(as.character(cmt_level))) %>%
+  spread(key = 'goal', value= 'cmt_level') %>%
+  dplyr::mutate_at(vars(SDG1:SDG17), funs(replace_na(., 0))) 
+  ### fill data gap NA as 1
+  # dplyr::mutate_all(funs(replace_na(., 0))) ### fill data gap NA as 1
+
+
+
+### ---------------------------------------------------------
+# str(goal_wide)
+# df_ht <- (goal_wide) %>% 
+#   as.data.frame() %>% 
+#   dplyr::mutate_all(funs(replace_na(.,1))) ### fill data gap NA as 1
+
+
+df_ht <- df_ht1
+lv_region <- sort(unique(df_ht$Region)); lv_region
+df_ht$Region <- factor(df_ht$Region, levels = lv_region)
+row.names(df_ht) <- df_ht[,1]
+df_ht = (df_ht[,-1])
+str(df_ht)
+mat1  <- as.matrix(df_ht[, grep("^SDG", colnames(df_ht))])
+# mat1  <- scale(mat1)
+mat1 <- log(mat1+1)
+str(mat1)
+
+SDGnames <- colnames(mat1); SDGnames
+length(SDGnames)
+
+### Define colors for each levels of qualitative variables
+### Define gradient color for continuous variable (mpg)
+### 1. SDG colors
+col_sdg <- c(
+  '#e5243b', '#DDA63A', '#4C9F38', '#C5192D', '#FF3A21',
+  '#26BDE2', '#FCC30B', '#A21942', '#FD6925', '#DD1367',
+  '#FD9D24', '#BF8B2E', '#3F7E44', '#0A97D9', '#56C02B',
+  '#00689D', '#19486A')
+# col_sdg_match <- c(
+#   'SDG1'  = '#e5243b', 'SDG2'  = '#DDA63A', 'SDG3'  = '#4C9F38', 'SDG4'  = '#C5192D', 
+#   'SDG5'  = '#FF3A21', 'SDG6'  = '#26BDE2', 'SDG7'  = '#FCC30B', 'SDG8'  = '#A21942', 
+#   'SDG9'  = '#FD6925', 'SDG10' = '#DD1367', 'SDG11' = '#FD9D24', 'SDG12' = '#BF8B2E', 
+#   'SDG13' = '#3F7E44', 'SDG14' = '#0A97D9', 'SDG15' = '#56C02B', 'SDG16' = '#00689D', 
+#   'SDG17' = '#19486A', 'SDG'   = 'gray50')
+
+col_sdg_match <- SDGnames
+names(col_sdg_match) = col_sdg
+col_sdg_match
+
+
+### Annotations -------------------------------------------------------------
+
+#### ~ with picture ---------------------------------------------------------
+getwd()
+image_png = sort(sample(dir("./Data/data_raw/SDG-Icons-2019_WEB", 
+                            full.names = TRUE), 17))
+# image_png = sample(dir("./data_raw/IcoMoon-Free-master/PNG/64px", 
+#                        full.names = TRUE), 18)
+
+image_png[1:3]
+img_sdg_match <- SDGnames; img_sdg_match
+names(img_sdg_match) <- image_png
+img_sdg_match
+# ha_png = HeatmapAnnotation(
+#   df = data.frame(SDGs = SDGnames), 
+#   png = anno_image(image_png))
+
+
+# Heatmap(matrix = mat1, 
+#         top_annotation = HeatmapAnnotation(image_png = anno_image(image_png)))
+
+
+#### ~ with colors ---------------------------------------------------
+ha_sdg = HeatmapAnnotation(
+  # df = data.frame(SDGs = SDGnames),
+  # col = list(SDGs = col_sdg_match),
+  img = anno_image(image = image_png, which = 'column', 
+                   border = F, space = unit(0.1, "mm")),
+  annotation_name_offset = unit(0.1, "mm"), simple_anno_size_adjust = T,
+  # annotation_height = unit(width_bar, "mm"), 
+  # annotation_width  = unit(width_bar, "mm"),
+  
+  # simple_anno_size  = unit(width_bar, "mm"),
+  
+  show_legend = F, 
+  show_annotation_name = F,
+  height = unit((width_bar + 1)*180/88, "mm"), 
+  annotation_height = unit((width_bar + 1)*180/88, "mm"),
+  # width  = unit(width_bar + 1, "mm"),
+  annotation_name_side = 'left', 
+  annotation_name_gp = gpar(fontsize = font_size))
+
+#### ~ with boxplot ----------------------------------------------------- 
+ha_boxplot = HeatmapAnnotation(
+  boxplot = anno_boxplot(x = mat1, axis = TRUE, 
+                         axis_param = list(side = 'right'),
+                         size = unit(width_bar * 1, "mm"), 
+                         outline = F), 
+  show_annotation_name = F, 
+  height = unit(width_bar*6, "mm")
+  # annotation_height = unit(20, "mm")) ## outlier points
+)
+
+
+#### ~ Row annotations - region ----------------------------------------------- 
+# ls_regions <- c("Asia Pacific", 'Africa', 'Americas', 'Europe')
+ls_regions <- lv_region; ls_regions
+col_regions<- c('#cccccc', '#f0f0f0')
+col_Region = c("Asia Pacific" = "#d7191c",  ## red
+               'Africa'       = 'yellow',  ## light orange
+               'Americas'     = "green",  ## dark green
+               'Europe'       = 'blue')  ## blue
+col_Region
+names(col_Region)
+# ha_region = rowAnnotation(
+#   df = data.frame(Region = unique(df_ht$Region)),
+#   annotation_height = unit(width_bar, "mm"), 
+#   col = list(Region = col_Region))
+
+ha_block <- rowAnnotation(
+  Region = anno_block(
+    gp = gpar(fill = col_regions, 
+              col = NA, ## remove the border color
+              fontsize = font_size), 
+    width = unit(width_bar, "mm"),
+    show_name = T, 
+    # name_gp = gpar(fontsize = 14), 
+    # labels_gp = gpar(fontsize = 8),
+    # name = 'Region',
+    labels = ls_regions,
+    labels_gp = gpar(col = "black", fontsize = font_size)),
+  # fontsize = font_size,
+  annotation_name_gp = gpar(fontsize = font_size),
+  width = unit(width_bar, "mm")
+  )
+
+
+#### ~ Row annotations - industry --------------------------------------------- 
+ls_industry <- sort(unique(df_ht$ind)); ls_industry
+num <- length(ls_industry); num
+
+# colors
+col_industry <- circlize::rand_color(n = num, luminosity = 'bright'); length(col_industry)
+myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")));# myPalette
+col_industry <- myPalette(num); col_industry
+### CHANGE: may choose some plain colors
+col_industry = c( 
+  ##https://colorbrewer2.org/#type=sequential&scheme=Purples&n=7
+  '#f2f0f7','#dadaeb','#bcbddc','#9e9ac8','#807dba','#6a51a3','#4a1486')
+col_industry = c( 
+  ## https://colorbrewer2.org/#type=diverging&scheme=PuOr&n=7
+  '#b35806','#f1a340','#fee0b6','#ffffbf','#d8daeb','#998ec3','#542788')
+## https://colorbrewer2.org/#type=sequential&scheme=Oranges&n=8
+col_industry = c(
+  '#fff5eb','#fee6ce','#fdd0a2','#fdae6b','#fd8d3c','#f16913','#d94801','#8c2d04'
+  )
+
+names(col_industry) <- ls_industry
+col_industry
+str(col_industry)
+
+# ha_industry = rowAnnotation(
+#   df = data.frame(Industry = ls_industry),
+#   annotation_height = unit(width_bar, "mm"), 
+#   col = list(Industry = ls_industry))
+
+
+#### ~ 3.17 Zoom/link annotation ----------------------------------------------
+panel_fun = function(index, nm) {
+    pushViewport(viewport(xscale = rg, yscale = c(0, 2)))
+    grid.rect()
+    grid.xaxis(gp = gpar(fontsize = 7))
+    grid.boxplot(mat1[index, ], pos = 1, 
+                 # outline = F, 
+                 direction = "horizontal")
+    popViewport()
+}
+
+# Region = sample(letters[1:3], 100, replace = TRUE, prob = c(1, 5, 10))
+Region <- df_ht$Region; Region
+
+str(Region)
+str(df_ht$ind)
+
+df_ht$ind <- factor(x = df_ht$ind, levels = sort(ls_industry))
+ind <- df_ht$ind 
+ind[1:10]
+
+rg = range(mat1); rg
+anno = anno_zoom(align_to = Region, which = "row", 
+                 panel_fun = panel_fun, 
+                 size = unit(10, "mm"), gap = unit(5, "mm"), 
+                 # height = unit(10, "mm"),
+                 width = unit(20, "mm"))
+
+
+str(mat1)
+
+library(dendextend)
+row_dend = hclust(dist(mat1))    # row clustering
+col_dend = hclust(dist(t(mat1))) # column clustering
+
+### pam() stands for Partitioning of the data into k clusters “around medoids”, 
+### a more robust version of K-means.
+library("cluster")
+set.seed(2)
+pa = pam(mat1, k = 10)
+k_num = 4
+
+
+
+legend_hmap <- 
+  list(grid_width  = unit(width_bar, "mm"), 
+       # grid_height = unit(width_bar, "mm"), 
+       # direction = "horizontal",
+       size = unit(width_bar, "mm"),
+       ncol = 1,
+       title_gp  = gpar(col = "black", 
+                        fontsize = font_size, face = 'bold'),
+       labels_gp = gpar(col = "black",
+                        # fill = 1:num, 
+                        fontsize = font_size - 1))
+```
+
+
+
+
+
+#### - plot: ind + region
+
+  <NOT USED>
+  
+  This plot will include both region and industry for row clustering. 
+  
+```{r eval=FALSE, include=FALSE}
+fname <- paste0(dir.figures, 'heatmap_10_region+industry_new.jpg')
+jpeg(filename = fname, width = width_2col, 
+     height = width_2col+2, units = unit_ns, res = 1000)
+
+Heatmap(matrix = mat1, name = "Score",
+        col = (brewer.pal(n=9, name="YlGnBu")), 
+        ### RdYlGn, YlGnBu ## rev() - reverse order
+        ### clustering approach #1 ----------------------- #
+        # km = k_num,     ## apply k-means on rows
+        # column_km = 3,  ## floor(k_num/2),
+        # row_km = 6,   ## the same as km
+        
+        ### this can also add the region names, but the gap is too wide
+        row_title = NULL,
+        # row_title_side = 'right',
+        # # row_title = c('EU', 'NA', 'AF', 'AS'), 
+        # row_title_gp = gpar(col = 'black',
+        #                     fontsize = font_size - 1,
+        #                     font = font),
+        
+        column_title = NULL,
+        # cluster_rows = color_branches(row_dend, k = 5),
+        ### clustering approach #2 ----------------------- #
+        # split = 5,
+        # split = paste0("pam", pa$clustering),
+        ### ---------------------------------------------- #
+        # column_km = 10,
+        bottom_annotation = ha_sdg,
+        top_annotation    = ha_boxplot,
+        # right_annotation  = ha_region, ## this is wrong
+        
+        ### do not know how to limit the width of the block
+        right_annotation  = ha_block,
+       
+        # show_column_hclust = T, 
+        cluster_columns = T, 
+        cluster_rows    = F,
+        
+        row_split = df_ht$Region, 
+        row_order = order(df_ht$Region, df_ht$ind),
+        row_gap = unit(0.5, "mm"),
+        # right_annotation = rowAnnotation(foo = anno),
+        
+        column_dend_reorder = T,
+        show_row_dend = F, 
+        show_column_dend = F, 
+        # show_row_names = T, 
+        show_column_names = T,
+        # column_names_rot = 45,
+        row_names_gp    = gpar(fontsize = font_size),
+        column_names_gp = gpar(fontsize = font_size), 
+        raster_quality = 20,
+        row_names_side  = 'right',
+        heatmap_legend_param = legend_hmap) +
+  # Heatmap(df_ht$Country, name = "Country", width = unit(5, "mm"),
+  #         col = circlize::colorRamp2(c(0, 500), c("Blue", "orange"))) +
+  
+  ### by country --------------------------------------------------------
+  ###   this is not used
+  # Heatmap(df_ht$Country, name = "Country", width = unit(5, "mm"),
+  #         col = circlize::rand_color(length(unique(df_ht$Country)))) +
+
+  ### by continent/region -----------------------------------------------
+  ###   we use ha_block to replace this annotation
+  # Heatmap(df_ht$Region, 
+  #         name = "Region", 
+  #         width = unit(width_bar, "mm"), 
+  #         row_names_gp    = gpar(fontsize = font_size), 
+  #         # row_labels = c('a', 'aa', 'aaa', 'aaa'),
+  #         column_names_gp = gpar(fontsize = font_size),
+  #         column_names_side = 'bottom', 
+  #         # labels = names(col_Region), ## wrong
+  #         heatmap_legend_param = legend_hmap,
+  #         col = col_Region) + ## color fill
+  ### by industry -------------------------------------------------------
+  Heatmap(df_ht$ind, 
+          name = "Industry", 
+          width = unit(width_bar, "mm"), 
+          row_names_gp    = gpar(fontsize = font_size),
+          column_names_gp = gpar(fontsize = font_size),
+          column_names_side = 'bottom', 
+          heatmap_legend_param = legend_hmap,
+          col = col_industry) 
+
+dev.off()
+# circlize::rand_color(n = length(unique(df_ht$Region)),luminosity = 'bright')
+
+```
+
+
+
+#### - plot: region (3b.ext)
+```{r}
+
+fname <- paste0(dir.figures, 'Extended Data Fig_3b_new.pdf')
+pdf(fname, width = (width_2col-3)/2.54, #paper = 'letter',
+    height = (width_2col+2)/2.54)
+
+
+### margin
+par(mar = c(0, 5, 0, 0)) ## bottom, left, top, right
+
+
+# plot(x= seq(1,10), y = seq(1,10))
+
+
+### plot
+Heatmap(matrix = mat1,
+        name = "Log(Number of\nSDG commitments)",                   ## legend name
+        col = (brewer.pal(n=9, name="YlGnBu")), ## heatmap color
+        row_title = ' ', #NULL,
+        column_title = NULL,
+        bottom_annotation = ha_sdg,
+        top_annotation    = ha_boxplot,
+        right_annotation  = ha_block,
+        cluster_columns = T,
+
+        ### 1st way ---------------------------------------
+        row_split = df_ht$Region, cluster_row_slices = T,
+        cluster_rows    = T, ## F
+        row_order = order(df_ht$Region), ## remove ", ind" as the order
+
+        ### 2nd way --------------------------------------
+        # cluster_rows = hc,
+        # split = length(unique(df_ht$Region)),
+
+        row_gap = unit(0.5, "mm"),   ## gap between split
+        # row_labels = NULL,
+        column_dend_reorder = T,
+        show_row_dend    = F,
+        show_column_dend = F,
+        show_row_names = F,
+        # row_names_side  = 'right',
+        show_column_names = T,
+        # column_names_rot = 45,
+        row_names_gp    = gpar(fontsize = font_size),
+        column_names_gp = gpar(fontsize = font_size),
+        raster_quality = 20,
+        show_heatmap_legend = T,
+        heatmap_legend_param = legend_hmap
+        )
+grid.text(label = 'b', x = unit(0.01, "npc"), y = unit(0.98, "npc"), rot = 0, gp = gpar(fontsize = 12, fontface = "bold"))
+
+
+dev.off()
+```
+
+
+
+```{r}
+f <- paste0(dir.results, "data_ComplexHeatmap_new.RData")
+save(mat1, df_ht, col_regions, width_bar, ls_regions, font_size, file = f)
+
+load(f)
+ha_block <- rowAnnotation(
+  Region = anno_block(
+    gp = gpar(fill = col_regions, 
+              col = NA, ## remove the border color
+              fontsize = font_size), 
+    width = unit(width_bar, "mm"),
+    show_name = T, 
+    labels = ls_regions,
+    labels_gp = gpar(col = "black", fontsize = font_size)),
+  annotation_name_gp = gpar(fontsize = font_size),
+  width = unit(width_bar, "mm"))
+
+Heatmap(matrix = mat1, 
+        name = "Log(Number)",                   ## legend name
+        col = (brewer.pal(n=9, name="YlGnBu")), ## heatmap color
+        row_title = NULL,
+        column_title = NULL,
+        # bottom_annotation = ha_sdg,
+        # top_annotation    = ha_boxplot,
+        right_annotation  = ha_block,
+        cluster_columns = T, 
+        
+        row_split = df_ht$Region, cluster_row_slices = T,
+        cluster_rows    = T, ## F
+        row_order = order(df_ht$Region),
+        
+        row_gap = unit(0.5, "mm"),
+        column_dend_reorder = T,
+        show_row_dend    = F, 
+        show_column_dend = F, 
+        show_row_names = F,
+        show_column_names = T,
+        row_names_gp    = gpar(fontsize = font_size),
+        column_names_gp = gpar(fontsize = font_size), 
+        raster_quality = 20,
+        show_heatmap_legend = T)
+```
+
+
+#### - plot: ind
+  Only include industry for the row clustering <NOT USED>
+```{r eval=FALSE, include=FALSE}
+
+fname <- paste0(dir.figures, 'heatmap_by_industry_v0728_new.jpg')
+jpeg(filename = fname, width = width_2col, 
+     height = width_2col+2, units = unit_ns, res = 1200)
+
+Heatmap(matrix = mat1, name = "Score",
+        col = (brewer.pal(n=9, name="YlGnBu")), 
+        ### this can also add the region names, but the gap is too wide
+        row_title = NULL,
+        column_title = NULL,
+        # column_km = 10,
+        bottom_annotation = ha_sdg,
+        top_annotation    = ha_boxplot,
+        ### CHANGE ----------------------------
+        # right_annotation = ha_block,
+        row_split = ind, 
+        row_order = order(ind),
+        
+        cluster_columns = T, 
+        cluster_rows = F,
+        row_gap = unit(0.5, "mm"),
+        
+        column_dend_reorder = T,
+        show_row_dend = F, 
+        show_column_dend = F, 
+        # show_row_names = T, 
+        show_column_names = T,
+        # column_names_rot = 45,
+        row_names_gp    = gpar(fontsize = font_size),
+        column_names_gp = gpar(fontsize = font_size), 
+        raster_quality = 20,
+        row_names_side  = 'right',
+        heatmap_legend_param = legend_hmap) +
+  ### by industry -------------------------------------------------------
+  Heatmap(df_ht$ind, 
+          name = "Industry", 
+          width = unit(width_bar, "mm"), 
+          row_names_gp    = gpar(fontsize = font_size),
+          column_names_gp = gpar(fontsize = font_size),
+          column_names_side = 'bottom', 
+          heatmap_legend_param = legend_hmap,
+          col = col_industry) 
+
+dev.off()
+```
+
+
+
+###  3.4 Industry compare
+  which industry committed most to the goals overall?
+```{r include=FALSE}
+cmt_ind <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::mutate(ind = ind_7sys) %>%
+  dplyr::group_by(Company, iso3, Region, ind) %>%
+  dplyr::summarise(cmt_goal = sum(n_statement, na.rm = T)) %>% ## to get total number of SDG commitment by company
+  ungroup() %>%
+  group_by(ind) %>%                      ## then calculate the *average* and total number of cmt for each industry
+  dplyr::summarise(
+    cmt_sum = sum(cmt_goal, na.rm = T),
+    cmt_avg = mean(cmt_goal, na.rm = T)) %>%
+  # arrange(ind, desc(cmt_avg), desc(cmt_sum)) %>%
+  dplyr::mutate(rank = order(order(cmt_avg, decreasing=T))) %>%
+  dplyr::arrange(rank)
+```
+
+
+
+#### - top5 (2ab)
+  For each industry, which goals (top5) were mostly committed? And which are least committed?
+```{r}
+### SDG icon
+df_sdg <- data.frame(
+  goal = paste0('SDG', 1:17),
+  icon = c(paste0(img_sur, '0',1:9, '.png'),
+           paste0(img_sur, '1',0:7, '.png'))) %>%
+  mutate(goal=as.character(goal))
+
+
+str(df_sdg)
+names(df)
+
+cmt_goal_ind <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::mutate(ind = ind_7sys) %>%
+  dplyr::group_by(Company, iso3, Region, ind, goal) %>%
+  dplyr::summarise(cmt_goal = sum(n_statement, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(ind, goal) %>%
+  dplyr::summarise(
+    cmt_sum = sum(cmt_goal, na.rm = T),
+    cmt_avg = mean(cmt_goal, na.rm = T)) %>%
+  # arrange(ind, desc(cmt_avg), desc(cmt_sum)) %>%
+  ungroup() %>%
+  dplyr::group_by(ind) %>%
+  dplyr::mutate(rank = order(order(cmt_avg, decreasing=T))) %>%
+  mutate(goal=as.character(goal)) %>%
+  dplyr::arrange(ind, desc(cmt_avg), desc(cmt_sum)) %>%
+  left_join(., df_sdg, by='goal')
+  
+
+cmt_goal_ind_top <- cmt_goal_ind %>%
+  top_n(n = 5, wt = cmt_avg)
+cmt_goal_ind_bottom <- cmt_goal_ind %>%
+  top_n(n = -5, wt = cmt_avg)
+
+unique(df$ind_7sys)
+
+
+
+
+library("ggimage")
+
+x_label_change <- scale_x_discrete(labels = c(
+    "Energy, natural resources, and basic materials" = "Energy, natural resources\n and basic materials",
+    'Telecommunications and technology' = 'Telecommunications\nand technology',
+    # 'Media & entertainment' = 'Media &\nentertainment',
+    'Food, beverage, and consumer goods' = 'Food, beverage\nand consumer goods',
+    'Healthcare and life sciences' = 'Healthcare\nand life sciences'
+    )) 
+
+p_top <- cmt_goal_ind_top %>%
+  ggplot(aes(x=ind, y=rank)) + ## , label = goal
+  # geom_point()+
+  # geom_text() +
+  # scale_y_reverse() +
+  geom_image(aes(image=icon), size=0.1,
+             asp = 1, by="height") +
+  # scale_size_identity() +
+  # theme_bw()
+  theme_ns +
+  theme(
+    ## Hide panel borders and remove grid lines
+    panel.border = element_blank(),
+    line = element_blank(),
+    axis.ticks = element_blank())+ # colour = "black",
+  xlab('') + ylab('Top 5 SDGs') +
+  x_label_change +
+  # theme(axis.text.y = element_text(angle = 0, vjust = 1.1, hjust = 1)) +
+  coord_flip()
+# p
+### save as jpg
+# fname <- paste0(dir.figures, 'top5_goal_ind_8sys_v0728_new.jpg'); fname
+# ggsave(fname, plot = p_top, 
+#        width = width_1col, 
+#        height = width_1col-1.5, units = unit_ns, dpi = 300)
+
+
+p_bot <- cmt_goal_ind_bottom %>%
+  ggplot(aes(x=ind, y=rank)) + ## , label = goal
+  geom_image(aes(image=icon), size=0.1,
+             asp = 1, by="height") +
+  theme_ns +
+  theme(
+    ## Hide panel borders and remove grid lines
+    panel.border = element_blank(),
+    line = element_blank(),
+    axis.ticks = element_blank())+ # colour = "black",
+  xlab('') + ylab('Bottom 5 SDGs') +
+  x_label_change +
+  coord_flip()
+
+### save as jpg
+# fname <- paste0(dir.figures, 'top5_goal_ind_bottom_8sys_v0728_new.jpg'); fname
+# ggsave(fname, plot = p_bot, 
+#        width = width_1col, 
+#        height = width_1col-1.5, units = unit_ns, dpi = 300)
+
+
+### combine plots
+### combine figures
+#### for Nature --------------------
+p_top_bot <- ggarrange(p_top, p_bot, 
+  nrow = 1, ncol = 2, labels = panel_labels, 
+  common.legend = F) 
+fname <- paste0(dir.figures, 'top5_goal_ind_bottom_top__2ab_V1022_new.jpg'); fname
+ggsave(filename = fname, plot = p_top_bot, 
+       width = width_2col, height = width_2col/2 - 2, 
+       units = unit_ns, dpi = 500)
+
+#### for Science --------------------
+(
+  p_top_bot <- ggarrange(p_top, p_bot, 
+  nrow = 2, ncol = 1, labels = panel_labels, 
+  common.legend = F) 
+)
+
+fname <- paste0(dir.figures, 'Fig2ab_top5_goal_ind_new.jpg'); fname
+ggsave(filename = fname, plot = p_top_bot, 
+       width = width_2col-5, height = width_2col+3, 
+       units = unit_ns, dpi = 500)
+
+
+### pdf ------------------------------
+# fname <- paste0(dir.figures, 'Fig2ab_new.pdf'); fname
+# ggsave(filename = fname, plot = p_top_bot, 
+#        width = width_2col-5, height = width_2col+3, 
+#        units = unit_ns, dpi = 500)
+```
+
+
+
+
+#### - boxplots ranked
+```{r}
+### functions
+### https://github.com/dgrtwo/drlib/blob/master/R/reorder_within.R
+reorder_within <- function(x, by, within, fun = median, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
+
+### plot
+sts <- boxplot.stats(df$n_statement)$stats; sts
+df %>%
+  dplyr::group_by(Company, iso3, Region, ind, goal) %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::summarise(cmt_goal = sum(n_statement, na.rm = T)) %>%
+  arrange(ind, goal) %>%
+  # 3. Add order column of row numbers
+  # mutate(order = row_number())  %>%
+  ggplot() +
+  geom_boxplot(
+    aes(x = reorder_within(goal, cmt_goal, ind, FUN = median), ## median,mean
+        y = cmt_goal),
+    outlier.size=-1, varwidth = F,
+    position = position_dodge2(width = 0.75, preserve = "single")) +
+  scale_x_reordered()+
+  facet_wrap(.~ind, scales = 'free', ncol = 2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.5)) +
+  coord_cartesian(ylim = c(sts[2]/2, max(sts)*4))
+
+
+```
+
+
+#### - 8 industries dots.ci (2a.ext)
+```{r}
+cmt_goal_ind_ci <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::group_by(Company, iso3, Region, ind_7sys, goal) %>%
+  dplyr::summarise(cmt_goal = sum(n_statement, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(ind_7sys, goal) %>%
+  dplyr::summarise( 
+    n=n(),
+    mean=mean(cmt_goal, na.rm = T),
+    sd=sd(cmt_goal, na.rm = T)
+  ) %>%
+  mutate(se=sd/sqrt(n),
+         ci=se * qt(p = (1-0.05)/2 + .5, df = n-1)) %>% ## qt: quantile function
+  mutate(ci=if_else(n<6, true = NaN, false = ci)) %>% as.data.frame()
+
+str(cmt_goal_ind_ci)
+
+fig_2a_ex <- cmt_goal_ind_ci %>%
+  ggplot() +
+  # geom_bar(aes(x=name, y=value), stat="identity", fill="skyblue", alpha=0.5) +
+  geom_point(aes(x=reorder_within(goal, mean, within = ind_7sys),
+                 y=mean, color = -mean), 
+             size = 1, alpha=0.9)+
+  geom_errorbar(aes(x=reorder_within(goal, mean, within = ind_7sys), 
+                    ymin=mean-ci, ymax=mean+ci), 
+                width=0.1, colour="gray30", alpha=0.9, size=0.2) +
+  scale_x_reordered()+
+  facet_wrap(~ ind_7sys, scales = 'free_x', nrow = 2) +
+  theme_bw() +
+  xlab('SDGs') + ylab('Average number of SDG commitments') +
+  theme_ns +
+  theme(legend.position = "none",
+        text = element_text(size=font_size-.5),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
+### save as jpg
+fname <- paste0(dir.figures, 'by industry - 8 sys - rank_2a.ext_new.png'); fname
+# ggsave(fname, plot = fig_2a_ex, 
+#        width = width_2col, 
+#        height = width_2col/2, units = unit_ns, dpi = 1200)
+```
+
+
+#### - 56 industry
+```{r eval=FALSE, include=FALSE}
+cmt_goal_ind56 <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::group_by(Company, iso3, Region, ind, Industry, goal) %>% ## ADD Industry
+  dplyr::summarise(cmt_goal = sum(n_statement, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(ind, Industry, goal) %>%                               ## ADD Industry
+  dplyr::summarise(
+    cmt_sum = sum(cmt_goal, na.rm = T),
+    cmt_avg = mean(cmt_goal, na.rm = T)) %>%
+  # arrange(ind, desc(cmt_avg), desc(cmt_sum)) %>%
+  ungroup() %>%
+  dplyr::group_by(Industry) %>%
+  dplyr::mutate(rank = order(order(cmt_avg, decreasing=T))) %>%
+  ungroup() %>%
+  dplyr::arrange(ind, Industry, desc(cmt_avg), desc(cmt_sum)) %>%
+  dplyr::group_by(ind, Industry) %>%
+  dplyr::mutate(id_order = cur_group_id()) %>%   ## order the facet plots by similar industry
+  dplyr::mutate(Industry = factor(Industry, levels = unique(Industry))) %>%   ## order the facet plots by similar industry
+  dplyr::mutate(goal = factor(goal, levels = paste0('SDG', 1:17))) %>%
+  as.data.frame()
+
+
+cmt_goal_ind56_wide <- cmt_goal_ind56 %>%
+  dplyr::select(-c(cmt_sum, rank)) %>%
+  spread(key = goal, value = cmt_avg) %>%
+  replace(is.na(.), 0) %>%                            ## replace NA with 0
+  gather(key = 'goal', value = 'cmt_avg', SDG1:SDG17) ## 51 industry * 17 SDG = 867 rows
+  
+  # left_join(., df_sdg, by='goal') %>%
+  # dplyr::mutate(goal = factor(x = goal, levels = paste0('SDG', 1:17))) %>%
+  # as.data.frame()
+
+unique(cmt_goal_ind56$Industry)
+str(cmt_goal_ind56_wide)
+
+cmt_goal_ind56_wide %>%
+  ggplot() +
+  geom_col(aes(x = reorder_within(goal, cmt_avg, within = Industry),
+               y = cmt_avg, 
+               # color = ind, 
+               fill = ind), show.legend = F) +
+  scale_fill_brewer(palette = palette_ind) +
+  scale_x_reordered()+
+  # facet_wrap(~Industry, scales = 'free_y') +
+  facet_wrap(~Industry, scales = 'free_x') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  xlab('SDGs') + ylab('Average number of SDG commitments')
+  
+```
+
+
+
+
+#### - 24 industry (2ab.ext)
+```{r}
+cmt_goal_ind20 <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::group_by(Company, iso3, Region, ind_3, ind_7sys, ind_agg, goal) %>% ## ADD ind_agg
+  dplyr::summarise(cmt_goal = sum(n_statement, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(ind_3, ind_7sys, ind_agg, goal) %>%                               ## ADD ind_agg
+  dplyr::summarise(
+    cmt_sum = sum(cmt_goal, na.rm = T),
+    cmt_avg = mean(cmt_goal, na.rm = T)) %>%
+  # arrange(ind, desc(cmt_avg), desc(cmt_sum)) %>%
+  ungroup() %>%
+  dplyr::group_by(ind_agg) %>%
+  dplyr::mutate(rank = order(order(cmt_avg, decreasing=T))) %>%
+  ungroup() %>%
+  dplyr::arrange(ind_7sys, ind_agg, desc(cmt_avg), desc(cmt_sum)) %>%
+  dplyr::mutate(ind_7sys = factor(ind_7sys, levels = ind_levels, labels = ind_labels)) %>%  ## 
+  ## order the facet plots by similar industry
+  dplyr::group_by(ind_7sys, ind_agg) %>%
+  dplyr::mutate(id_order = cur_group_id()) %>%   
+  dplyr::mutate(ind_agg = factor(ind_agg, levels = unique(ind_agg))) %>%   ## order the facet plots by similar industry
+  dplyr::mutate(goal = as.character(goal)) %>%#
+  dplyr::mutate(goal = factor(goal, levels = paste0('SDG', 1:17))) %>%
+  as.data.frame()
+str(cmt_goal_ind20)
+
+cmt_goal_ind20_wide <- cmt_goal_ind20 %>%
+  dplyr::select(-c(cmt_sum, rank)) %>%
+  spread(key = goal, value = cmt_avg) %>%
+  replace(is.na(.), 0) %>%                                ## replace NA with 0
+  gather(key = 'goal', value = 'cmt_avg', SDG1:SDG17) %>% ## 51 industry * 17 SDG = 867 rows
+  # dplyr::mutate(ind_7sys = factor(ind_7sys, levels = ind_levels, labels = ind_labels)) %>%
+  as.data.frame()
+
+  # left_join(., df_sdg, by='goal') %>%
+  # dplyr::mutate(goal = factor(x = goal, levels = paste0('SDG', 1:17))) %>%
+  # as.data.frame()
+
+# unique(cmt_goal_ind20_wide$ind_agg)
+str(cmt_goal_ind20_wide)
+
+fig_2b_ex <- cmt_goal_ind20_wide %>%
+  ggplot() +
+  geom_col(aes(x = reorder_within(goal, cmt_avg, within = ind_agg),
+               y = cmt_avg, fill = ind_7sys), 
+           color = 'gray40', size = .25,
+           show.legend = T) +
+  # scale_fill_brewer(palette = palette_ind) +  ## fill colors
+  scale_x_reordered()+
+  # facet_wrap(~Industry, scales = 'free_y') +
+  scale_fill_brewer(palette = palette_ind) +
+  
+  facet_wrap(~ind_agg, scales = 'free_x') +
+  theme_bw() +
+  theme_ns +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        text = element_text(size = font_size -.5),
+        legend.position = c(0.9, 0.05)) +
+  xlab('SDGs') + ylab('Average number of SDG commitments') + labs(fill = "Industrial sectors")
+
+### save as jpg
+fname <- paste0(dir.figures, 'by industry - 24 sys_2b.ext_new.png'); fname
+# ggsave(fname, plot = fig_2b_ex, 
+#        width = width_2col, 
+#        height = width_2col, units = unit_ns, dpi = 900)
+
+
+### fig 2ab ext ----------------------------------------------------------
+(
+  fig_2ab_ex <- ggarrange(fig_2a_ex, fig_2b_ex, labels = 'auto', nrow = 2, heights = c(0.5, 1))
+)
+fname <- paste0(dir.figures, 'Extended Data Fig_2ab_new.jpg'); fname
+ggsave(fname, plot = fig_2ab_ex, 
+       width = width_2col, 
+       height = width_2col + 8, units = unit_ns, dpi = 600)
+
+### pdf ---------------------------------
+fname <- paste0(dir.figures, 'Extended Data Fig_2ab_new.pdf'); fname
+ggsave(fname, plot = fig_2ab_ex, 
+       width = width_2col, 
+       height = width_2col + 8, units = unit_ns, dpi = 600)
+```
+
+
+
+### 3.5 Evenness
+####   - ev by com (1ab)
+  For each company, what is the evenness of its commitments towards the 17 SDGs?
+  - for each ctr, what is the avg evenness?
+    - any difference between developed and developing ctr groups?
+    - any difference between different income groups? 
+```{r}
+library(vegan)
+names(df)
+dt <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  # dplyr::filter(Company == 'Adidas') %>%
+  group_by(Company, iso3, goal, ind_7sys) %>%
+  dplyr::summarise(n_goal_cmt = sum(n_statement, na.rm = T)) %>%
+  arrange(goal) %>%
+  pivot_wider(names_from = goal, values_from = n_goal_cmt) %>% as.data.frame() %>%
+  ### NA as 0
+  dplyr::mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>%
+  arrange(Company)
+
+str(dt)
+
+### first col as row names
+row.names(dt) <- dt[, 1]
+### only keep the cols with SDGs
+dtt <- dt %>%
+  dplyr::select(starts_with('SDG'))
+### calculation
+#### Species richness (S) and Pielou's evenness (J):
+H <- vegan::diversity(dtt); H
+S <- specnumber(dtt); S ## rowSums(BCI > 0) does the same
+S <- 17 ## here we assume the com should commit to all 17 SDGs, for those they did not commit to, we assign the number of commitment as 0. 
+J <- H/log(S); 
+head(J)
+J.com <- J %>% as.data.frame() %>%
+  rownames_to_column(var = 'Company') 
+names(J.com) <- c("Company", "evenness")
+
+J.com <- J.com %>%
+  ### NA as 0
+  dplyr::mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>%
+  ### add ctr, industry info
+  # merge(x = ., y = com_final[, c('company_name', 'region', 'ind_7sys', 'iso3')], 
+  #       by.x = 'Company', by.y = 'company_name', all = T) %>%
+  left_join(x=., y=dt[, 1:3], by = 'Company') %>%
+  ungroup() %>%
+  dplyr::arrange(!is.na(iso3), !is.na(evenness), desc(evenness))
+
+names(J.com)
+str(J.com)
+
+J.com_moreinfo <- J.com %>%
+  left_join(., grp, by = c('iso3' ='iso_a3')) %>%
+  arrange(!is.na(inc_group))
+names(J.com_moreinfo)
+
+
+### histogram plot --------------------------------------------------
+hist(J.com$evenness)
+boxplot(J.com$evenness)
+mean(J.com$evenness)
+sd(J.com$evenness)
+
+
+ev_violin <- J.com_moreinfo %>%
+  ggplot(aes(x = 1, y = evenness)) +
+  # geom_boxplot() +
+  geom_violin(trim = F) +
+  # geom_dotplot(binaxis='y', stackdir='center', dotsize = 0.5, color = 'gray80', fill = 'gray80') +
+  stat_summary(fun.data = 'mean_sdl', fun.args = list(mult=1),
+               geom="pointrange") +
+  theme_ns +
+  ylim(0, 1) +
+  xlab('') + ylab('') +
+  theme(axis.text = element_text(colour = 'transparent'),
+        plot.margin = unit(c(.5, .5, -0.5, .5), "line"), ## t = 0, r = 0, b = 0, l = 0
+        axis.ticks = element_line(colour = 'transparent'),
+        panel.border = element_rect(colour = 'transparent'),
+        # panel.border = element_blank(),
+        panel.grid = element_line(colour = 'transparent'),) +
+  coord_flip()
+ev_violin
+
+
+ev_hist <- 
+  ggplot(data = J.com_moreinfo,
+         aes(x = evenness, fill = inc_group
+        # fill = eco_group, color = eco_group,
+        )) + 
+  geom_histogram(
+    # aes(color = inc_group),
+    # aes(y=..density.., color = NULL),
+    # bins = 50,
+    position="identity",
+    alpha = 0.6) +
+  xlim(0, 1) +
+  scale_fill_brewer(palette="RdYlBu", direction = -1) +
+  scale_color_brewer(palette="RdYlBu", direction = -1) +
+  # theme_bw() +
+  theme_ns +
+  theme(legend.position = c(0.2, 0.85),
+        legend.key = element_rect(colour = 'transparent', fill = 'transparent'),
+        legend.key.size = unit(0.5, "line"),
+        plot.margin = unit(c(-0.5, .5, .5, .5), "line"), ## t = 0, r = 0, b = 0, l = 0
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        panel.background=element_rect(fill="transparent", colour=NA),
+        plot.background=element_rect(fill="transparent", colour=NA),) +
+  labs(fill = "Income group", color = "Income group") +
+  # facet_wrap(.~inc_group) +
+
+  ylab('Number of companies') +
+  xlab('Evenness of SDG commitments')
+ev_hist
+
+
+### combine figures
+(ev_ps <- ggarrange(
+  ev_violin, ev_hist, 
+  nrow = 2, ncol = 1, labels = '',  heights = c(1,4), # align = 'h', 
+  common.legend = F))
+
+### density plot ----------------------------------------------------
+# ggplot(J.com_moreinfo) + 
+#   geom_density(aes(x = evenness, 
+#                    fill = inc_group, color = inc_group,
+#                    # fill = eco_group, color = eco_group,
+#                    ), alpha = 0.4) +
+#   scale_fill_brewer(palette="RdYlBu", direction = -1) +
+#   scale_color_brewer(palette="RdYlBu", direction = -1) +
+#   theme_bw() +
+#   theme(legend.position = c(0.35, 0.7)) +
+#   labs(fill = "Income group", color = "Income group") +
+#   xlab('Evenness') + ylab('Density')
+
+
+
+### save as jpg
+fname <- paste0(dir.figures, 'Fig1b_evenness_by_com_distribution_plots_new.jpg');fname
+ggsave(fname, plot = ev_ps, 
+       width = width_1col, 
+       height = width_1col, units = unit_ns, dpi = 600)
+
+
+
+### combine figures
+(fig1ab <- ggarrange(
+  bar_goal_n, ev_ps, 
+  nrow = 1, ncol = 2, labels = panel_labels, common.legend = F))
+
+### save as jpg
+fname <- paste0(dir.figures, 'Fig1ab_new.jpg'); fname
+ggsave(fname, plot = fig1ab, 
+       width = width_2col, 
+       height = width_1col, units = unit_ns, dpi = 600)
+
+### save as pdf
+# fname <- paste0(dir.figures, 'Figure_1ab_new.pdf'); fname
+# ggsave(fname, plot = fig1ab,
+#        width = width_2col,
+#        height = width_1col, units = unit_ns, dpi = 600)
+
+```
+
+
+
+#### - ev by ctr & by group
+```{r}
+### 1/3 by ctr --------------------------------------------------------------------------
+J.com_byctr <- J.com %>% 
+  group_by(iso3) %>%
+  ### data for adding error bars
+  dplyr::summarise( 
+    n    = n(),
+    mean = mean(evenness, na.rm = T),
+    sd   = sd(evenness, na.rm = T)
+  ) %>%
+  ### only choose ctr with more than 5 companies
+  # dplyr::filter(n >= 5)  %>% 
+  dplyr::mutate(se = sd/sqrt(n))  %>%
+  dplyr::mutate(ci = se * qt(p = (1-0.05)/2 + .5, df = n-1)) %>% ## qt: quantile function
+  ### small sample, set ci as NA
+  # dplyr::mutate(ci = if_else(n<6, true = NaN, false = ci)) %>%
+  dplyr::arrange(desc(n))
+  
+sum(J.com_byctr$n)
+
+J.com_bygrp <- J.com_byctr %>%
+  left_join(., grp, by = c('iso3' ='iso_a3'))
+names(J.com_bygrp)
+
+### plot
+J.com_bygrp %>% 
+  dplyr::filter(n >= 4) %>%
+  ggplot(aes(x = reorder(iso3, desc(mean)), y = mean, 
+             color = income_grp)) +
+  # geom_col() +
+  geom_point(alpha = 1) +
+  
+  geom_errorbar(aes(x=iso3, ymin=mean-ci, ymax=mean+ci), 
+                # colour="gray50", alpha=0.9,
+                width=0.2, size=0.3) +
+  # scale_fill_manual(values=wes_palette(n=5, name="Zissou1")) +
+  scale_fill_brewer(palette="RdYlBu", direction = -1) +
+  scale_color_brewer(palette="RdYlBu", direction = -1) +
+  guides(size = FALSE, alpha = F) + ## remove legend for dot size
+  theme_ns +
+  xlab(NULL) + ylab("Average evenness of companies' commitments to the 17 SDGs")
+
+
+### 2/3 by group -----------------------------------------------------------------------------
+
+
+### by developed and develping ctr group
+J.com_bygrp %>%
+  group_by(eco_group) %>%
+  dplyr::summarise(
+    n = n(),
+    mean = mean(mean, na.rm = T),
+    sd = sd(mean, na.rm = T),
+    se = sd/sqrt(n),
+    ci = se * qt(p = (1-0.05)/2 + .5, df = n-1)
+  ) 
+
+
+### 3/3 by income group ------------------------------------------------------------
+J.com_bygrp %>%
+  ungroup() %>%
+  group_by(inc_group) %>%
+  dplyr::summarise(
+    n = n(),
+    mean = mean(mean, na.rm = T),
+    sd = sd(mean, na.rm = T),
+    se = sd/sqrt(n),
+    ci = se * qt(p = (1-0.05)/2 + .5, df = n-1)
+  ) 
+  
+```
+
+
+
+#### - ev by goal
+ For each goal, what is the evenness of committed ctr?
+```{r}
+### evenness of companies within a ctr --------------------------------------------------
+names(df)
+dt_bygoal <- df %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  # dplyr::filter(Company == 'Adidas') %>%
+  group_by(Company, goal) %>%
+  dplyr::summarise(n_goal_cmt = sum(n_statement, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(goal) %>%
+  dplyr::summarise(
+    ### total number of commitment statements to each goal 
+    cmt_total = sum(n_goal_cmt, na.rm = T),
+    ### total number of countries that committed to each goal
+    n = n()) %>%
+  dplyr::mutate(pct = n/500*100) %>% arrange(desc(pct))
+
+names(dt_bygoal)
+
+
+### manual calculation of evenness -----------------------------------------------------
+richness = length(unique(dt_bygoal$goal)); richness
+log(richness)
+
+#### (1/3) use pct of com
+total <- sum(dt_bygoal$pct); total
+dt_bygoal <- dt_bygoal %>%
+  dplyr::mutate(
+    p = pct/total,
+    p_lnp = p*log(p))
+H = -sum(dt_bygoal$p_lnp); H
+evn <- H/log(richness); evn
+
+
+#### (2/3) use number of com
+total <- sum(dt_bygoal$n); total
+dt_bygoal <- dt_bygoal %>%
+  dplyr::mutate(
+    # n = 100,
+    p = n/total,
+    p_lnp = p*log(p))
+H = -sum(dt_bygoal$p_lnp); H
+evn <- H/log(richness); evn
+
+#### (3/3) use cmt number
+total <- sum(dt_bygoal$cmt_total); total
+dt_bygoal <- dt_bygoal %>%
+  dplyr::mutate(
+    # n = 100,
+    p = cmt_total/total,
+    p_lnp = p*log(p))
+H = -sum(dt_bygoal$p_lnp); H
+evn <- H/log(richness); evn
+```
+
+
+
+
+###   3.6 SDG index
+
+####    - data_National SDGs
+
+  Does the performance of big companies correlate with the nation's perfomance?
+  National SDG Index and goal performance from SDG Dashboard Report
+  
+```{r}
+dir.rpt <- 'G:/My Drive/_paper/SDGs/Refs/SDSN Reports/2018GlobalIndex-master'
+xls <- list.files(path = dir.rpt, pattern = '2018GlobalIndexResults.xlsx',
+                  all.files = T, full.names = T); xls
+
+rpt.all <- readxl::read_excel(path = xls, skip = 1)
+# names(rpt.all)
+rpt <- rpt.all %>% dplyr::select(c(1:9, 229:245))
+names(rpt)
+
+### here, we use the nation rank as an indicator
+rpt_overlap_ctr <- merge(ctr, rpt, by.x='iso3', by.y='id', all.x = T)%>%
+  dplyr::mutate(
+    ctr_rank_raw =`Global Index Rank: 2018 version`,
+    ctr_index = `Global Index Score (0-100): 2018 version`) 
+
+chn_index <- rpt_overlap_ctr %>% 
+  filter(iso3=='CHN') %>% 
+  select(ctr_index) %>% 
+  unlist(); chn_index
+  
+### SDG Index for Taiwan and HongKong are missing, here we use China's index to fill the NA.
+rpt_overlap_ctr <- rpt_overlap_ctr %>%
+  mutate(ctr_index=if_else(is.na(ctr_index), chn_index, ctr_index)) %>%
+  dplyr::mutate(ctr_rank = order(order(ctr_index, decreasing=T))) 
+```
+
+
+
+#####   * goal level
+```{r}
+names(rpt_overlap_ctr)
+
+rpt_goal <- rpt_overlap_ctr %>%
+  gather(key = 'goal', 'goal_score', `Goal 1 Score`:`Goal 17 Score`) %>%
+  dplyr::mutate(
+    goal = gsub('Goal ', 'SDG', goal),
+    goal = gsub(' Score', '', goal))
+```
+
+
+
+
+
+####    - data_com: % of com - rank
+
+#####   * at index level (6ab.ext)
+
+  Then, let's see if the % of companies has any relation to the national SDG Index rank. 
+  
+```{r}
+names(data_both)
+pct_com_byctr <- data_both %>%
+  filter(!goal %in% c('SDG', 'noSDG')) %>%
+  st_drop_geometry() %>%
+  select(-c(name, type, lon, lat)) %>%
+  filter(!is.na(pct_com_goal_country))
+
+
+unique(pct_com_byctr$economy)
+unique(pct_com_byctr$income_grp)
+### double-check
+# pct_com_byctr2 <- df %>%
+#   filter(!goal %in% c('SDG', 'noSDG')) %>%
+#   distinct(Company, iso3, goal) %>%
+#   group_by(iso3, goal) %>%
+#   tally() %>%
+#   arrange(iso3, goal)
+
+### get the Region info
+# ctr_region <- df %>%
+#   distinct(iso3, Region)
+ctr_region <- com_final %>%
+  distinct(iso3, region)
+
+### for each country, what's the avg % of committed companies? 
+avg_pct_by_ctr <- pct_com_byctr %>%
+  group_by(iso3, 
+           # Region,
+           income_grp) %>%
+  dplyr::summarise(index = mean(pct_com_goal_country, na.rm = T)) %>%
+  ungroup() %>%
+  dplyr::mutate(rank = order(order(index, decreasing=T))) %>%
+  arrange(rank) %>%
+  dplyr::mutate(id = row_number()) %>%
+  left_join(., ctr_region, by='iso3')
+
+
+#### - compare -------------------------------------------------------
+data <- merge(x = avg_pct_by_ctr, y = rpt_overlap_ctr, by = 'iso3') %>%
+  ## add the number of companies in each country
+  left_join(., n.com.country[, c('iso3', 'Continent', 'n')], by = 'iso3') %>%
+  dplyr::mutate(n_com = n+1)
+names(data)
+str(data)
+
+library(wesanderson)
+size_text = 1.2
+### color income group
+(p_compare1 <- data %>% 
+  # select(iso3, Region, income_grp, rank, ctr_rank) %>%
+  # gather(key = 'group', 'val', Region:income_grp) %>%
+  ggplot(aes(x = rank, y = ctr_rank, color = income_grp)) + 
+  geom_point(aes(color = income_grp, alpha = -log(n_com), 
+                 size = log(n_com)), 
+             # show.legend = F
+             # size = 1
+             ) +
+  # scale_color_brewer(direction = -1, type = 'div', palette = 'RdYlBu')+
+  scale_color_manual(values=wes_palette(n=5, name="Zissou1")) +
+  geom_text(aes(label = iso3), nudge_y = -1.5, fontface = 'bold',
+            size=size_text, show.legend = F) +
+  # geom_smooth(method = 'lm', formula = y~x, se = F) + ## loess
+  geom_vline(xintercept = 25, size = 0.1) +
+  geom_hline(yintercept = 25, size = 0.1) +
+  labs(color='Income group') +
+  xlab('Rank of % committed companies')+
+  ylab('Rank of national SDG Index') +
+  theme_ns +
+  guides(size = FALSE, alpha = F) + ## remove legend for dot size
+  theme(legend.position = c(0.2, 0.1))
+)
+
+### save as jpg
+fname <- paste0(dir.figures, 'cmt_vs_Index_pct_rank_income2_v0728_new.jpg');fname
+# ggsave(fname, plot = p_compare1, width = width_1col, 
+#        height = width_1col, units = unit_ns, dpi = 300)
+
+
+
+
+### color region
+p_compare2 <- data %>% 
+  # select(iso3, Region, income_grp, rank, ctr_rank) %>%
+  ggplot(aes(x = rank, y = ctr_rank, color = region)) + 
+  geom_point(aes(color = region,
+                 alpha = -log(n_com), 
+                 size = log(n_com))) +
+  geom_text(aes(label = iso3), nudge_y = -1, fontface = 'bold',
+            size=size_text, show.legend = F) +
+  # geom_smooth(method = 'lm', formula = y~x, se = F) + ## loess
+  geom_vline(xintercept = 25, size = 0.1) +
+  geom_hline(yintercept = 25, size = 0.1) +
+  xlab('Rank of % committed companies')+
+  ylab('Rank of national SDG Index') +
+  labs(color = 'Region')+
+  theme_ns +
+  guides(size = FALSE, alpha = F) + ## remove legend for dot size
+  theme(legend.position = c(0.12, 0.12))
+p_compare2
+
+### save as jpg
+fname <- paste0(dir.figures, 'cmt_vs_Index_pct_rank_region2_new.jpg');fname
+# ggsave(fname, plot = p_compare2, width = width_1col, 
+#        height = width_1col, units = unit_ns, dpi = 300)
+
+
+### combine figures -----------------------------------
+p_compare <- ggarrange(p_compare1, p_compare2, 
+  nrow = 1, ncol = 2, labels = panel_labels,  # align = 'h', 
+  common.legend = F)
+
+fname <- paste0(dir.figures, 'Extended Data Fig_6ab__cmt_vs_Index_pct_rank - combine_new.jpg'); fname
+ggsave(filename = fname, plot = p_compare, 
+       width = width_2col, height = width_2col/2, 
+       units = unit_ns, dpi = 500)
+
+
+### pdf --------------------------------------------
+fname <- paste0(dir.figures, 'Extended Data Fig_6ab_new.pdf'); fname
+ggsave(filename = fname, plot = p_compare, 
+       width = width_2col, height = width_2col/2, 
+       units = unit_ns, dpi = 500)
+```
+
+
+
+##### * at goal level (not use)
+  data_com: ctr with most com
+```{r eval=FALSE, include=FALSE}
+names(data_both)
+goal_most_com_pct_com_byctr <- data_both %>%
+  filter(!goal %in% c('SDG', 'noSDG')) %>%
+  st_drop_geometry() %>%
+  select(-c(name, type, lon, lat)) %>%
+  filter(!is.na(pct_com_goal_country)) %>%
+  dplyr::mutate(ctr_goal = paste0(iso3, '_', goal)) %>% ## create a unique and combine id
+  dplyr::filter(iso3 %in% ctr_most_ls) %>%              ## choose the ctr with many com only
+  dplyr::filter(iso3 != 'HKG') %>%                      ## remove Hong kong here
+  arrange(goal, desc(pct_com_goal_ctr_num)) %>%
+  dplyr::group_by(goal) %>% #as.data.frame() %>%
+  dplyr::mutate(rank_goal_lv = order(order(pct_com_goal_ctr_num, decreasing=TRUE)),
+                rank_goal_l2 = rank(desc(pct_com_goal_ctr_num))) %>%
+  arrange(goal, rank_goal_lv) %>%
+  dplyr::select(ctr_goal, rank_goal_lv)
+
+detach("package:plyr", unload=TRUE) ### this is very important; otherwise, the rank did not function well
+goal_most_com_rpt <- rpt_goal %>% as.data.frame() %>%
+  dplyr::filter(iso3 %in% ctr_most_ls)  %>%
+  dplyr::mutate(ctr_goal = paste0(iso3, '_', goal)) %>%
+  dplyr::filter(!is.na(country)) %>% ## remove hongkong and taiwan at this moment
+  ungroup() %>% as.data.frame() %>%
+  arrange(goal, desc(goal_score)) %>%
+  dplyr::group_by(goal) %>% #as.data.frame() %>%
+  dplyr::mutate(rank_goal_lv = order(order(goal_score, decreasing=TRUE)),
+                rank_goal_l2 = rank(desc(goal_score))) %>%
+  arrange(goal, rank_goal_lv) %>%
+  ungroup() %>% as.data.frame() %>%
+  dplyr::select(ctr_goal, rank_goal_lv)
+
+str(goal_most_com_rpt)
+
+
+
+
+### join the two data for plotting
+goal_most_com2 <- merge(goal_most_com_pct_com_byctr, goal_most_com_rpt, by = 'ctr_goal', all.x = T)
+
+### plot
+goal_most_com2 %>% 
+  # select(iso3, Region, income_grp, rank, ctr_rank) %>%
+  ggplot(aes(x = rank_goal_lv.x, y = rank_goal_lv.y)) + 
+  geom_point(aes(color = goal), show.legend = F) +
+  geom_smooth(method = 'lm', formula = 'y ~ x') +
+  geom_text(aes(label = ctr_goal), nudge_y = -1, fontface = 'bold',
+            size=size_text, show.legend = F) +
+  # geom_smooth(method = 'lm', formula = y~x, se = F) + ## loess
+  # geom_vline(xintercept = 25, size = 0.1) +
+  # geom_hline(yintercept = 25, size = 0.1) +
+  facet_wrap(~goal) +
+  xlab('Rank of % committed companies')+
+  ylab('Rank of national SDG') +
+  theme_ns +
+  guides(size = FALSE, alpha = F) + ## remove legend for dot size
+  theme(legend.position = c(0.1, 0.1))
+
+```
+
+
+####    - ctr rank by avg pct
+#####   - ctr level (3abc)
+```{r}
+ctr_rank_bypct <- pct_com_byctr %>%
+  dplyr::filter(n_com_ctr >= 5) %>% ### only choose ctr with more than 5 companies
+  left_join(., grp[, c(3,6)], by = c('iso3' = 'iso_a3')) %>%
+  # dplyr::mutate(group = income_grp) %>%
+  dplyr::mutate(group = eco_group) %>%
+  dplyr::mutate(group = gsub('1|2|\\.', '', group)) %>% ## remove "1." and "2."
+  ungroup() %>%
+  group_by(iso3, 
+           # Region,
+           group) %>%
+  
+  # dplyr::summarise(index = mean(pct_com_goal_country, na.rm = T)) %>%
+  
+  ### data for adding error bars
+  dplyr::summarise( 
+    n    = n(),
+    mean = mean(pct_com_goal_country, na.rm = T),
+    sd   = sd(pct_com_goal_country, na.rm = T)
+  ) %>%
+  dplyr::mutate(se = sd/sqrt(n))  %>%
+  dplyr::mutate(ci = se * qt(p = (1-0.05)/2 + .5, df = n-1)) %>% ## qt: quantile function
+  dplyr::mutate(ci = if_else(n<6, true = NaN, false = ci)) %>%
+  
+  ungroup() %>%
+  dplyr::mutate(rank = order(order(mean, decreasing=T))) %>%
+  arrange(rank) %>%
+  dplyr::mutate(id = row_number()) %>%
+  left_join(., ctr_region, by='iso3') 
+
+### fill the bar by region --------------------------------------------------------
+ctr_rank_bypct %>%
+  ggplot(aes(fill = region)) +
+  geom_col(aes(x = mean, y = reorder(iso3, mean))) +
+  scale_fill_brewer(palette="RdYlBu", direction = -1) +
+  theme_ns
+
+### fill the bar by income group --------------------------------------------------
+(
+  p_ctr_rank_bypct <- ctr_rank_bypct %>%
+    ggplot(aes(x = mean, y = reorder(iso3, desc(mean)), fill = group, alpha = 0.85)) +
+    geom_col() +
+    geom_errorbar(aes(y=iso3, xmin=mean-ci, xmax=mean+ci), 
+                  width=0.2, colour="gray50", alpha=0.85, size=0.3) +
+    # scale_fill_manual(values=wes_palette(n=5, name="Zissou1")) +
+    # scale_fill_brewer(palette="RdYlBu", direction = -1) + ### best for 4 classes
+    scale_fill_manual(values = c('#67a9cf', '#ef8a62')) +
+    theme_ns +
+    theme(legend.key.size = unit(0.2,"cm")) +
+    xlab('Average % of companies\ncommitted to the 17 SDGs') + ylab(NULL) +
+    theme(legend.position = c(0.9, 0.85)) + 
+    coord_flip() +
+    ### remove some legends
+    guides(alpha = FALSE) +
+    guides(fill = guide_legend(override.aes = list(alpha = 0.85))) + ## same transparency as the fill 
+    labs(fill = 'Group')
+)
+### save as jpg
+fname <- paste0(dir.figures, 'ctr_rank_by_avg_pct_of_commit_new.jpg');fname
+# ggsave(fname, plot = last_plot(), width = width_2col, 
+#        height = width_1col, units = unit_ns, dpi = 300)
+
+
+### add evenness at ctr level -------------------------------------------------------------
+ctr_choose <- ctr_rank_bypct$iso3
+
+J.com_byctr.choose <- J.com_byctr %>%
+  dplyr::filter(iso3 %in% ctr_choose) %>%
+  left_join(., grp, by = c('iso3' = 'iso_a3'))
+names(J.com_byctr.choose)
+
+#### plot to view the data ########################
+p.evenness_byctr <- J.com_byctr.choose %>%
+  # dplyr::mutate(group = income_grp) %>%
+  dplyr::mutate(group = eco_group) %>%
+  ggplot(aes(x = reorder(iso3, desc(mean)), y = mean, 
+             fill = group,
+             alpha = 0.85)) +
+  # geom_col() +
+  # geom_point(show.legend = F) +
+  geom_col(show.legend = F) +
+  geom_errorbar(aes(x=iso3, ymin=mean-ci, ymax=mean+ci), 
+                width=0.2, colour="gray50", alpha=0.85, size=0.3) +
+  # scale_fill_manual(values=wes_palette(n=5, name="Zissou1")) +
+  # scale_fill_brewer(palette="RdYlBu", direction = -1) +
+  scale_fill_manual(values = c('#67a9cf', '#ef8a62')) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  # ylim(0.05, 1) +
+  guides(size = FALSE, alpha = F) + ## remove legend for dot size
+  guides(fill = guide_legend(override.aes = list(alpha = 0.85))) + ## same transparency as the fill 
+  theme_ns +
+  theme(legend.position = c(0.9, 0.85)) +
+  xlab(NULL) + ylab("Average evenness of companies'\ncommitments to the 17 SDGs")
+p.evenness_byctr
+
+
+#### dual y-axis plot ##############################
+# col_left  <- 'gray10'
+# col_right <- 'red'
+# coeff <- 100
+# 
+# ggplot() +
+#   geom_col(
+#     data = ctr_rank_bypct,
+#     aes(x = reorder(iso3, desc(mean)),
+#         y = mean, fill = income_grp, alpha = 0.8)) +
+#   geom_errorbar(
+#     data = ctr_rank_bypct,
+#     aes(x=iso3, ymin=mean-ci, ymax=mean+ci), 
+#         width=0.2, colour="gray50", alpha=0.9, size=0.3) +
+#   # scale_fill_manual(values=wes_palette(n=5, name="Zissou1")) +
+#   scale_fill_brewer(palette="RdYlBu", direction = -1) +
+#   theme_ns +
+#   # ylab('Average % of companies\ncommitted to the 17 SDGs') + 
+#   xlab(NULL) +
+#   theme(legend.position = c(0.9, 0.85)) + 
+#   ### remove some legends
+#   guides(alpha = FALSE) +
+#   labs(fill = 'Income group') +
+#   
+#   ### right axis
+#   geom_point(
+#     data = J.com_byctr.choose,
+#     aes(x = iso3, y = mean*coeff), size=3, color = col_right) +
+#   scale_y_continuous(
+#     # Features of the first axis
+#     name = 'Average % of companies\ncommitted to the 17 SDGs',
+#     # Add a second axis and specify its features
+#     sec.axis = sec_axis(~./coeff, 
+#                         name = "Average evenness of companies'\ncommitment to the 17 SDGs ")
+#   ) + 
+#   
+#   theme(
+#     axis.title.y.left = element_text(color = col_left),
+#     axis.ticks.y.left = element_line(color = col_left),
+#     axis.line.y.left = element_line(color = col_left), 
+#     axis.text.y.left = element_text(color = col_left), 
+#     
+#     axis.title.y.right = element_text(color = col_right),
+#     axis.ticks.y.right = element_line(color = col_right),
+#     axis.line.y.right = element_line(color = col_right), 
+#     axis.text.y.right = element_text(color = col_right),
+#     )
+
+
+### combine figures
+#### 2 sub-plot
+ctr_map_rank <- ggarrange(
+  p_pct_com_goal_ctr5, p_ctr_rank_bypct, 
+  nrow = 2, ncol = 1, labels = panel_labels, heights = c(4,1), widths = c(1, 0.95), 
+  # align = 'h', 
+  common.legend = F) +
+  font("xy.text", size = 2, color = "gray")
+# fname <- paste0(dir.figures, 'ctr_rank_by_avg_pct_of_commit__map_v0806_new.png'); fname
+# ggplot2::ggsave(filename = fname,
+#        plot = ctr_map_rank, width = width_2col, height = width_2col + 5,
+#        units = unit_ns, dpi = 300)
+
+#### 3 sub-plot --------------------------------------------
+ctr_map_rank <- ggarrange(
+  p_pct_com_goal_ctr5, p_ctr_rank_bypct, p.evenness_byctr,
+  nrow = 3, ncol = 1, labels = panel_labels, vjust = 1, hjust = 0.3,  ## For Nature, hjust = 0.5
+  heights = c(4,1,1), widths = c(1, 0.95, 0.95), 
+  # align = 'h', 
+  common.legend = F) +
+  font("xy.text", size = 2, color = "gray")
+
+fname <- paste0(dir.figures, 'Fig3abc_new.jpg'); fname
+ggsave(filename = fname,
+       plot = ctr_map_rank, width = width_2col, height = width_2col + 5 + 5, 
+       units = unit_ns, dpi = 1200)
+
+### pdf -----------------------
+fname <- paste0(dir.figures, 'Fig3abc_new.pdf'); fname
+# ggsave(filename = fname,
+#        plot = ctr_map_rank, width = width_2col, height = width_2col + 5 + 5, 
+#        units = unit_ns, dpi = 1200)
+```
+
+
+
+##### - group level - by developed vs. developing
+  In each group, the pct of companies that committed to SDGs in general.
+```{r}
+### the number of committed companies in each ctr
+ctr_have_data   <- df %>% 
+  filter(goal != 'noSDG') %>% 
+  distinct(Company, iso3) %>%
+  dplyr::mutate(yes = 1) %>%
+  group_by(iso3) %>%
+  tally(name = 'com_committed')
+
+### add the 500 companies selected for coding to the above data
+#### this was wrong, as the selected list is not 700 + companies list
+# ctr_list_all <- com700 %>% distinct(Company, iso3) %>% as.data.frame() %>%
+#   merge(., ctr_have_data, by = 'iso3', all.x = T)
+ctr_list_all <- com_final %>% as.data.frame() %>%
+  ungroup() %>%
+  dplyr::group_by(iso3) %>%
+  dplyr::tally(name = 'com_total', wt = n(), sort = T) %>%
+  merge(., ctr_have_data, by = 'iso3', all.x = T)
+
+str(ctr_list_all)
+sum(ctr_list_all$com_total)
+sum(ctr_list_all$com_committed)
+sum(ctr_list_all$com_committed, na.rm = T)
+
+### there is a NA in the committed ctr, need to fix the NA as 0
+ctr_list_all <- ctr_list_all %>%
+  dplyr::mutate_if(is.numeric, ~replace(., is.na(.), 0))
+sum(ctr_list_all$com_committed) ## check again
+
+ctr_list_all_group <- ctr_list_all %>%
+  left_join(., grp, by = c('iso3' = 'iso_a3'))
+### what is the percent of companies committed to the goals in general?
+ctr_commit_pct <- ctr_list_all %>%
+  ### cal the pct
+  dplyr::mutate(pct = com_committed/com_total *100) %>%
+  ### AUT have more then 100% ??? sth wrong with the raw data??? fix it here
+  dplyr::mutate(pct = ifelse(pct > 100, 100, pct)) %>%
+  ### only choose ctr with more than 5 companies
+  dplyr::filter(com_total >= 5) %>%
+  arrange(desc(pct))
+
+
+
+### merge data: pct of committed com by group
+ctr_commit_pct_grp <- merge(ctr_commit_pct, grp, by.x='iso3', by.y = 'iso_a3', all.x = T) %>%
+  group_by(eco_group) %>%
+  dplyr::summarise(
+    n = n(),
+    pct_mean = mean(pct, na.rm = T))
+
+ctr_commit_pct_byincomegrp <- merge(ctr_commit_pct, grp, by.x='iso3', by.y = 'iso_a3', all.x = T) %>%
+  group_by(inc_group) %>%
+  dplyr::summarise(
+    n = n(),
+    pct_mean = mean(pct, na.rm = T))
+
+```
+
+
+##### - by goal + by group (4.ext)
+  For each goal, the avg pct of com in each income group
+```{r}
+
+### the pct of com committed to each goal by ctr
+by_goal_by_group <- pct_com_byctr %>% 
+  ### re-code ctr group
+  mutate(eco_group = case_when(
+    str_detect(economy, "Developed") ~ "Developed",
+    str_detect(economy, "Emerging")  ~ "Developing",
+    str_detect(economy, "eveloping|Least") ~ "Developing",
+    TRUE ~ .$economy
+  )) %>%
+  select(iso3, eco_group, goal, pct_com_goal_country) %>%
+  dplyr::mutate(pct = pct_com_goal_country) %>%
+  left_join(., grp[, c(3,7)], by = c('iso3' = 'iso_a3')) %>%
+  arrange(iso3, goal)
+  
+length(unique(by_goal_by_group$iso3))
+names(by_goal_by_group)
+
+### merge the com number info to the data
+by_goal_by_group_5 <- by_goal_by_group %>%
+  left_join(., ctr_have_data, by = 'iso3') %>% 
+  ### only choose ctr with more than 5 companies
+  dplyr::filter(com_committed >= 4) %>%
+  dplyr::mutate(group = eco_group) %>%  ### by developed vs. developing
+  # dplyr::mutate(group = inc_group) %>%  ### by 4 income levels
+  group_by(goal, group) %>%  
+  dplyr::summarise(
+    n = n(),
+    pct_mean = mean(pct, na.rm = T))  %>%
+  # dplyr::mutate(goal = as.character(goal)) %>% 
+  as.data.frame()
+str(by_goal_by_group_5)
+# length(unique(by_goal_by_group_5$iso3))
+
+
+### plot -----------------------------------------------------
+by_goal_by_group_5 %>%
+  # filter(goal == 'SDG1') %>%
+  ggplot(aes(x = group, y = pct_mean, fill = group, alpha=0.8))+
+  geom_col(show.legend = F) +
+  scale_fill_manual(values = c('#67a9cf', '#ef8a62')) +
+  facet_wrap(~goal, nrow = 2) +
+  theme_ns +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  xlab('') + ylab('Percent of committed companies')
+
+### save as jpg -----------
+fname <- paste0(dir.figures, 'Extended Data Fig_4__avg_pct_of_committed_com_by_dped_dping_new.jpg');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_1col/1.2, units = unit_ns, dpi = 300)
+
+### save as pdf -----------
+fname <- paste0(dir.figures, 'Extended Data Fig_4_new.pdf');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_1col/1.2, units = unit_ns, dpi = 300)
+
+```
+
+
+
+####    - cmt at company level
+#####   * avg or total cmt
+```{r}
+### SDG Index at company level -----------------------------------------
+### for each company, how many SDG cmt statements for each goal?
+cmt_by_goal_by_com <- goal_long %>% 
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  group_by(Company, iso3, Region, goal) %>%
+  dplyr::summarise(cmt = sum(num_total, na.rm = T)) %>% 
+  # ungroup() %>%
+  # group_by(Region) %>%
+  # mutate(med = median(cmt_avg)) %>%
+  arrange(iso3, goal, cmt) %>%
+  ungroup() #%>%
+  # dplyr::mutate(id = row_number())
+
+cmt_by_goal_by_com2 <- cmt_by_goal_by_com %>%
+  arrange(goal) %>%
+  pivot_wider(names_from = goal, values_from = cmt) %>%
+  arrange(Company) 
+
+### dt is the same as the above "cmt_by_goal_by_com2"
+cmt_by_goal_by_com2 <- dt %>%
+  gather(key = goal, value = cmt, SDG1:SDG17) %>%
+  arrange(Company, goal)
+
+### cal the average, total commitment across all 17 Goals
+cmt_stat_by_com <- cmt_by_goal_by_com2 %>% 
+  group_by(Company, iso3, ind_7sys) %>%
+  dplyr::summarise(
+    n_goal   = n(),
+    cmt_mean = mean(cmt, na.rm = T),
+    cmt_sum  = sum(cmt, na.rm = T)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(cmt_mean))
+
+### save as rdata
+fname <- paste0(dir.results, 'cmt_stat_by_com_new.RData')
+save(cmt_stat_by_com, J.com_moreinfo, file = fname)
+load(fname)
+```
+
+
+
+##### * top 50 companies --- (5.ext)
+```{r}
+### pick the list ---------------------------------------------------
+top_n_each  <- 50
+top_n_final <- 50
+#### (1) top 50 regarding number of cmt
+top_n_com_cmt <- cmt_stat_by_com %>%
+  head(top_n_each)
+#### (2) top 50 regarding evenness
+top_n_com_evenness <- J.com_moreinfo %>%
+  head(top_n_each)
+#### (3) a common list
+top_n_com_ls <- unique(c(top_n_com_cmt$Company, top_n_com_evenness$Company))
+length(top_n_com_ls)
+
+### filter the two data and merge as one ----------------------------
+top_com_cmt <- cmt_stat_by_com %>%
+  filter(Company %in% top_n_com_ls) %>%
+  dplyr::select(Company, cmt_mean)
+top_com_eve <- J.com_moreinfo %>%
+  filter(Company %in% top_n_com_ls)
+top_com_data <- merge(top_com_eve, top_com_cmt, by.x = 'Company', by.y = 'Company', all.x = T) %>%
+  arrange(desc(cmt_mean), desc(evenness)) %>%
+  dplyr::mutate(id = cmt_mean)  %>% ## id = evenness * cmt_mean
+  arrange(desc(id)) %>%
+  head(top_n_final)
+
+### plot ------------------------------------------------------------
+col_left  <- '#4dac26'
+col_right <- '#d01c8b'
+coeff <- 300
+top_com_data %>%
+  ggplot(aes(x = reorder(Company, id))) +
+  geom_col(aes(y = cmt_mean), 
+           fill = col_left, alpha = 0.8) +
+  # geom_col(aes(y = evenness*coeff), 
+  #          fill = col_right, width = 0.5, alpha = 0.8) +
+  geom_point(aes(y = evenness*coeff), size = 2,
+             color = col_right) +
+  geom_segment(aes(y=0, xend = Company, yend = evenness*coeff), 
+               color = col_right, size = 0.3) +
+  theme_bw() +
+  scale_y_continuous(
+    # Features of the first axis
+    name = 'Average number of commitments to the 17 SDGs',
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~./coeff,
+                        name = "Average evenness of companies'\ncommitments to the 17 SDGs ")
+  ) +
+  theme(
+    axis.title.x.bottom = element_text(color = col_left),   ## y.left (before coord_flip())
+    axis.ticks.x.bottom = element_line(color = col_left),
+    axis.line.x.bottom = element_line(color = col_left),
+    axis.text.x.bottom = element_text(color = col_left),
+
+    axis.title.x.top = element_text(color = col_right),   ## y.right
+    axis.ticks.x.top = element_line(color = col_right),
+    axis.line.x.top = element_line(color = col_right),
+    axis.text.x.top = element_text(color = col_right),
+    
+    # panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    ) +
+  coord_flip() +
+  xlab('Company')
+
+### save as jpg ------
+fname <- paste0(dir.figures, 'Extended Data Fig_5__company_commitment_evenness_top50_new.jpg');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_2col, units = unit_ns, dpi = 600)
+
+### save as pdf ------
+fname <- paste0(dir.figures, 'Extended Data Fig_5_new.pdf');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_2col, units = unit_ns, dpi = 600)
+```
+
+
+
+##### * all com (si_table1)
+```{r}
+### data -----------------------------------------------------------
+all_com_cmt <- cmt_stat_by_com %>%
+  dplyr::select(Company, cmt_mean)
+
+com_cmt_evenness_all <- merge(x = J.com_moreinfo, y = all_com_cmt, by.x = 'Company', by.y = 'Company', all.x = T) %>%
+  arrange(desc(cmt_mean), desc(evenness)) %>%
+  dplyr::mutate(id = evenness * cmt_mean)  %>%
+  arrange(desc(id))
+
+### save as rdata
+fname <- paste0(dir.results, 'com_cmt_evenness_all_new.RData')
+save(com_cmt_evenness_all, file = fname)
+```
+
+
+  A fancy table
+```{r}
+### load data, in case we need to run all the code above
+fname <- paste0(dir.results, 'com_cmt_evenness_all_new.RData')
+load(fname)
+
+### match iso3c and iso2c
+library(countrycode)
+country_names <- com_cmt_evenness_all$iso3; country_names
+iso2c <- countrycode(country_names,
+            origin = 'iso3c',
+            destination = 'iso2c')
+
+table.data <- data.frame(
+  com_cmt_evenness_all,
+  abbr = tolower(iso2c)
+) %>%
+  dplyr::select(-id)
+
+
+### add the remaining companies, and provide full 500 list
+com_dt_no_cmt <- com_dt %>%
+  dplyr::filter(!company_name %in% com_cmt_evenness_all$Company) %>%
+  dplyr::mutate(
+    evenness = NA, 
+    cmt_mean = NA, 
+    abbr = tolower(countrycode(iso3, origin = 'iso3c', destination = 'iso2c')),
+    name= 'NA', 
+    type = NA, 
+    economy = NA, 
+    income_grp = NA, 
+    eco_group = NA,
+    inc_group = NA) %>%
+  dplyr::rename(Company = company_name) %>%
+  arrange(!is.na(abbr)) %>%
+  dplyr::select(names(table.data))
+
+nrow(com_cmt_evenness_all)
+nrow(com_dt_no_cmt)
+nrow(com_cmt_evenness_all) + nrow(com_dt_no_cmt)
+
+## combine the data and companies without data
+names(table.data)
+names(com_dt_no_cmt)
+table.dat <- rbind(table.data, com_dt_no_cmt)
+
+### add flag info
+table.dat$Country <- sprintf('![](http://flagpedia.net/data/flags/mini/%s.png)', table.dat$abbr)
+# table.dat$flag <- sprintf('https://allianceone.coop/files/assets/default/images/iso-country-flags/png-country-4x3/res-640x480/%s.png', table.dat$abbr) ## too big these images
+
+### save the rank as a table
+### change industry level names --> shorter
+levels(table.dat$ind_7sys)
+ind_labels_short <- c(
+  'Materials',
+  'Manufacture',
+  'Transport',
+  'Healthcare',
+  'IT',
+  'Finance',
+  'Food',
+  'Entertainment'
+)
+
+
+table.s1 <- table.dat %>%
+  arrange(desc(cmt_mean), iso3, Company) %>% ## desc(cmt_mean*evenness)
+  dplyr::mutate(Commitment_mean = formatC(cmt_mean,2,format="f"),
+                Evenness        = formatC(evenness,2,format="f"),
+                Rank            = row_number()) %>%
+  dplyr::mutate(
+    Industry = factor(ind_7sys, levels = levels(ind_7sys), labels = ind_labels_short)) %>%
+  as.data.frame() %>%
+  group_by(Industry) %>%
+  dplyr::mutate(Rank_Industry   = row_number(),
+                # Rank_Industry   = ifelse(is.na(Commitment_mean), NA, Rank_Industry),
+                ISO3            = iso3) %>%
+  as.data.frame() %>%
+  dplyr::select(Rank, Company, Country, ISO3, Industry, Rank_Industry, Commitment_mean, Evenness, abbr) %>%
+  ungroup() %>%
+  # dplyr::filter(Commitment_mean == 'NA')
+  dplyr::mutate(
+    # Rank = ifelse()
+    Rank_Industry  = as.character(Rank_Industry),
+    Commitment_mean= trimws(as.character(Commitment_mean)), ## there are spaces in "NA", as we used formatC() above
+    Rank_Industry  = ifelse(Commitment_mean == "NA", "NA", Rank_Industry)) %>%
+  # dplyr::mutate(Rank_Industry = case_when()) %>%
+  arrange(Rank) %>%
+  dplyr::slice(1:500)
+
+# str(table.s1)
+# unique(table.s1$Commitment_mean)
+
+
+# names(table.s1) <- c('Company', 'Country name', 'Country iso3', 'Industry', 'Commitment mean', 'Evenness')
+### save as rdata
+fname <- paste0(dir.results, 'table.s1_new.RData'); fname
+save(table.dat, table.s1, file = fname)
+
+```
+
+
+  Load the data and revise Table directly here. 
+```{r}
+fname <- paste0(dir.results, 'table.s1_new.RData'); fname
+load(fname)
+
+str(table.s1)
+table.s1 <- table.s1 %>%
+  dplyr::mutate(
+    Rank = ifelse(Commitment_mean == "NA", "NA", Rank)  ### companies with no commitment whose Rank as NA
+  )
+
+### one way to generate a fancy table  ------------------------------
+library(knitr)
+# table.s1 %>%
+#   kable(x = .)
+
+### another way to generate a fancy table --------------------------
+library(kableExtra)
+options(kableExtra.auto_format = FALSE)
+lks <- sprintf('https://allianceone.coop/files/assets/default/images/iso-country-flags/png-country-4x3/res-640x480/%s.png',
+               table.s1$abbr)
+tbl_s1 <- table.s1 %>%
+  dplyr::mutate(Country = '') %>%
+  dplyr::select(-abbr) %>%
+  kable(x = ., align = 'l') %>% ## l --> left
+  kable_styling(bootstrap_options = c("striped", "hover"), fixed_thead = T) %>% ## c("striped", "hover", "condensed")
+  kable_classic(full_width = F, html_font = "Times New Roman", font_size = 10) %>%
+  # kable_material_dark() %>%
+  column_spec(3, image = spec_image(lks, 60, 45))
+
+tbl_s1
+
+### save as html
+### 
+save_kable(x = tbl_s1, file = paste0(dir.figures, 'si_table_1_new.html'), latex_header_includes = T, self_contained = T)
+
+### then go to find the html and open it in Browser --> copy and paste it into a Word doc --> adjust font size 8 and bold the title
+### and title font size is 8.5 --> adjust to single-space, no space before and after --> fix table border on the top --> Done!
+
+### save to local xlsx 
+# fname <- paste0(dir.figures, '/si_table_1.xlsx');fname
+# writexl::write_xlsx(x = table.s1, path = fname)
+
+```
+
+
+
+
+
+```{r eval=FALSE, include=FALSE}
+### plot ------------------------------------------------------------
+# coeff <- 300
+com_cmt_evenness_all %>%
+  ggplot(aes(x = reorder(Company, id))) +
+  geom_col(aes(y = cmt_mean), 
+           fill = col_left, alpha = 0.8) +
+  # geom_col(aes(y = evenness*coeff), 
+  #          fill = col_right, width = 0.5, alpha = 0.8) +
+  geom_point(aes(y = evenness*coeff), size = 2,
+             color = col_right) +
+  geom_segment(aes(y=0, xend = Company, yend = evenness*coeff), 
+               color = col_right, size = 0.3) +
+  theme_bw() +
+  scale_y_continuous(
+    # Features of the first axis
+    name = 'Average number of commitments to the 17 SDGs',
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~./coeff,
+                        name = "Average evenness of companies'\ncommitments to the 17 SDGs ")
+  ) +
+  theme(
+    axis.title.x.bottom = element_text(color = col_left),   ## y.left (before coord_flip())
+    axis.ticks.x.bottom = element_line(color = col_left),
+    axis.line.x.bottom = element_line(color = col_left),
+    axis.text.x.bottom = element_text(color = col_left),
+
+    axis.title.x.top = element_text(color = col_right),   ## y.right
+    axis.ticks.x.top = element_line(color = col_right),
+    axis.line.x.top = element_line(color = col_right),
+    axis.text.x.top = element_text(color = col_right),
+    
+    # panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    ) +
+  coord_flip() +
+  xlab('Company')
+
+### save as jpg
+fname <- paste0(dir.figures, 'company_commitment_evenness_all356_new.jpg');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_2col*6, units = unit_ns, dpi = 600)
+```
+
+
+
+#### - SDG Index at country level 
+  for each country, what's the avg cmt of the companies to each goal?
+```{r}
+goal_cmt_by_ctr <- cmt_by_goal_by_com %>% 
+  group_by(iso3, Region, goal) %>%
+  dplyr::summarise(cmt_avg = mean(cmt, na.rm = T)) %>%
+  arrange(iso3, goal, cmt_avg) %>%
+  ungroup()%>%
+  dplyr::mutate(id = row_number())
+
+### for each country, what's the aggregated goal cmt? - Similar to calculating the aggregated SDG score (Index) from 17 individual goal.
+agg_cmt_by_ctr <- goal_cmt_by_ctr %>%
+  group_by(iso3, Region) %>%
+  dplyr::summarise(cmt_avg = mean(cmt_avg, na.rm = T)) %>%
+  ungroup() %>%
+  dplyr::mutate(rank = order(order(cmt_avg, decreasing=T))) %>%
+  arrange(rank) %>%
+  dplyr::mutate(id = row_number())
+  
+
+### plot
+sc <- theme_bw() + 
+  theme(legend.position = c(0.1, 0.8),
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+### - bar plot at country level
+agg_cmt_by_ctr %>% 
+  group_by(Region) %>%
+  ggplot(aes(x=reorder(iso3, id), y = cmt_avg, fill = Region)) +
+  geom_col() + 
+  geom_text(aes(label = as.integer(cmt_avg)), hjust = 0.5, vjust = -0.5, size = 2) +
+  sc + xlab(NULL) + ylab('SDG commitment on average')
+  
+### - boxplot at continent level
+agg_cmt_by_ctr %>% ggplot() + 
+  geom_boxplot(aes(x = reorder(Region, cmt_avg, FUN = 'median'), 
+                   y = cmt_avg, fill = Region)) + 
+  sc + xlab('Region') +  ylab('SDG commitment')
+  
+
+#### - compare -------------------------------------------------------
+data <- merge(x = agg_cmt_by_ctr, y = rpt_overlap_ctr, by = 'iso3')
+names(data)
+
+### - rank
+data %>% 
+  ggplot(aes(x = rank, y = ctr_rank, color = Region)) + 
+  geom_point(aes(color = Region), size = 5) +
+  geom_text(aes(label = iso3), nudge_y = -0.5) +
+  # geom_smooth(method = 'lm', formula = y~x, se = F) + ## loess
+  geom_vline(xintercept = 25) +
+  geom_hline(yintercept = 25) +
+  theme_bw()
+
+## it seems the more cmt, the lower rank of natiaonl SDG Index score; does not make any sense...
+
+### - actual value
+data %>% 
+  ggplot(aes(x = cmt_avg, y = ctr_index, color = Region)) + 
+  geom_point(aes(color = Region), size = 5) +
+  geom_text(aes(label = iso3), nudge_y = -0.5) +
+  # geom_smooth(method = 'lm', formula = y~x, se = F) + ## loess
+  theme_bw()
+```
+
+
+
+
+

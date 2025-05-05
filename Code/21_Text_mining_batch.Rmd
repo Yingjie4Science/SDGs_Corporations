@@ -73,7 +73,7 @@ fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
 
 
 
-# 1. PDF to clean TXT
+# 1. PDF to cleaned TXT
 
   This was processed in a separate script. 
 
@@ -174,7 +174,7 @@ ls <- d2
 dir_input <- paste0(dir.reports, "pdf_not_coded/"); dir_input
 ls  <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
 
-cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146 => 391
+cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146 => 389
 ```
 
 

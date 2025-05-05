@@ -1,0 +1,1035 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "3/26/2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+# remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+dir.raw     <- './Data/data_raw/'
+dir.results <- './Data/data_results/'
+dir.figures <- './Data/figures/';      dir.figures
+
+
+source('./Code/_packages.R')
+
+```
+
+
+
+
+#  1.  Data
+
+## 1.1 SDG coded data cleaning
+
+
+```
+
+(318)       (356)
+`df17`      `df18`
+    \        /
+     \      /
+      \    /
+      `df0` (443)
+        |
+        |
+        |
+        |
+        V
+  (goal level)
+      `df1` (443)                              `com_inData`
+        |                                           ^
+        |                                           |
+        v                                           |
+      `df2` -----------                             |
+  (target level)      |               (rename)      |
+                      |------->`dfcom` ----------> `df` (443 company, with both 2017 and 2018)
+                      |                             ^
+    `com700` ----------                             |
+  (with com info)                                   |
+                                                    | (to check which companies were not coded)
+                                                    |
+                                                    |
+                                                `com_final` 
+                                                  (508)
+
+```
+
+### - Goal level data (df1)
+
+```{r include=FALSE}
+
+## main data read in
+getwd()
+xls   <- paste0(dir.raw, 'UNGSII/Yingjie_data_02242020_YL.xlsx'); xls
+excel_sheets(xls)
+
+sheet   <- '2017 detailed data'; 
+data_yr <- as.numeric(gsub("\\D", "", sheet)); data_yr
+df17    <- readxl::read_excel(path = xls, sheet = sheet) %>% 
+  dplyr::mutate(yr = data_yr) %>%
+  as.data.frame()
+
+sheet   <- '2018 detailed data'; 
+data_yr <- as.numeric(gsub("\\D", "", sheet)); data_yr
+df18    <- readxl::read_excel(path = xls, sheet = sheet) %>% 
+  dplyr::mutate(yr = data_yr) %>%
+  as.data.frame()
+
+df0     <- rbind(df17, df18) %>%
+  dplyr::mutate(
+    Company = gsub('Chiristian Dior', 'Christian Dior', Company),
+    Company = gsub('AB Inbev', 'AB InBev', Company),
+    Company = gsub('US Foods Holing', 'US Foods Holding', Company)
+  )
+  
+
+
+## data cleaning - goal level --------------------------------------------------
+names(df0)
+str(df0)
+names(df0) <- c("Company", "Region", "Target", "SDG", 'n_statement', 'yr')
+# unique(df0$Target)
+unique(df0$SDG)
+
+n_sdg    <- length(unique(df0$SDG)) -2; n_sdg
+n_target <- length(unique(df0$Target)); n_target
+print(paste0('There are total ', n_sdg,    ' goals.'))
+print(paste0('There are total ', n_target, ' SDG targets.'))
+
+
+### split the goal id and description into 2 cols
+# df_splt <- colsplit(df0$SDG, pattern = ' ', c('goal', 'goal_desc'))
+# df1 <- cbind(df0, df_splt) 
+
+df1 <- separate(data = df0, col = SDG, sep = " ", remove = F,
+                extra = 'merge',
+                into = c('goal', 'goal_desc')) %>%
+  # dplyr::mutate(Target = gsub('\\(', '', Target),
+  #               Target = gsub('\\)', '', Target)) %>%
+  # dplyr::mutate(Target = trimws(Target)) %>%
+  as.data.frame()
+
+
+sort(unique(df1$goal))
+df1$goal <- factor(df1$goal, levels = c(paste0('SDG', seq(1, 17)), 'SDG', 'noSDG'))
+levels(df1$goal)
+```
+
+
+
+### - Target level data (df2)
+
+  Since there is no Target ID in the raw dataset. The author manfully coded the target ID based on the description from UN's SDG indicator list, and then left join the coded target ID to the raw dataset.
+  
+  This target list includes unique values from both 2017 and 2018 data. 
+  
+```{r}
+### Tidy target and add numbered ID --------------------------------------------
+ls_target_df1 <- df1 %>% distinct(SDG, Target) %>% arrange(SDG, Target)
+
+fname <- './Data/data_raw/_ls_goal_target.xlsx'; fname
+writexl::write_xlsx(x = ls_target_df1, path = fname)
+
+
+### --> read in manually matched target list 
+ls_target <- readxl::read_xlsx(path = './Data/data_raw/_ls_goal_target_manualTidy.xlsx', sheet = 1) %>%
+  dplyr::select(Target_id, Target) %>%
+  dplyr::distinct(Target_id, Target, .keep_all = T) %>%
+  # dplyr::mutate(Target = gsub('\\(', '', Target),
+  #               Target = gsub('\\)', '', Target)) %>%
+  # dplyr::mutate(Target = trimws(Target)) %>%
+  separate(col = Target_id, into = c('goal_id', 'target_id'), sep = '\\_', remove = F) %>%
+  as.data.frame()
+
+str(ls_target)
+
+
+
+### Match UNGSII's target name with UN's ----------------------------------------
+### --> UN Goal and Target list 
+library(reshape2)
+ls_un <- read.csv('./Data/data_raw/_ls_un_goal_target.csv', stringsAsFactors = F) %>%
+  dplyr::filter(!is.na(GoalID)) %>%
+  tidyr::separate(Targets, c('target_id_un', 'target_desc_un'), 
+           sep = ' ', extra = 'merge', remove = T)
+str(ls_un)
+ls_un_id <- ls_un %>%
+  dplyr::select(GoalID, target_id_un) %>%
+  separate(target_id_un, c('target_id_un1', 'target_id_un2'), 
+           sep = '\\.', remove = F) %>%
+  dplyr::select(-target_id_un1) %>%
+  dplyr::mutate(goalname = paste0('SDG', GoalID))
+str(ls_un_id)
+ls_un_id$goalname <- factor(x = ls_un_id$goalname, levels = unique(ls_un_id$goalname))
+
+
+### --> merge the two lists 
+names(df1)
+str(df1)
+df1.2 <- merge(x = df1, y = ls_target, by.x = 'Target', by.y = 'Target', all.x = T) %>%
+  ungroup() %>%
+  arrange(!is.na(Target_id), goal, Target_id) #%>%
+  ### check on any duplicated records as I re-coded Target to Target_id
+  # dplyr::count(Company, Target_id) %>%
+
+
+
+
+### --> unique target description in the original raw data set, & new coded data -------------------
+target_desc_raw <- df1.2 %>% 
+  dplyr::select(#Company, goal, 
+                Target_id, Target) %>%
+  distinct(Target, .keep_all = T)
+
+target_desc_new <- df1.2 %>% 
+  dplyr::select(#Company, goal, 
+                Target_id, Target) %>%
+  distinct(Target_id, .keep_all = T)
+
+
+### --> Use new coded target ID (`Target_id`) for the final `level 2 data` -------------------------
+###     Because I further coded the target ids (i.e., 'Target_id') based on the raw data (i.e., 'Target'), it is necessary to summarize the data and keep unique 'Target_id' and 'n_statement'. 
+names(df1.2)
+
+df2 <- df1.2 %>%
+  ungroup() %>%
+  dplyr::group_by(Company, Region, 
+                  Target,  ## this has been re-coded
+                  SDG, 
+                  # n_statement,
+                  goal, goal_desc, Target_id, goal_id, target_id, yr) %>%
+  dplyr::summarise(n_statement = sum(n_statement, na.rm = T)) %>%
+  ## correct company names
+  dplyr::mutate(Company = gsub('Northrop Gruman', 'Northrop Grumman', Company)) %>%
+  # mutate(id = seq.int(nrow(.))) %>%
+  arrange(yr, goal, Target_id)
+
+
+# unique(df2$n)
+names(df2)
+unique(df2$goal)
+
+
+### --> to check if any not matched rows, then add to the manual coding xls - "_ls_goal_target_manualTidy.xlsx"
+df2_na <- df2 %>% dplyr::filter(is.na(Target_id)); df2_na
+# writexl::write_xlsx(x = df2_na, path = './data_raw/_ls_goal_target_na_notMatch.xlsx')
+
+hist(df2$n_statement)
+# boxplot(df2$n_statement)
+length(unique(df2$Company))
+```
+
+
+  *Note: * The coded data for 2018 is very different from the data for 2017. 
+  
+  As a result, we can **NOT** use 2017 data to supplement 2018. 
+
+```{r - compare 2017 vs 2018}
+
+df2yr <- df2 %>%
+  ungroup() %>%
+  dplyr::select(Company, yr, goal, Target_id, n_statement) %>%
+  group_by(Company, yr, 
+           # Target_id, 
+           goal) %>%
+  dplyr::summarise(n = sum(n_statement, na.rm = T)) %>%
+  tidyr::spread(key = yr, value = n) %>%
+  as.data.frame()
+
+
+## remove rows with NA and compare
+df2yr1 <- df2yr %>%
+  drop_na()
+df2yr1 %>%
+  # ggplot(aes(x = `2018`, y = `2017`, color = goal)) +
+  ggplot(aes(x = log(`2018`), y = log(`2017`), color = goal)) +
+  geom_point() +
+  geom_smooth(formula = y~x, method = 'lm') +
+  geom_abline(linetype = "dashed") +
+  theme_bw()
+  
+
+
+### company list in the coded data (356) -----------------------------------------------------------
+com_df2_byYear <- df2 %>%
+  ungroup() %>%
+  dplyr::select(Company, yr, n_statement) %>%
+  group_by(yr, Company) %>%
+  dplyr::summarise(n = sum(n_statement, na.rm = T)/17) %>%
+  as.data.frame()
+
+## data in wide format
+com_df2_byYear_w <- com_df2_byYear %>%
+  spread(key = yr, value = n) %>%
+  as.data.frame()
+
+## plot to compare the difference
+com_df2_byYear_w %>%
+  drop_na() %>%
+  ggplot(aes(x = `2018`, y = `2017`)) +
+  # ggplot(aes(x = log(`2018`), y = log(`2017`))) +
+  geom_point() +
+  geom_smooth(formula = y~x, method = 'lm') +
+  geom_abline(linetype = "dashed") +
+  theme_bw()
+
+```
+
+
+
+### - Save data
+```{r include=FALSE}
+
+## save as RData
+fname <- paste0(dir.results, 'df1_df2.RData'); fname
+save(df1, df2, file = fname)
+save(ls_un_id, file = paste0(dir.results, 'ls_un_id.RData'))
+
+
+## or save as XLSX
+fname <- paste0(dir.results, 'df1.xlsx'); fname
+writexl::write_xlsx(df1, path = fname)
+fname <- paste0(dir.results, 'df2.xlsx'); fname
+writexl::write_xlsx(df2, path = fname)
+```
+
+
+
+
+## 1.2 Company info cleaning
+
+  In addition to the company names in the *coded data*, there are `two` other data sets that include more detailed company information. 
+  
+  Here, we need to use the other two to enrich the company info we have in the coded data. 
+  
+```
+Yingjie_Companies_190930_updateYL.xlsx
+          |
+          v
+         com1  -->  com2  -----------------> `com700`
+                                                 |
+                                                 |
+                                                 |
+Companies in SCR500.xlsx                         |
+          |                                      |
+          v                                      |
+      `com500`-----------------------            |
+                                    |            v
+                                    |------> `com500_plus` ------> `com_final`
+                                    |                                 (508)
+      `com_ls_inData` ---------------
+          ^
+          |
+  (companies in the coded data)
+```
+
+
+
+### * Company info - in data
+```{r}
+fname <- paste0(dir.results, 'df1_df2.RData'); fname
+load(fname)
+
+## company list for (2017 + 2018) data: 443 unique ---------------------------------------
+com_ls_inData <- df2 %>%
+  ungroup() %>%
+  group_by(yr) %>%
+  dplyr::distinct(Company, Region) %>%
+  arrange(desc(yr)) 
+
+com_ls_inData_unique <- com_ls_inData %>%
+  ungroup() %>%
+  distinct(Company, Region, .keep_all = T)
+
+com_ls_inData_unique %>% group_by(yr) %>% tally()
+
+
+## company list for 2018 data: 356 -------------------------------------------------------
+com_ls_2018 <- com_ls_inData %>%
+  dplyr::filter(yr == 2018) %>%
+  arrange(Company) %>%
+  as.data.frame()
+
+## company list for 2017 data: 318 -------------------------------------------------------
+com_ls_2017 <- com_ls_inData %>%
+  dplyr::filter(yr == 2017) %>%
+  as.data.frame()
+
+
+## any difference? -----------------------------------------------------------------------
+# if (!require(devtools)) install.packages("devtools")
+# devtools::install_github("yanlinlin82/ggvenn")
+library(ggvenn)
+
+com_2018 = com_ls_2018$Company
+com_2017 = com_ls_2017$Company
+
+x <- list(com_2018 = com_ls_2018$Company,
+          com_2017 = com_ls_2017$Company)
+ggvenn(
+  x, 
+  fill_color = c("#0073C2FF", "#EFC000FF"), #show_elements = T, 
+  stroke_size = 0.5, set_name_size = 4
+)
+
+
+# setdiff(com_2018, com_2017)
+
+cat('The list in 2017 but not in 2018\n')
+setdiff(com_2017, com_2018) %>% sort()
+```
+
+
+### * Company info - 700+
+
+```{r - clean 700+ com, include=FALSE}
+## company info - all 700+
+xls <- paste0(dir.raw, 'UNGSII/Yingjie_Companies_190930_updateYL.xlsx')
+excel_sheets(xls)
+sheet <- "Companies"
+com0 <- readxl::read_excel(path = xls, sheet = sheet)
+names(com0)
+head(com0, 2)
+
+### cleaning data --------------------------------------------------------------
+names(com0) <- c("Company", 'Industry', 'Industry2', 
+                 "Country", 'Continent', 'Location', 'name_long', 'ISIN')
+com1 <- com0 %>% ## create a new name col for the country
+  dplyr::mutate(Country = gsub(' in general', '', Country)) %>%
+  dplyr::select(-c(Industry2, Location, name_long, ISIN))
+
+### detect rows containing NA values in any column 
+com1 %>% filter_all(any_vars(is.na(.))) ## if no NA, then good
+```
+
+
+
+```{r - industry info, include=FALSE}
+### check industry info
+n.industry <- unique(com0$Industry); #n.industry
+print(paste0('There are total ', length(n.industry), ' industries.'))
+
+### number of countries by industry --------------------------------------------
+ls_industry <- com1 %>%
+  group_by(Industry) %>% tally() %>% arrange(n)
+
+## write to local and tidy this list 
+# writexl::write_xlsx(x = ls_industry, path = './Data/data_raw/_ls_industry.xlsx')
+
+```
+
+
+**Update on industry classifiction**
+f <- '_ls_industry_manualTidy.xlsx'    ## 
+f <- '_ls_industry_manualTidy_R1.xlsx' ## revised classification on 6/11/2022
+
+
+```{r eval=FALSE, include=FALSE}
+
+### read in again after cleaning up Industry info ----------------------------
+f <- '_ls_industry_manualTidy.xlsx'    
+df.industry <- 
+  readxl::read_excel(path = paste0(dir.raw, f)) %>%
+  # dplyr::select(Industry, ind) %>%
+  dplyr::mutate(ind_agg = str_to_sentence(ind_agg),
+                ind_7sys= str_to_sentence(ind_7sys))
+
+
+### change to factor and add levels
+unique(df.industry$ind_7sys)
+
+ind_levels <- c(
+  "Energy, natural resources, and basic materials", ## primary
+  "Industrial manufacturing",                       ## secondary
+  "Mobility and transportation",
+  "Healthcare and life sciences",                   ## Tertiary
+  "Telecommunications and technology",
+  "Financial services",
+  "Food, beverage, and consumer goods",             ## Quaternary         
+  "Media & entertainment"
+)
+
+
+## --> shorten the names for label use
+ind_labels <- c(
+  'Resources and materials',
+  'Industrial manufacturing',
+  'Mobility and transportation',
+  'Healthcare',
+  'IT and Telecommunications',
+  'Financial services',
+  'Food and consumer goods',
+  'Media & entertainment'
+)
+```
+
+
+```{r include=FALSE}
+f <- '_ls_industry_manualTidy_R1.xlsx' ## revised classification on 6/11/2022
+df.industry <- 
+  readxl::read_excel(path = paste0(dir.raw, f)) %>%
+  # dplyr::select(Industry, ind) %>%
+  dplyr::mutate(ind_agg = str_to_sentence(ind_agg),
+                ind_7sys= str_to_sentence(ind_7sys))
+
+
+### change to factor and add levels
+unique(df.industry$ind_7sys) ## now with 13 classes, not 7
+
+ind_levels <- c(
+  "Energy", 
+  "Basic materials",                                ## primary
+  "Industrial manufacturing",                       ## secondary
+  "Mobility and transportation",
+  "Health care",                                    ## Tertiary
+  "Telecommunications and technology",
+  "Financial services",
+  "Food, beverage & tobacco",             ## Quaternary   
+  "Consumer products and services", 
+  "Media & entertainment",
+  "Automobiles and parts",
+  "Insurance",
+  "Retail"
+)
+
+
+## --> shorten the names for label use
+ind_labels <- c(
+  "Energy", 
+  "Basic materials",
+  'Industrial manufacturing',
+  'Mobility and transportation',
+  'Health care',
+  'IT and Telecommunications',
+  'Financial services',
+  'Food, beverage & tobacco',
+  "Consumer products & services", 
+  "Media & entertainment",
+  "Automobiles and parts",
+  "Insurance",
+  "Retail"
+)
+
+
+df.industry <- df.industry  %>%
+  dplyr::mutate(
+    ## choose one classification sys for analysis
+    ind_7sys = factor(ind_7sys, levels = ind_levels), # , labels = ind_labels
+    ind = ind_7sys) %>%
+  dplyr::select(-n, -id)
+
+
+### --> add the updated industry info to the company dataframe
+com2 <- merge(com1, df.industry, by = 'Industry', all.x = T)
+str(com2)
+
+```
+
+
+
+```{r - country name info, include=FALSE}
+names(com2)
+head(com2, 2)
+
+### save the nation info to local to coding the ISO3
+### 52 countries
+df.ctr <- com2 %>% dplyr::select(Continent, Country) %>%
+  distinct(Country, .keep_all = T) %>%
+  arrange(Country) 
+writexl::write_xlsx(x=df.ctr, path = paste0(dir.raw, '_country_info_raw.xlsx'))
+
+df.ctr.test <- com2 %>% dplyr::filter(Country=='South Africa (Rep.)')
+## change one row using "South Africa" to "South Africa (Rep.)". Raw data error. 
+
+
+### read in the updated and manually coded country info
+ctr <- readxl::read_excel(path = paste0(dir.raw, '_country_info_raw_iso3.xlsx'), 
+                          range = 'B1:C100') %>%
+  filter(!is.na(Country))
+
+com700 <- com2 %>%
+  merge(., ctr, 'Country', all.x = T) %>%
+  dplyr::mutate(
+    Company = gsub('Northrop Gruman', 'Northrop Grumman', Company),
+    Company = gsub('Anheuser-Busch \\(AB InBev\\)', 'AB InBev', Company),
+    Company = gsub('Chiristian Dior', 'Christian Dior', Company),
+    Company = gsub('US Foods Holing', 'US Foods Holding', Company),
+    Company = gsub('Flextronics International', 'Flex', Company),
+    Company = trimws(Company),
+    Continent = ifelse(Company =='Emirates Group', 'Asia', Continent),
+                )
+str(com700)
+```
+
+
+### * Company info - 500 +
+
+```{r}
+### this is the final list of 500 companies for SDG commitment coding
+com500 <- readxl::read_excel(path = paste0(dir.raw, 'UNGSII/Companies in SCR500.xlsx')) %>%
+  ## unify the company names
+  dplyr::mutate(
+    company_name = gsub('Advanced Card Systems', 'Advanced Card Systems Holdings (ACS)', company_name),
+    company_name = gsub('Ab Inbev', 'AB InBev', company_name),
+    company_name = gsub('Amazon', 'Amazon.co', company_name),
+    company_name = gsub('Chiristian Dior', 'Christian Dior', company_name),
+    company_name = gsub('Delta Corporation \\(Zumbabwe\\)', 'Delta Corporation Limited \\(Zimbabwe\\)',  company_name),
+    company_name = gsub('Emirates Airlines', 'Emirates Group', company_name),
+    company_name = gsub('Flextronics International', 'Flex', company_name),
+    company_name = gsub('Inditex', 'Industria de Diseno Textil', company_name),
+    company_name = gsub('Northrop Gruman', 'Northrop Grumman', company_name),
+    company_name = gsub('US Foods Holing', 'US Foods Holding', company_name),
+       # company_name = gsub('Sompo Japan Nipponkoa', 'Sompo Holdings', company_name),
+    company_name = gsub('Standard Bank Group', 'Standard Bank Group Limited', company_name),
+    region = ifelse(company_name=='Emirates Group', 'Asia', region),
+    company_name = trimws(company_name),
+    region       = trimws(region)
+  ) %>% as.data.frame() 
+
+
+### combine the company list from SCR500 list AND coded data. 
+com500_plus <- 
+  merge(x = com500, 
+        y = com_ls_inData %>% ungroup() %>% dplyr::distinct(Company, Region), 
+        by.x = 'company_name', by.y = 'Company', all = T) %>%
+  arrange(company_name) %>% ## !is.na(region), 
+  dplyr::mutate(
+    region = ifelse(company_name == 'Austrian Post', 'Europe', region),
+    region = ifelse(company_name == 'Estee Lauder', 'North America',  region),
+    region = ifelse(company_name == 'Fluor', 'North America', region),
+    region = ifelse(company_name == 'Julius Bär', 'Europe', region),
+    region = ifelse(company_name == 'Principal Financial Group', 'North America', region),
+    region = ifelse(company_name == 'Prudential Financial', 'North America',  region),
+    region = ifelse(company_name == 'Rio Tinto Group', 'Europe',  region),
+    region = ifelse(company_name == 'SoftBank Group' ,'Asia',  region),
+    region = ifelse(company_name == 'AB Inbev','Europe',  region)
+    ) %>%
+  arrange(!is.na(region), company_name) %>% 
+  as.data.frame()
+
+
+### --> companies that are not coded in 2017 and 2018 data
+com500_notCoded <- com500_plus %>%
+  dplyr::filter(is.na(Region))
+
+
+### --> keep filling the missing info in `region`, by comparing with `Region` column, then remove this column 
+com500_plus <- com500_plus %>% dplyr::select(-Region)
+```
+
+
+### * Com final list + Save
+```{r}
+com_final <- com500_plus %>%
+  ## left join with the all companies data table
+  left_join(., com700, by = c('company_name'='Company')) %>% 
+  dplyr::mutate(
+    # company_name = gsub('Chiristian Dior', 'Christian Dior', company_name),
+    company_name = gsub('Taiwan Semicondctor Manufacturing', 'Taiwan Semiconductor Manufacturing', company_name)) %>% 
+  arrange(!is.na(Country), Country)
+  
+
+
+## --> check on data ----------------------------
+# sort(unique(com700$Company))
+# str(com700)
+# str(com_final)
+length(unique(com_final$company_name)) # --> 508 companies
+unique(com_final$region)               # -->   5 regions
+
+com_final %>% group_by(company_name) %>% tally() %>% dplyr::filter(n > 1)
+length(unique(com_final$Country))      # -->  48 countries
+
+
+
+## --> save data ---------------------------------
+fname <- paste0(dir.results, '/com_final_500_scr.RData'); fname
+save(com_final, com700, ctr, ind_levels, ind_labels, file = fname)
+
+fname <- paste0(dir.results, '/com_final_500_scr.xlsx')
+writexl::write_xlsx(x = com_final, path = fname)
+
+rm(com0, com1, com2, com500_notCoded, com500_plus)
+```
+
+
+
+
+
+
+
+## 1.3 Merge 'coded data' and 'com info' 
+
+
+
+```{r}
+
+### load the coded data: `df1` and df2`
+fname <- paste0(dir.results, 'df1_df2.RData'); 
+load(fname)
+
+
+### load the company profile data
+fname <- paste0(dir.results, 'com_final_500_scr.RData'); 
+load(fname) ## `com_final, com700, ctr, ind_levels, ind_labels`
+
+
+
+### add additional company profile to the coded data -------------------------------------
+dfcom <- merge(df2, com700, 'Company', all.x = T) %>% 
+  arrange(Company, goal) %>%
+  dplyr::mutate(
+    Company = gsub('Taiwan Semicondctor Manufacturing', 'Taiwan Semiconductor Manufacturing', Company),
+    target_id = ifelse(goal_id == 'SDGs'  & is.na(target_id), 'g', target_id),
+    target_id = ifelse(goal_id == 'noSDG' & is.na(target_id), 'g', target_id),
+    goal_desc = ifelse(goal_id == 'noSDG' & is.na(goal_desc), 'noSDG', goal_desc)
+  )
+
+## check NA
+dfcom.na <- dfcom %>% dplyr::filter_all(any_vars(is.na(.))) 
+df2.na   <- df2   %>% dplyr::filter_all(any_vars(is.na(.))) 
+dfcom.na <- dfcom %>% dplyr::select(-target_id) %>%
+  dplyr::filter_all(any_vars(is.na(.))) 
+cat('There are', length(unique(dfcom.na$Company)), 'missing data!\n\n')
+
+
+
+### rename the final dataset
+# names(dfcom)
+df <- dfcom %>%
+  dplyr::select(Company, iso3, goal_id, Target_id, target_id, goal, yr,
+                n_statement,
+                goal_desc, 
+                # Target, SDG, Country,
+                ind, Industry, ind_agg, ind_7sys, ind_3,
+                Region, Continent) %>%
+  arrange(Company, Target_id, yr)
+# str(df)
+
+cat('There are', unique(df$Company) %>% length(), 'companies after combining 2017 and 2018 data.')
+```
+
+
+
+  * get familiar with the data (NO USE)
+```{r include=FALSE}
+### how to normalize the data ???
+df %>% dplyr::filter(yr == 2018) %>%
+  ggplot(aes(x=n_statement)) + 
+  geom_histogram(binwidth=2) + 
+  ylim(0, 150) +
+  theme_bw()
+
+df %>% dplyr::filter(yr == 2018) %>%
+  ggplot(aes(y=n_statement)) + 
+  geom_boxplot() + 
+  ylim(0, 50) + theme_bw()
+
+df %>% dplyr::filter(yr == 2018) %>%
+  ggplot(aes(x=n_statement)) + 
+  geom_density() + theme_bw()
+
+
+### find the intervals for classifying the raw data
+### jenks - will be very slow; quantile - better
+nclass = 10
+# classint_jk <- classIntervals(df$n_statement,n=nclass, style= "jenks"); classint_jk
+classint_qt <- classIntervals(df$n_statement,n=nclass, style="quantile"); classint_qt
+pal <- c("red", "blue") #'yellow', 
+plot(classint_qt, pal=pal, main="Quantile")
+
+classint    <- classint_qt
+brks <- c(unique(as.integer(classint$brk))); brks
+seqs <- seq(1, length(brks)-1); seqs
+
+```
+
+
+
+### For MS
+```{r - Final data, include=FALSE}
+### the final version of data input for analysis
+df <- df %>%
+  dplyr::mutate(
+    ns = cut(n_statement, breaks = brks, 
+             labels = NULL, include.lowest = T, 
+             right = F, dig.lab = 3))
+unique(df$ns)
+unique(df$Company) %>% length()
+str(df)
+
+getwd()
+fname <- paste0(dir.results, 'df.RData'); fname
+save(df, file = fname)
+load(fname)
+```
+
+
+
+### Check un-coded companies
+
+```
+(318)       (356)
+`df17`      `df18`
+    \        /
+     \      /
+      \    /
+      `df0` (443) ---> ... ---> `df`
+```
+
+  According to the flowchart in section 1.1, there are fewer than 500 companies either in each-year data or the combination. 
+  
+  We need to fill the gap, either by considering the combination, or only considering the 2018 data. 
+  
+
+```{r - match UNGSII 500}
+
+to_use_2018_only <- T
+# to_use_2018_only <- F
+
+
+if (to_use_2018_only == T) {years <- c(2018)} else {years <- c(2017, 2018)}
+years_label <- paste(years, collapse = "_"); cat('years_label:', years_label, '\n')
+
+## Here, we use `com_final` to check which company do not have coded data in `df`
+##    `com_final` --> 508 companies listed by UNGSII
+##    `df` ---------> 443 coded companies
+
+unique(df$Company) %>% length()
+
+com_inData <- df %>% 
+  dplyr::filter(yr %in% years) %>%
+  ungroup() %>% 
+  dplyr::rename(iso3_2 = iso3) %>% 
+  dplyr::select(Company, iso3_2, goal_id, yr) %>% ## 443 coded companies
+  arrange(desc(yr)) %>%
+  dplyr::distinct(Company, .keep_all = TRUE)
+
+unique(com_inData$Company) %>% length()
+
+
+
+### which companies do not have coded data? ----------------------------------------------
+com_inData_matchUN500 <- 
+  merge(x    = com_final %>% ungroup() %>% dplyr::select(1:6, iso3),   ## 508 companies
+        y    = com_inData, 
+        by.x = 'company_name', 
+        by.y = 'Company', 
+        all  = T) %>%
+  arrange(is.na(goal_id), company_name, iso3, goal_id)
+
+
+### double check
+# ls1 <- com_final$company_name
+# ls2 <- com_inData_matchUN500$company_name
+# setdiff(ls1, ls2)
+# setdiff(ls2, ls1) ## "Taiwan Semicondctor Manufacturing"
+```
+
+
+
+
+  The world's 500 largest companies generated USD 32.7 trillion *in revenues* and USD 2.15 trillion in profits in 2018. Together, this year's Fortune Global 500 companies employ 69.3 million people worldwide and are represented by 34 countries.
+  
+  Fortune Global 500 were ranked by **Revenues**. https://fortune.com/global500/2019/
+
+```{r - match Fortune 500, warning=FALSE}
+f <- paste0(dir.results, 'company_Fortune_Global500.RData'); 
+load(f) ## `com500ft_ToMatchName`
+
+### merge with Fortune-Global500 to get the ranking
+com_inData_matchFortune <- 
+  merge(x    = com500ft_ToMatchName,
+        y    = com_inData, 
+        by.x = 'company_name_tomatch', 
+        by.y = 'Company', 
+        all  = T) %>%
+  arrange(is.na(goal_id), company_name_tomatch, iso3_2, goal_id)
+```
+
+
+
+```{r - match UNGSII 500 and then Fortune 500, warning=FALSE}
+com_inData_matchUN500_Fortune <- 
+  merge(x = com_inData_matchUN500 %>% dplyr::select(company_name, Country, goal_id),  
+        y = com500ft_ToMatchName, # %>% 
+          # dplyr::select(company_name, rank, country) %>% 
+          # dplyr::rename(y.rank = rank, y.country = country),
+        by.x = 'company_name', 
+        by.y = 'company_name_tomatch', 
+        all = T) %>%
+  arrange(#Rank,is.na(goal_id), iso3, 
+          company_name, goal_id) %>%
+  as.data.frame()
+
+
+### filter the rows with NA, and to double-check name match 
+com_inData_matchUN500_Fortune19_name <- com_inData_matchUN500_Fortune %>%
+  dplyr::filter(is.na(Country)|is.na(country)) %>%
+  as.data.frame()
+
+
+### company that were coded by human and also in the Fortune 500 list --------------------
+com_inData_matchUN500_inFortune <- com_inData_matchUN500_Fortune %>%
+  dplyr::filter(!is.na(goal_id)) %>%
+  dplyr::filter(!is.na(rank2019) | !is.na(rank2018)) %>%
+  dplyr::select(-Country, -goal_id, -company_name_Fortune19) %>%
+  as.data.frame()
+f <- paste0(dir.raw, 'com_list_HumanCoded_inFortune.xlsx'); f
+writexl::write_xlsx(x = com_inData_matchUN500_inFortune, path = f)
+```
+
+
+
+
+```{r - add missing companies to the list, include=FALSE}
+
+### This depends on which list to use, UNGSII 500 or Fortune 500
+
+### 1. add missing ones according to the UNGSII 500 List ------------------------------------
+com_final_naCheckMissing <- com_inData_matchUN500_Fortune %>%
+  janitor::clean_names() %>%
+  dplyr::filter(is.na(goal_id) &        ## companies that are missing in data
+                  !is.na(country)) %>%  ## countries that are in the reference list but not in data
+  # dplyr::select(1:4, Rank, country) %>%
+  # dplyr::rename(Rank_Fortune = Rank) %>%
+  as.data.frame()
+skimr::skim(com_final_naCheckMissing)
+f <- paste0(dir.raw, 'com_final_naCheckNA_UN500_', years_label, '.xlsx'); f
+writexl::write_xlsx(x = com_final_naCheckMissing, path = f)
+
+
+### --> company list already done
+com_added <- readxl::read_excel(path = paste0(dir.raw, 'com_final_naCheckNA_UN500_2018_ManualFillna.xlsx')) %>%
+  dplyr::mutate(company_name = trimws(company_name)) %>%
+  # dplyr::mutate(
+  #   company_name = gsub('Anheuser\\-Busch \\(AB InBev\\)', 'AB InBev', company_name),
+  #   company_name = gsub('Flextronics International', 'Flex', company_name),
+  #   # company_name = gsub('xxx', 'xxx', company_name),
+  #   # company_name = gsub('xxx', 'xxx', company_name),
+  #   # company_name = gsub('xxx', 'xxx', company_name),
+  # ) %>%
+  as.data.frame()
+
+
+
+
+
+
+### 2. add missing ones according to the Fortune 500 List -----------------------------------
+com_final_naCheckMissing <- com_inData_matchFortune %>%
+  dplyr::filter(is.na(goal_id) &        ## companies that are missing in data
+                  !is.na(country)) %>%  ## countries that are in the reference list but not in data
+  as.data.frame()
+# skimr::skim(com_final_naCheckMissing)
+
+com_final_naCheckMissing2 <- com_final_naCheckMissing %>%
+  dplyr::mutate(company_name_tomatch = trimws(company_name_tomatch)) %>%
+  dplyr::rename(company_name = company_name_tomatch) %>%
+  merge(x = ., 
+        y = com_added %>% dplyr::select(company_name, iso3), 
+        by = 'company_name', all = T) %>%
+  dplyr::filter(company_name != "Merck") %>%        ## this one has been added but with the same name in two countries
+  dplyr::filter(is.na(iso3)) %>%                    ## remove the companies that have been added via `com_added`
+  dplyr::select(-yr, -iso3) %>%                     ## the remaining ones to be added
+  arrange(company_name) %>%
+  as.data.frame()
+
+f <- paste0(dir.raw, 'com_final_naCheckNA_Fortune_', years_label, '.xlsx'); f
+writexl::write_xlsx(x = com_final_naCheckMissing2, path = f)
+```
+
+
+```
+  Then, we manually append 
+  `com_final_naCheckNA_Fortune_2018.xlsx`
+                  |
+                  |
+                  | (add to)
+                  |
+                  V
+  `com_final_naCheckNA_UN500_2018_ManualFillna.xlsx` 
+                  |
+                  | (save as ...)
+                  |
+                  V                             
+  `com_final_naCheckNA_UN500_2018_ManualFillna_AddFortune.xlsx`
+            (worked on this to fill in more reports)
+
+```
+
+
+### Data for MS and Text mining
+```{r - Data for Text mining}
+
+fname <- paste0(dir.results, 'df.RData'); fname
+load(fname)
+
+
+comp_name <- 'Cemex'
+df_x <- df %>%
+  dplyr::filter(Company %in% c(comp_name))
+
+
+# comp_name <- 'Apple'
+# df_x <- df %>%
+#   dplyr::filter(Company %in% c(comp_name))
+# 
+# 
+# comp_name <- 'Pfizer'
+# df_x <- df %>%
+#   dplyr::filter(Company %in% c(comp_name))
+
+
+### save to local, and compare to the text mining approach 
+fname <- paste0('./Data/data_TextMining/df_', comp_name, '_reference.xlsx'); fname
+writexl::write_xlsx(x = df_x, path = fname)
+
+### report pdf: 
+### - https://investor.apple.com/investor-relations/default.aspx#tabs_content--2019
+### - https://s2.q4cdn.com/470004039/files/doc_financials/2018/q4/10-K-2018-(As-Filed).pdf
+
+```
+
+
+
+
+```{r - Number for MS}
+### To look at the details for MS writing
+d1 <- df1.2 %>% dplyr::filter(Target_id == '3_c') %>% 
+  left_join(., com700, 'Company') 
+
+d2 <- df1.2 %>% dplyr::filter(Target_id == '16_6') %>% 
+  left_join(., com700, 'Company') 
+```
+
+
+
+
+
+
+```
+# 2. Data summary
+
+```
+

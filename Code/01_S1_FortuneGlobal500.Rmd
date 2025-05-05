@@ -110,6 +110,12 @@ func_from_Fortune19_to_NameInData <- function(df) {
       company_name = gsub('Woolworths Group', 'Woolworths',  company_name),
       company_name = gsub('International Business Machines', 'IBM', company_name),
       company_name = gsub('United Parcel Service', 'UPS', company_name),
+      
+      
+      company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
+      company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
+      company_name = gsub("L'Oréal", "L'Oreal", company_name),
+      company_name = gsub('Fomento Económico Mexicano', 'Fomento Economico Mexicano', company_name),
       # company_name = gsub('xxx', 'xxx', company_name),
       # company_name = gsub('xxx', 'xxx', company_name),
       # company_name = gsub('xxx', 'xxx', company_name),
@@ -364,7 +370,9 @@ com500ft_profile2 <- com500ft_profile %>%
 names(com500ft_profile2)
 
 ### save this for future use
-com500ft_profile_df <- com500ft_profile2
+com500ft_profile_df <- com500ft_profile2 %>%
+  func_from_Fortune19_to_NameInData(df = .) %>%
+  as.data.frame()
 
 
 

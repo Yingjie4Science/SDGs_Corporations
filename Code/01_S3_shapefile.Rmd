@@ -1,0 +1,94 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "3/26/2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+path <- rstudioapi::getSourceEditorContext()$path
+dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
+setwd(dir)
+getwd()
+dirname(dir)
+setwd(dirname(dir))
+getwd()
+
+dir.raw     <- './Data/data_raw/'
+dir.results <- './Data/data_results/'
+dir.figures <- './Data/figures/';      dir.figures
+
+
+source('./Code/_packages.R')
+
+```
+
+
+
+
+#  1.  Data
+
+## 1.4 Shapefile data
+```{r}
+
+library(rnaturalearthdata)
+library(rnaturalearth)
+library(sf)
+shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
+  dplyr::select(name, type, iso_a3, economy, income_grp) %>%
+  dplyr::mutate(
+    iso_a3 = ifelse(name == 'Norway', 'NOR', iso_a3),
+    iso_a3 = ifelse(name == 'N. Cyprus', 'CYP', iso_a3),
+    iso_a3 = ifelse(name == 'France', 'FRA', iso_a3))
+# plot(shp['iso_a3'])
+shp_iso_na <- shp %>% 
+  st_drop_geometry() %>%
+  dplyr::filter(is.na(iso_a3))
+
+
+### group info from the shp data
+sort(unique(shp$economy))
+sort(unique(shp$income_grp))
+
+grp <- shp %>% 
+  st_drop_geometry() %>% 
+  ### re-code ctr group
+  mutate(eco_group = case_when(
+    str_detect(economy, "Developed") ~ "1. Developed",
+    str_detect(economy, "Emerging")  ~ "2. Developing",
+    str_detect(economy, "eveloping|Least") ~ "2. Developing",
+    TRUE ~ .$economy
+  ))  %>% 
+  ### re-code income group
+  mutate(inc_group = case_when(
+    str_detect(income_grp, "High")  ~ "1. High income",
+    str_detect(income_grp, "Upper") ~ "2. Upper middle income",
+    str_detect(income_grp, "Lower") ~ "3. Lower middle income",
+    str_detect(income_grp, "Low income") ~ "4. Low income",
+    TRUE ~ .$income_grp
+  )) %>%
+  arrange(!is.na(iso_a3)) %>% ### check missing info and fill the data gap
+  dplyr::mutate(iso_a3 = ifelse(name == 'Norway', 'NOR', iso_a3))
+
+
+### save 
+fname <- paste0(dir.results, 'grp.RData'); fname
+save(grp, shp, file = fname)
+
+### save a copy to the `SDGdetector` package
+getwd()
+fname <- paste0('./Code/SDGdetector/data/', 'shp_grp.RData'); fname
+save(grp, shp, file = fname)
+```
+
