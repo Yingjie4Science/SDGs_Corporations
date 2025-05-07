@@ -13,8 +13,8 @@ editor_options:
 
 # Dirs and packages
 ```{r include=FALSE}
-### To clear your environment 
-# remove(list = ls())
+## To clear your environment
+remove(list = ls())
 
 ## set work dir
 path <- rstudioapi::getSourceEditorContext()$path
@@ -25,9 +25,9 @@ dirname(dir)
 setwd(dirname(dir))
 getwd()
 
-dir.raw     <- './Data/data_raw/'
-dir.results <- './Data/data_results/'
-dir.figures <- './Data/figures/';      dir.figures
+dir.raw     <- './data/data_raw/'
+dir.results <- './data/data_results/'
+dir.figures <- './figures/'
 
 
 source('./Code/_packages.R')
@@ -167,7 +167,6 @@ str(ls_target)
 
 ### Match UNGSII's target name with UN's ----------------------------------------
 ### --> UN Goal and Target list 
-library(reshape2)
 ls_un <- read.csv('./Data/data_raw/_ls_un_goal_target.csv', stringsAsFactors = F) %>%
   dplyr::filter(!is.na(GoalID)) %>%
   tidyr::separate(Targets, c('target_id_un', 'target_desc_un'), 
@@ -439,7 +438,8 @@ ls_industry <- com1 %>%
 ```
 
 
-**Update on industry classifiction**
+**Update on industry classification**
+
 f <- '_ls_industry_manualTidy.xlsx'    ## 
 f <- '_ls_industry_manualTidy_R1.xlsx' ## revised classification on 6/11/2022
 
@@ -579,6 +579,10 @@ com700 <- com2 %>%
     Continent = ifelse(Company =='Emirates Group', 'Asia', Continent),
                 )
 str(com700)
+
+## save data
+f <- paste0(dir.results, 'com700.rds')
+saveRDS(object = com700, file = f)
 ```
 
 
@@ -980,6 +984,7 @@ writexl::write_xlsx(x = com_final_naCheckMissing2, path = f)
 
 
 ### Data for MS and Text mining
+
 ```{r - Data for Text mining}
 
 fname <- paste0(dir.results, 'df.RData'); fname

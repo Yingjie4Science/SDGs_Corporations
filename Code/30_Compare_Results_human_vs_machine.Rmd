@@ -4,7 +4,7 @@ author: "Yingjie"
 date: "6/17/2021"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 
@@ -14,19 +14,11 @@ editor_options:
 ### To clear your environment 
 remove(list = ls())
 
-## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
-getwd()
 
 # directories for Yingjie
   dir.reports <- './Data/data_TextMining/annual_reports/'
   dir.results <- './Data/data_results/'
-  dir.figures <- './Data/figures/'
+  dir.figures <- './figures/'
   dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
 
 # directories for Veronica
@@ -70,7 +62,8 @@ save(goals_df, file = fname)
 ```
 
 ```{r - colors}
-source('./Code/function_UN_SDG_logo_color.R')
+getwd()
+source('./code/function_UN_SDG_logo_color.R')
 color_hex
 ```
 
@@ -170,9 +163,11 @@ save(ls_com_top20, file = fname)
 
 ## Compare
 
-```{r}
+```{r include=FALSE}
 ### plot correlation 
 library(ggpmisc)  ## for `stat_poly_eq`
+library(hydroGOF)  ## for `rmse`
+
 formula <- y ~ x  ## needed for ggpmisc's equation and R2 text
 # myformat <- "Intercept: %s\nSlope: %s\nR²: %s"
 myformat <- "Slope: %s\nR²: %s"  ##not sure how to extract slope
@@ -201,7 +196,7 @@ dfs_2 <- rbind(dfs_m_format, dfs_h_format) %>%
   dplyr::filter(!is.na(company))
 
 
-library(hydroGOF)  ## for `rmse`
+
 ## data in a wide format
 dfs_2w_targ <- dfs_2 %>%
   ## remove SDG general 

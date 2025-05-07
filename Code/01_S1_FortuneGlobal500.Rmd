@@ -22,12 +22,12 @@ dir_root <- dirname(dir)
 setwd(dir_root)
 getwd()
 
-dir.raw     <- paste0(dir_root, '/Data/data_raw/')
-dir.results <- paste0(dir_root, '/Data/data_results/')
-dir.figures <- paste0(dir_root, '/Data/figures/'); dir.figures
+dir.raw     <- paste0(dir_root, '/data/data_raw/')
+dir.results <- paste0(dir_root, '/data/data_results/')
+dir.figures <- paste0(dir_root, '/figures/'); dir.figures
 
 
-source('./Code/_packages.R')
+source('./code/_packages.R')
 ```
 
 
@@ -51,6 +51,14 @@ source('./Code/_packages.R')
   
 ```
 
+
+
+## Help data
+
+```{r }
+f <- paste0(dir.results, 'com700.rds')
+com700 <- readRDS(f)
+```
 
 
 ## 2019 Fortune 500
@@ -138,7 +146,7 @@ com_g500_19 <- func_from_Fortune19_to_NameInData(df = raw19)
 file <- paste0(dir.raw, 'company-dataset/', 'Fortune-Global-500-List-2018-Someka-V1F.xlsx') 
 raw18 <- readxl::read_excel(file, skip = 7) 
 raw18 <- raw18 %>%
-  dplyr::mutate_at(c(4:ncol(.)), as.numeric) %>%
+  dplyr::mutate(across(4:ncol(.), ~ suppressWarnings(as.numeric(.)))) %>%
   janitor::clean_names()
 
 # skimr::skim(raw18)

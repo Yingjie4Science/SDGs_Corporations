@@ -17,17 +17,10 @@ editor_options:
 remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
-getwd()
 
-dir.raw     <- './Data/data_raw/'
-dir.results <- './Data/data_results/'
-dir.figures <- './Data/figures/';      dir.figures
+dir.raw     <- './data/data_raw/'
+dir.results <- './data/data_results/'
+dir.figures <- './figures/';      dir.figures
 
 
 source('./Code/_packages.R')
@@ -42,9 +35,6 @@ source('./Code/_packages.R')
 ## 1.4 Shapefile data
 ```{r}
 
-library(rnaturalearthdata)
-library(rnaturalearth)
-library(sf)
 shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
   dplyr::select(name, type, iso_a3, economy, income_grp) %>%
   dplyr::mutate(

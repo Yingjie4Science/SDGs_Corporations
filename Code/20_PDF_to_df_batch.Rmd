@@ -4,7 +4,7 @@ author: "Yingjie"
 date: "6/17/2021"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 
@@ -15,20 +15,14 @@ editor_options:
 remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
 getwd()
 
 # directories
   dir.raw     <- './Data/data_raw/'
   # dir.reports <- './Data/data_TextMining/annual_reports/'
-  dir.reports <- 'D:/_papers/SDGs/SDGs_Corporations/Data/data_TextMining/annual_reports/' ## PDFs are stored here to save space
+  dir.reports <- './Data/data_TextMining/annual_reports/' ## PDFs are stored here to save space
   dir.results <- './Data/data_results/'
-  dir.figures <- './Data/figures/'
+  dir.figures <- './figures/'
   dirpath     <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
   dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
 
@@ -61,7 +55,7 @@ today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ## read the company information list from XLS file. 
 f <- paste0(dir.raw, "com_list_HumanCoded_URL.xlsx")
 com_download <- readxl::read_excel(f) %>%
-  dplyr::filter(str_starts(string = url, pattern = "NA", negate = T))
+  dplyr::filter(str_starts(string = url_collection, pattern = "NA", negate = T))
 com_download_ls <- unique(com_download$Company)
 
 
@@ -69,7 +63,7 @@ com_download_ls <- unique(com_download$Company)
 files <- list.files(dirpath_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
 com_name_ls <- gsub("\\--.*", "", basename(files))
 
-cat('There are', length(files), "PDF reports."); ## 356
+cat('There are', length(files), "PDF reports.\n"); ## 356
 
 
 ## identify the difference between the two list
@@ -87,14 +81,14 @@ files <- list.files(path = paste0(dir.reports, 'pdf_not_coded'),
                     pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
 com_name_ls <- gsub("\\--.*", "", basename(files))
 
-cat('There are', length(files), "PDF reports.") ## 146 --> 394
+cat('\n There are', length(files), "PDF reports.") ## 146 --> 394
 
 
 ### count how many companies have more than one documents --------------------------------
 n_unique <- com_name_ls %>% unique() %>% length() 
-cat('There are', n_unique, 'unique companies.')
+cat('\n There are', n_unique, 'unique companies.')
 
-cat('There are', (length(files)-n_unique), 'unique companies.')
+cat('\n There are', (length(files)-n_unique), 'unique companies.')
 ```
 
 
@@ -169,7 +163,7 @@ for (pdf in files) {
 
 
 
-```{r - Make a copy to project dir}
+```{r - Make a copy to project dir, eval=FALSE, include=FALSE}
 ## for data 1
 files <- list.files(path = paste0(dir.reports, 'pdf_coded_human/DF'), pattern = '*.RData$', full.names = T); #files
 toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir

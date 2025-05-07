@@ -17,6 +17,10 @@ remove(list = ls())
 
 library(dplyr)
 library(stringr)
+
+# ## devtools is required
+# library(devtools)
+# install_github("dasonk/docstring")
 library(docstring)
 
 ```
@@ -37,7 +41,7 @@ library(docstring)
   
 ```{r - 1. Collection - direct commit}
 
-script_file <- './Code/helper_SDG_search_terms.R' ## the 2nd version
+script_file <- './code/helper_SDG_search_terms.R' ## the 2nd version
 
 source(file = script_file)
 

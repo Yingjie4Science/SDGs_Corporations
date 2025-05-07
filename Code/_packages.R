@@ -2,9 +2,9 @@
 
 ### manipulate data #####
 library(dplyr)
-library(plyr)
-library(tidyverse)
+library(tidyr)
 library(splitstackshape)
+library(stringr)
 library(reshape2)   ## colsplit
 library(reshape)
 library(readxl)
@@ -25,9 +25,10 @@ library(RColorBrewer)
 ## Color Brewer palette
 library(viridis)
 library(hrbrthemes)
+
+
+# library(devtools)
 # install_github("jokergoo/ComplexHeatmap")
-# library(utils)
-# remove.packages('ComplexHeatmap')
 
 library(ComplexHeatmap)
 # packageVersion('ComplexHeatmap')

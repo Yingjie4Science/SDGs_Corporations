@@ -15,23 +15,12 @@ editor_options:
 remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
 getwd()
 
-# directories for Yingjie
-  dir.reports <- './Data/data_TextMining/annual_reports/'
-  dir.results <- './Data/data_results/'
-  dir.figures <- './Data/figures/';      dir.figures
-
-# directories for Veronica
-  # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
-  # dir.results <- '../Data/data_results/'                   # VF added another '.'
-  # dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
+# directories 
+  dir.reports <- './data/data_TextMining/annual_reports/'
+  dir.results <- './data/data_results/'
+  dir.figures <- './data/figures/';      dir.figures
 
 # load packages
   source('./Code/_packages.R')
@@ -47,6 +36,7 @@ today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 
 
 ## helper data
+
 ```{r}
 source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
 
@@ -104,6 +94,10 @@ pdf <- paste0(dir.reports, 'pdf_coded_human/', 'Cemex--IntegratedReport2018.pdf'
   We will **not** be using this, since it finds less words and also doesn't work well with columns. 
 
 ```{r eval=FALSE, include=FALSE}
+
+# Install required packages if not already installed
+if (!require(pdftools)) install.packages("pdftools")
+
 ### test code 
 # get encoding 
   # txt1 <- pdftools::pdf_text(pdf)
@@ -136,7 +130,7 @@ pdf <- paste0(dir.reports, 'pdf_coded_human/', 'Cemex--IntegratedReport2018.pdf'
 # }
 # remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), INSTALL_opts = "--no-multiarch")
 
-source('./Code/function_pdf2text.R') # `pdf2text`
+source('./code/function_pdf2text.R') # `pdf2text`
 txt2 <- pdf2text(filename = pdf) %>%
   # dplyr::filter(nchar(statement) > 5) %>% ## remove sentences that are too short
   ## remove sentences that are too short
@@ -148,6 +142,7 @@ txt2 <- pdf2text(filename = pdf) %>%
   ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
   dplyr::distinct(statement, .keep_all = T) %>%
   as.data.frame()
+
 ```
 
 
@@ -224,7 +219,7 @@ fname <- paste0(dir.reports, 'txt_sentence_df_inspection.xlsx'); fname
 
 
 
-## SDG search terms
+## SDG match terms
 
   Make a list of keywords for SDGs.
 

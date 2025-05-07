@@ -17,17 +17,11 @@ editor_options:
 remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
 getwd()
 
 dir.raw     <- './Data/data_raw/'
 dir.results <- './Data/data_results/'
-dir.figures <- './Data/figures/'
+dir.figures <- './figures/'
 
 
 source('./Code/_packages.R')

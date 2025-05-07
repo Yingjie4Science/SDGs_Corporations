@@ -26,7 +26,7 @@ getwd()
 # directories for Yingjie
   dir.reports <- './Data/data_TextMining/annual_reports/'
   dir.results <- './Data/data_results/'
-  dir.figures <- './Data/figures/'
+  dir.figures <- './figures/'
   dirpath     <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
 
 # directories for Veronica
@@ -52,6 +52,7 @@ today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 
 
 ## Helper data
+
 ```{r - UN SGD target list}
 source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
 
@@ -93,6 +94,7 @@ fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
   **Choose one of the following as input**
 
 ```{r - 350 + reports with human data}
+
 dir_input <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
 
 ## 1. load the `txt` data
@@ -191,6 +193,7 @@ cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146 =>
   These SDG search terms can be *direct mention*, such as "SDG 1", "SDG 2", "SDG 1.2", "SDG 1.a", or *indirect mention*.  
 
 ```{r}
+
 fname <- paste0('./Data/data_TextMining/database/', 'SDG_keys.RData'); fname
 load(fname) ## --> SDG_keys_drc, SDG_keys_indrc, SDG_keys
 
@@ -235,6 +238,7 @@ for (f in ls) {
 
 
 ```{r - run - parallel}
+
 ## load the function
 source('./Code/function_sdg_detector.R') ## `sdg_detector()`
 
@@ -242,6 +246,7 @@ source('./Code/function_sdg_detector.R') ## `sdg_detector()`
 library(parallel)
 library(doParallel)
 library(foreach)
+
 detectCores()
 detectCores(logical = FALSE)  ## Same answer as before on some systems?
 ## returns the number of available hardware threads, and if it is FALSE, returns the number of physical cores
@@ -283,6 +288,7 @@ stopImplicitCluster()
   Inspect and tune mining results
   
   Manual edits. Go back to the SDG keyword strings and edit there first. The duplicate SDGs should be the ones that are inspected to make sure that keywords are being used correctly. But overlap is okay if the sentences actually do talk about >1 SDG.
+  
 ```{r}
 
 ```
@@ -290,6 +296,7 @@ stopImplicitCluster()
 
 
 # 3. Format results
+
 ```{r - function}
 
 func_format <- function(coded) {
@@ -351,6 +358,7 @@ func_format <- function(coded) {
 
 
 ```{r - run}
+
 ls <- list.files(path = paste0(dir_input, 'DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
 
 cat('There are', ls %>% length(), 'corporate reports were CODED.')
@@ -376,6 +384,7 @@ fname <- paste0(dir_input, 'DF_coded_results/coded_dfs_', n, '.xlsx');  fname
 writexl::write_xlsx(x = dfs, path = fname)
 fname <- paste0(dir_input, 'DF_coded_results/coded_dfs_', n, '.RData'); fname
 save(dfs, file = fname)
+
 ```
 
 

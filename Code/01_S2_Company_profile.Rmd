@@ -22,7 +22,7 @@ getwd()
 
 dir.raw     <- paste0(dir_root, '/Data/data_raw/')
 dir.results <- paste0(dir_root, '/Data/data_results/')
-dir.figures <- paste0(dir_root, '/Data/figures/'); dir.figures
+dir.figures <- paste0(dir_root, '/figures/'); dir.figures
 
 
 source('./Code/_packages.R')
@@ -406,11 +406,7 @@ geodf500_update <- rbind(geodf_to_update1, geosi, geodf_to_update2) %>%
 
 #### - map
 ```{r}
-library(sf)
-library(ggrepel)
-library(rnaturalearthdata)
-library(rnaturalearth)
-library(sf)
+
 shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
   dplyr::select(name, type, iso_a3, economy, income_grp) %>%
   dplyr::filter(name != 'Antarctica')
@@ -545,14 +541,15 @@ ggsave(fname, plot = last_plot(),
   - Profit = net income, after accounting for all expenses
 ```{r}
 getwd()
-xls <- './Data/data_raw/zilong/geo_location_coms/revenue.xlsx'
+xls <- paste0(dir.raw, 'company_info_Zilong/geo_location_coms/revenue.xlsx')
 excel_sheets(xls)
 rvn <- readxl::read_excel(path = xls, sheet = 1) %>%
   dplyr::select(1:3)
 names(rvn) <- c('ID', 'name', 'revenue_usd_mil') ## million USD
 
 ### load the final 500 com list - "com_final"
-load('./data_raw/com_final_500_scr.RData')
+f <- paste0(dir.results, 'com_final_500_scr.RData')
+load(f)
 com_final_ctr <- com_final %>%
   dplyr::select(company_name:Country)
 
@@ -562,10 +559,11 @@ rvn500 <- rvn %>%
   arrange(!is.na(revenue_usd_mil), name)
 
 ### fill data gap manually 
-writexl::write_xlsx(x = rvn500, path = './data_raw/zilong/geo_location_coms/revenue_fillna.xlsx')
+f <- paste0(dir.raw, 'company_info_Zilong/geo_location_coms/revenue_fillna.xlsx')
+writexl::write_xlsx(x = rvn500, path = f)
 
 ### update the data
-xls <- './data_raw/zilong/geo_location_coms/revenue_update.xlsx'
+xls <- './data_raw/company_info_Zilong/geo_location_coms/revenue_update.xlsx'
 rvn500new <- read_excel(path = xls, sheet = 1) %>%
   dplyr::mutate(revenue_usd_mil = as.numeric(revenue_usd_mil)) %>%
   arrange(!is.na(revenue_usd_mil), revenue_usd_mil, name)
@@ -592,7 +590,7 @@ percent(rvn500_total/(global_gdp), accuracy = 0.01) ## 17.43%
   (5) linkedin
 ```{r eval=FALSE, include=FALSE}
 getwd()
-xls <- './data_raw/zilong/geo_location_coms/employee.xlsx'
+xls <- './data_raw/company_info_Zilong/geo_location_coms/employee.xlsx'
 excel_sheets(xls)
 emp <- readxl::read_excel(path = xls, sheet = 1) %>%
   dplyr::select(1:3)
@@ -605,10 +603,10 @@ employee500 <- emp %>%
   arrange(!is.na(employee), name)
 
 ### fill data gap manually 
-writexl::write_xlsx(x = emp500, path = './data_raw/zilong/geo_location_coms/employee500_with_na.xlsx')
+writexl::write_xlsx(x = emp500, path = './data_raw/company_info_Zilong/geo_location_coms/employee500_with_na.xlsx')
 
 ### update the data
-xls <- './data_raw/zilong/geo_location_coms/employee500_with_na_filled.xlsx'
+xls <- './data_raw/company_info_Zilong/geo_location_coms/employee500_with_na_filled.xlsx'
 employee500new <- read_excel(path = xls, sheet = 1, trim_ws = T) %>%
   as.data.frame() %>%
   dplyr::mutate(
