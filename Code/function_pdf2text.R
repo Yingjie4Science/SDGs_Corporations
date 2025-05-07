@@ -63,6 +63,31 @@ pdf2text <- function(filename){
 
 
 
+##'
+##'
+##' Use `tokenize` to splits the text into sentences [TBD] ----------------------------- -
+# library(tokenizers)
+# # === 1. Read the PDF and extract text ===
+# pdf_text <- tabulizer::extract_text(file = pdf) %>%
+#   iconv("UTF8", "ASCII", "") 
+# full_text <- paste(pdf_text, collapse = " ") %>%
+#   stringr::str_squish()
+# 
+# # === 2. Split text into sentences ===
+# sentences <- tokenize_sentences(full_text)[[1]]
+# 
+# # === 3. Save as a DataFrame ===
+# df <- data.frame(sentence = sentences, stringsAsFactors = FALSE) %>%
+#   mutate(nchr = nchar(sentences))
+# 
+# # === 4. Save to CSV ===
+# write.csv(df, "sentences.csv", row.names = FALSE)
+
+
+
+##'
+##'
+##'
 
 ### change encoding is needed to fix the encoding problems of punctuation in a sentence --> 'This plan 
 ###   is designed to fortify our company<U+9225><U+6A9A> position as a leading global building materials company.'

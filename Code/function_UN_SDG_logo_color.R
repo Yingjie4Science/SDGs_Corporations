@@ -1,2 +1,3 @@
 
-source('./Code/SDGdetector/R/sdg_color_icon.R')
+source('./code/SDGdetector/R/sdg_color.R')
+source('./code/SDGdetector/R/sdg_icon.R')
