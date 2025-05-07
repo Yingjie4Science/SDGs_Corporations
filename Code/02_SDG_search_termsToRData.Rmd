@@ -120,26 +120,17 @@ SDG_keys <- rbind(SDG_keys_drc, SDG_keys_indrc)
 fname <- paste0('./Data/data_TextMining/database/', 'SDG_keys.RData'); fname
 save(SDG_keys_drc, SDG_keys_indrc, SDG_keys, file = fname)
 
+### 1.1. save as rds
+f <- paste0('./Data/data_TextMining/database/', 'SDG_keys.rds'); f
+saveRDS(SDG_keys, file = f)
+
 
 ### 2. save to `SDG_TM` for R package development
 fname <- paste0(dirname(getwd()), '/SDG_TM/data/SDG_keys.RData'); fname
 save(SDG_keys, file = fname)
 
-### 3. for Meng Cai's repo
+### 3. for R package development
 fname <- paste0('./Code/SDGdetector/data/', 'SDG_keys.RData'); fname
 save(SDG_keys, file = fname)
-```
-
-
-
-
-# Make a copy 
-  Make a copy of the R script to Package repo. 
-```{r}
-
-new.folder <- paste0(dirname(getwd()), '/SDG_TM/code'); new.folder
-
-# copy the files to the new folder
-file.copy(from = script_file, to = new.folder, overwrite = T)
 ```
 
