@@ -387,11 +387,9 @@ developing_country_ls <- paste0('(', developing_country_ls, ')|(', developing_co
 ## 1. No Poverty -----------------------------------------------------------------------------------
 
 SDG1_1 = c(poverty_ls, 
-           reduce_ls, 
            "extreme|\\bmost\\b|excess\\S*|exceeding|\\bhigh\\b|\\bhuge\\b|great|\\bover\\b|remarkabl\\S*|striking|\\bsevere|serious")
 
-SDG1_2 = c(poverty_ls, 
-           reduce_ls)  
+SDG1_2 = c(poverty_ls)  
 
 SDG1_3 = c(paste(poverty_ls, "the vulnerable.?", sep = "|"), 
            "assure|\\bcare.?\\b|\\bcover\\S*|preserve\\S*|protect\\S*|safeguard\\S*|secure|shelter.?|shield\\S*|support\\S*")
@@ -410,8 +408,7 @@ SDG1_4 <- func_to_exclude_terms(which_sdg_term = SDG1_4,
 
 
 SDG1_5 = c(paste(poverty_ls, "vulnerab\\S*", sep = "|"), 
-           disaster_ls, 
-           reduce_ls)
+           disaster_ls)
 SDG1_5 <- func_AND_plus(SDG1_5)
 
 
@@ -423,7 +420,6 @@ SDG1_a_y = c('government\\S*',
              "essential service.?|education\\S*|health|social protection.?") 
 SDG1_a_z = c('development cooperation.?', 
              'program\\S*|\\bpolicy|\\bpolicies',
-             reduce_ls,
              poverty_ls) 
 SDG1_a_x <- func_AND_plus(SDG1_a_x)
 SDG1_a_y <- func_AND_plus(SDG1_a_y)
@@ -431,7 +427,6 @@ SDG1_a_z <- func_AND_plus(SDG1_a_z)
 
 
 SDG1_b_x = c(poverty_ls, 
-             reduce_ls, 
              paste(policy_ls, support_ls, sep = '|'))
 SDG1_b_y = c('government\\S*', 
              'expenditure\\S*|\\bspend\\S*', 
@@ -454,20 +449,17 @@ SDG1_b_y <- func_AND_plus(SDG1_b_y)
 
 ## 2. Zero Hunger ----------------------------------------------------------------------------------
 
-SDG2_1_x = c(reduce_ls, 
-             "hunger|undernourish\\S*|undernutrion|starv\\S*|famine\\S*|malnourish\\S*|malnutrition\\S*") 
-SDG2_1_y = c(reduce_ls, 
-             "food|nutrition.?", 
+SDG2_1_x = c("hunger|undernourish\\S*|undernutrion|starv\\S*|famine\\S*|malnourish\\S*|malnutrition\\S*") 
+SDG2_1_y = c("food|nutrition.?", 
              "insecurity|desert.?\\b|deprivation.?|deficien\\S*")
 SDG2_1_z = c("food|nutrition.?", 
              "access|safe|secur\\S*|nutritious|sufficient|\\bample|plentiful|abundant")
 
-SDG2_1_x <- func_AND_plus(SDG2_1_x)
-# SDG2_1_y <- func_AND_plus(SDG2_1_y)
+
 SDG2_1_z <- func_AND_plus(SDG2_1_z)
 
 temp <- SDG2_1_y
-SDG2_1_y <- lookaround_nearby_n(word_ls1 = temp[2], word_ls2 = temp[3], third_AND_string = temp[1], n = 5)
+SDG2_1_y <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 5)
 
 
 temp    <- paste("malnutrition.?|malnourish|undernourish|undernutrition|under nourished|stunting",
@@ -484,8 +476,7 @@ SDG2_2_y <- func_AND_plus(SDG2_2_y)
 
 
 
-SDG2_3_x = c(increase_ls, 
-             ag_ls, 
+SDG2_3_x = c(ag_ls, 
              "productiv\\S*|production.?|income")
 SDG2_3_y = c("access to", 
              ag_ls,
@@ -583,12 +574,10 @@ SDG2_c   <- func_AND_plus(SDG2_c)
 
 
 SDG3_1 = c(paste("matern\\S*|antenatal\\S*|birth|gestational|parturient", func_AND_plus(c("post","natal|partum")), sep = "|"), 
-           paste(death_ls, "health.?care|complica\\S*|depress\\S*", sep = "|"),
-           reduce_ls)
+           paste(death_ls, "health.?care|complica\\S*|depress\\S*", sep = "|"))
 
 SDG3_2 = c(paste(child_ls, "newborn\\S*|foetal|premature|preterm|pediatric\\S*|perinatal|infant.?|neonat\\S*", sep = '|'),
-           paste(death_ls, "syndrome|wellness|well.?being", sep = '|'),
-           reduce_ls)
+           paste(death_ls, "syndrome|wellness|well.?being", sep = '|'))
 
 SDG3_1 <- func_AND_plus(SDG3_1) 
 SDG3_2 <- func_AND_plus(SDG3_2) 
@@ -605,7 +594,7 @@ temp <- paste(
   "water borne|water.?borne",
   "sexual\\S* transmi\\S*", sep = "|"
 )
-SDG3_3 = c(temp, reduce_ls)
+SDG3_3 = c(temp)
 SDG3_3 <- func_AND_plus(SDG3_3) 
 
 
@@ -615,38 +604,35 @@ SDG3_4_x1 = c(
         "\\bNCD\\b|cardiovascular|heart attack\\S*|myocard\\S* infarct\\S*|cerebrovascular accident\\S*|\\bCVA\\b", 
         "cancer|carcinoma\\S*|lung emphysema\\S*|neoplasm\\S*|tumor\\S*|tumour\\S*",
         "diabet\\S*|copd|coad|asthma\\S*|diarrhea|diarrhoea|dysentery|\\bobes\\S*|suicid\\S*|stroke", sep = '|'),
-  death_ls,
-  reduce_ls);
+  death_ls);
 
 SDG3_4_x2 = c(
   "chronic\\S*", 
-  "bronchitis|disease\\S*|hepatitis\\S*|pulmonary|respiratory|\\bstress", 
-  reduce_ls);
+  "bronchitis|disease\\S*|hepatitis\\S*|pulmonary|respiratory|\\bstress");
 
 SDG3_4_y = c(
   "\\bmental\\S*|mood|psychological|psychiatric|psychosis|psychotic|\\bcogniti\\S*|emotion\\S*", 
-  "disorder|disease\\S*|\\bhealth\\b|wellness|illness\\S*|\\bsick\\S*|disabilit\\S*", 
-  reduce_ls)
-SDG3_4_z = c('\\bCV\\b', "death|mortality", reduce_ls)
+  "disorder|disease\\S*|\\bhealth\\b|wellness|illness\\S*|\\bsick\\S*|disabilit\\S*")
+SDG3_4_z = c('\\bCV\\b', 
+             "death|mortality")
 
 # SDG3_4_x1 <- func_AND_plus(SDG3_4_x1)
 # SDG3_4_x2 <- func_AND_plus(SDG3_4_x2)
 # SDG3_4_y  <- func_AND_plus(SDG3_4_y)
 
 temp <- SDG3_4_x1
-SDG3_4_x1 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, third_AND_string = temp[3])
+SDG3_4_x1 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 temp <- SDG3_4_x2
-SDG3_4_x2 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, third_AND_string = temp[3])
+SDG3_4_x2 <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 temp <- SDG3_4_y
-SDG3_4_y  <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4, third_AND_string = temp[3])
+SDG3_4_y  <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 4)
 temp <- SDG3_4_z
-SDG3_4_z  <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 2, third_AND_string = temp[3])
+SDG3_4_z  <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 2)
 
 
 
 SDG3_5 = c("substance|drug|alcohol|drinking|drunk|ethanol|liquor|liqueur|booze|\\bwine|\\bbeer.?|Narcotic", 
-           "\\babus\\S*|misuse|misconduct.?|obsessive|addict\\S*|\\bharm.?\\b|\\bharmed\\b|hazardous|disorder\\S*",
-           paste('\\btreatment.?', reduce_ls, sep = "|"))
+           "\\babus\\S*|misuse|misconduct.?|obsessive|addict\\S*|\\bharm.?\\b|\\bharmed\\b|hazardous|disorder\\S*")
 SDG3_5 <- func_AND_plus(SDG3_5)
 
 
@@ -719,8 +705,7 @@ SDG3_a   <- gsub("\\.\\+", "(?!.*government)(?!.*Governance)(?!.*Management)(?!.
 SDG3_b_x = c(
   paste("vaccin\\S*|medicin\\S*|medication\\S*|antibiotic", "health facilit\\S*|health sector\\S*", sep = '|'),
   "research\\S*|develop\\S*|\\bR&D\\b",
-  developing_country_ls,
-  support_ls)
+  developing_country_ls)
 SDG3_b_y = c(
   paste("vaccin\\S*|medicin\\S*|medication\\S*|antibiotic|pharmac\\S*", "health facilit\\S*", sep = '|'),
   "access|\\bavailab\\S*|afford\\b|affordabl\\S*|covered by|TRIPS Agreement.?|Trade.?Related Aspects of Intellectual Property Rights")
@@ -758,8 +743,7 @@ SDG3_c_y <- func_AND_plus(SDG3_c_y)
 
 
 SDG3_d_x = c("\\bhealth\\b", 
-             "early warning|manag\\S*|risk reduction|emergency|\\burgen\\S*",
-             paste("preparedness", increase_ls, sep = "|"))
+             "early warning|manag\\S*|risk reduction|emergency|\\burgen\\S*")
 SDG3_d_y = c("International Health Regulations|\\bIHR\\b|health risk",
              "capacity")
 SDG3_d_z1 = c("blood\\S*", 
@@ -770,7 +754,7 @@ SDG3_d_z2 = c("antibiotic|antimicr\\S*",
 
 # SDG3_d_x  <- func_AND_plus(SDG3_d_x)
 temp <- SDG3_d_x
-SDG3_d_x  <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6, third_AND_string = temp[3])
+SDG3_d_x  <- lookaround_nearby_n(word_ls1 = temp[1], word_ls2 = temp[2], n = 6)
 SDG3_d_y  <- func_AND_plus(SDG3_d_y)
 SDG3_d_z1 <- func_AND_plus(SDG3_d_z1)
 SDG3_d_z2 <- func_AND_plus(SDG3_d_z2)
