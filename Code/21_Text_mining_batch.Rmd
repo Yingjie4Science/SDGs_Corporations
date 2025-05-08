@@ -24,53 +24,43 @@ setwd(dirname(dir))
 getwd()
 
 # directories for Yingjie
-  dir.reports <- './Data/data_TextMining/annual_reports/'
-  dir.results <- './Data/data_results/'
-  dir.figures <- './figures/'
-  dirpath     <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  source('./Code/_directories.R')
+  dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
 
-# directories for Veronica
-  # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
-  # dir.results <- '../Data/data_results/'                   # VF added another '.'
-  # dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
 
 # load packages
   source('./Code/_packages.R')
 
   library(tm)        # text mining: readPDF(), Corpus()
-  library(tidyverse) # piping and wrangling
-  library(tabulizer) # importing PDFs
-  #library(remotes)  # installing from remote repositories
   
   ## for parallel computing
   library(parallel)
   library(doParallel)
   library(foreach)
   
+  
+# Robust check and install for SDGdetector
+if (!requireNamespace("SDGdetector", quietly = TRUE)) {
+  message("Installing 'SDGdetector' from GitHub...")
+  
+  # Check and install remotes if needed
+  if (!requireNamespace("remotes", quietly = TRUE)) {
+    install.packages("remotes")
+  }
+
+  # Install from GitHub
+  remotes::install_github("Yingjie4Science/SDGdetector")
+} else {
+  message("'SDGdetector' is already installed.")
+}
+library(SDGdetector)
+  
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
+
+## load the function
+source('./Code/function_sdg_detector.R') ## `sdg_detector()`
 ```
 
-
-## Helper data
-
-```{r - UN SGD target list}
-source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
-
-goals_df <- ls_un_id %>%
-  dplyr::select(goalname, target_id_un, target_id_un2) %>%
-  # group_by(goalname) %>%
-  # arrange(goalname, target_id_un2) %>%
-  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un),
-                target_id_un = paste0('SDG', target_id_un)) %>%
-  dplyr::mutate(id = row_number()) %>%
-  dplyr::mutate(target_id_un = factor(target_id_un, levels = unique(target_id_un)),
-                target_id_un = reorder(target_id_un, id)) %>%
-  as.data.frame()
-
-## save to `SDG_TM` for R package development
-fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
-# save(goals_df, file = fname)
-```
 
 
 
@@ -95,7 +85,7 @@ fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
 
 ```{r - 350 + reports with human data}
 
-dir_input <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+dir_input <- dirpath_pdf
 
 ## 1. load the `txt` data
 # ls <- list.files(path = paste0(dir_input, 'TXT/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
@@ -106,16 +96,6 @@ ls <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.c
 cat('There are', ls %>% length(), 'corporate reports were converted.') ## 352
 ```
 
-
-
-
-
-```{r - Quick test on 1 report, eval=FALSE, include=FALSE}
-
-## test 
-ls <- "./Data/data_TextMining/annual_reports/pdf_coded_human/DF/Total.RData"
-# ls <- "./Data/data_TextMining/annual_reports/pdf_coded_human/DF/Cemex.RData"
-```
 
 
 
@@ -159,7 +139,7 @@ ls.my <- list.files(path = paste0(dir_input, 'DF/'), pattern = paste0(ls.my, col
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 d2 = setdiff(ls, ls.my)
 d2
 
@@ -183,18 +163,13 @@ cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146 =>
 
 
 
-
-
-
-
-
 ## 2.2. Load SDG search terms
 
   These SDG search terms can be *direct mention*, such as "SDG 1", "SDG 2", "SDG 1.2", "SDG 1.a", or *indirect mention*.  
 
 ```{r}
 
-fname <- paste0('./Data/data_TextMining/database/', 'SDG_keys.RData'); fname
+fname <- paste0(dir.tm, 'database/', 'SDG_keys.RData'); fname
 load(fname) ## --> SDG_keys_drc, SDG_keys_indrc, SDG_keys
 
 ```
@@ -206,9 +181,10 @@ load(fname) ## --> SDG_keys_drc, SDG_keys_indrc, SDG_keys
 
   For every row in the corpus (ideally only 1 sentence in each row), have a column 1-17 and 1/0 or y/n if matching the SDG. This would be a for-loop and i 1:17 is linked to the columns being filled
     
-```{r - run [NOT USE], eval=FALSE, include=FALSE}
-## load the function
-source('./Code/function_sdg_detector.R') ## `sdg_detector()`
+    
+  * The following is not in use
+  
+```{r eval=FALSE, include=FALSE}
 
 ## loop data
 for (f in ls) {
@@ -235,12 +211,9 @@ for (f in ls) {
 
 
 
+### - run parallel - SDGDetector
 
-
-```{r - run - parallel}
-
-## load the function
-source('./Code/function_sdg_detector.R') ## `sdg_detector()`
+```{r eval=FALSE, include=FALSE}
 
 ## set up parallel
 library(parallel)
@@ -283,6 +256,59 @@ stopImplicitCluster()
 
 
 
+
+### - run parallel - txt2sdg
+
+```{r}
+
+## install the package if not already installed
+if (!requireNamespace("text2sdg", quietly = TRUE)) {
+  if (!requireNamespace("devtools", quietly = TRUE)) {
+    install.packages("devtools")
+  }
+  devtools::install_github("dwulff/text2sdg")
+} else {
+  message("Package 'text2sdg' is already installed.")
+}
+library(text2sdg)
+
+
+# ensemble approach
+hits = detect_sdg(texts)
+
+f <- ls[1]; f
+
+## --> get company name
+company_name <- gsub(".RData", "", basename(f)); print(company_name)
+df <- get(load(f))
+
+
+##' 
+##' 1. using `sdgdetector`
+##' 
+coded1 <- sdg_detector(df = df)
+coded3 <- sdg_detector(df = df) ### change grepl() to str_detect() in the function
+# coded1 <- SDGdetector(x = df, col = 'statement')
+
+
+
+##' 
+##' 2. using `text2sdg`
+##' 
+coded2 <- detect_sdg(df$statement)
+
+
+# extract systems hits
+coded2_attr <- attr(coded2, "system_hits")
+
+# fname <- paste0(dir_input, 'DF_coded/', company_name, '_coded.RData'); #fname
+# save(coded, file = fname)
+    
+```
+
+
+
+
   To Inspect 
 
   Inspect and tune mining results
@@ -293,105 +319,4 @@ stopImplicitCluster()
 
 ```
 
-
-
-# 3. Format results
-
-```{r - function}
-
-func_format <- function(coded) {
-  
-  ### --> pull out the column with coded results
-  # coded_sdgs <- dplyr::pull(coded, sdgs)   ## the same as below one
-  coded_sdgs <- as.vector(unlist(coded['sdgs'])) %>%
-    paste(sep = " ", collapse = " ")
-  # coded_sdgs
-  
-  
-  ### --> format it as a DF 
-  coded_sdgs <- unlist(strsplit(coded_sdgs, split = "\\,")) %>% trimws();
-    
-  coded_sdgs_df <- as.data.frame(table(coded_sdgs)) %>%
-    dplyr::filter(coded_sdgs != '') %>%
-    separate(col = coded_sdgs, into = c('goal', 'target_id'), sep = '_', remove = F) %>%
-    dplyr::mutate(
-      goal_id   = as.numeric(gsub("\\D", "", goal)),
-      target_id = gsub('^.{3}', "", coded_sdgs)) %>%
-    arrange(goal_id, target_id) %>%
-    dplyr::select(1:2, goal_id, everything()) %>%
-    dplyr::rename(n_statements = Freq)
-  
-  
-  
-  ### --> The above data only presents what were detected, but some SDGs without match won't be shown. 
-  ### --> Force to list all 17 SDGs and 169 Targets
-
-  
-  ### --> merge data 
-  coded_sdgs_df_format <- 
-    merge(x = coded_sdgs_df, ## the coded data
-          y = goals_df,      ## the UN goal and target id for formatting
-          by.x = c('goal', 'coded_sdgs'), 
-          by.y = c('goalname', 'target_id_un'), all = T) %>%
-    dplyr::mutate(goal = factor(goal, levels = goals_ls)) %>%
-    arrange(goal, id) %>%
-    dplyr::mutate(id = row_number()) %>%
-    dplyr::mutate(coded_sdgs = gsub('general', 'g', coded_sdgs),
-                  coded_sdgs = factor(coded_sdgs, levels = unique(coded_sdgs)),
-                  coded_sdgs = reorder(coded_sdgs, id)) %>%
-    ## for the NA in `goal_id` and `target_id`, fill the info
-    dplyr::mutate(
-      goal_id   = ifelse(is.na(goal_id),   gsub('SDG|\\_.*$','',coded_sdgs), goal_id),
-      # target_id = ifelse(is.na(target_id), gsub('.*_','',coded_sdgs), target_id), ## Remove all text before '_'
-      target_id = ifelse(is.na(target_id), gsub('SDG','',coded_sdgs), target_id) ## Remove all text before '_'
-    ) %>%
-    as.data.frame()
-  
-  # str(coded_sdgs_df_format)
-  return(coded_sdgs_df_format)
-
-}
-
-```
-
-
-
-
-```{r - run}
-
-ls <- list.files(path = paste0(dir_input, 'DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
-
-cat('There are', ls %>% length(), 'corporate reports were CODED.')
-
-dfs <- data.frame()
-
-for (f in ls) {
-  # print(f)
-  com_name <- gsub('\\.RData|_coded', '', basename(f)); print(com_name)
-  load(f) ## all coded reports were named "coded" as Rdata
-
-  d <- func_format(coded = coded)
-  d$company = com_name
-  d <- d %>% dplyr::select(company, everything())
-
-  dfs <- rbind(dfs, d)
-}
-
-n <- unique(dfs$company) %>% length(); n
-
-### save all the hits to xlsx for easier inspection. 
-fname <- paste0(dir_input, 'DF_coded_results/coded_dfs_', n, '.xlsx');  fname
-writexl::write_xlsx(x = dfs, path = fname)
-fname <- paste0(dir_input, 'DF_coded_results/coded_dfs_', n, '.RData'); fname
-save(dfs, file = fname)
-
-```
-
-
-
-
-
-# 4. Compare Machine to Human
-
-  See next script. 
 
