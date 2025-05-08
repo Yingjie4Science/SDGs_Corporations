@@ -117,11 +117,11 @@ SDG_keys <- rbind(SDG_keys_drc, SDG_keys_indrc)
 ## Save to database --------------------------------------------------------------------------------
 
 ### 1. for this project
-fname <- paste0('./Data/data_TextMining/database/', 'SDG_keys.RData'); fname
+fname <- paste0('./Data/data_tm/database/', 'SDG_keys.RData'); fname
 save(SDG_keys_drc, SDG_keys_indrc, SDG_keys, file = fname)
 
 ### 1.1. save as rds
-f <- paste0('./Data/data_TextMining/database/', 'SDG_keys.rds'); f
+f <- paste0('./Data/data_tm/database/', 'SDG_keys.rds'); f
 saveRDS(SDG_keys, file = f)
 
 
