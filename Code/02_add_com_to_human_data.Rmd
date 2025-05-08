@@ -1,0 +1,380 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "3/26/2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Dirs and packages
+```{r include=FALSE}
+## To clear your environment
+remove(list = ls())
+
+## load work dir
+source('./Code/_directories.R')
+
+source('./Code/_packages.R')
+
+```
+
+## Merge 'coded data' and 'com info' 
+
+```{r}
+
+### load the coded data: `df1` and df2`
+fname <- paste0(dir.results, 'df1_df2.RData'); 
+load(fname)
+
+
+### load the company profile data
+fname <- paste0(dir.results, 'com_final_500_scr.RData'); 
+load(fname) ## `com_final, com700, ctr, ind_levels, ind_labels`
+
+
+
+### add additional company profile to the coded data -------------------------------------
+dfcom <- merge(df2, com700, 'Company', all.x = T) %>% 
+  arrange(Company, goal) %>%
+  dplyr::mutate(
+    Company = gsub('Taiwan Semicondctor Manufacturing', 'Taiwan Semiconductor Manufacturing', Company),
+    target_id = ifelse(goal_id == 'SDGs'  & is.na(target_id), 'g', target_id),
+    target_id = ifelse(goal_id == 'noSDG' & is.na(target_id), 'g', target_id),
+    goal_desc = ifelse(goal_id == 'noSDG' & is.na(goal_desc), 'noSDG', goal_desc)
+  )
+
+## check NA
+dfcom.na <- dfcom %>% dplyr::filter_all(any_vars(is.na(.))) 
+df2.na   <- df2   %>% dplyr::filter_all(any_vars(is.na(.))) 
+dfcom.na <- dfcom %>% dplyr::select(-target_id) %>%
+  dplyr::filter_all(any_vars(is.na(.))) 
+cat('There are', length(unique(dfcom.na$Company)), 'missing data!\n\n')
+
+
+
+### rename the final dataset
+# names(dfcom)
+df <- dfcom %>%
+  dplyr::select(Company, iso3, goal_id, Target_id, target_id, goal, yr,
+                n_statement,
+                goal_desc, 
+                # Target, SDG, Country,
+                ind, Industry, ind_agg, ind_7sys, ind_3,
+                Region, Continent) %>%
+  arrange(Company, Target_id, yr)
+# str(df)
+
+cat('There are', unique(df$Company) %>% length(), 'companies after combining 2017 and 2018 data.')
+```
+
+
+
+  * get familiar with the data (NO USE)
+```{r include=FALSE}
+### how to normalize the data ???
+df %>% dplyr::filter(yr == 2018) %>%
+  ggplot(aes(x=n_statement)) + 
+  geom_histogram(binwidth=2) + 
+  ylim(0, 150) +
+  theme_bw()
+
+df %>% dplyr::filter(yr == 2018) %>%
+  ggplot(aes(y=n_statement)) + 
+  geom_boxplot() + 
+  ylim(0, 50) + theme_bw()
+
+df %>% dplyr::filter(yr == 2018) %>%
+  ggplot(aes(x=n_statement)) + 
+  geom_density() + theme_bw()
+
+
+### find the intervals for classifying the raw data
+### jenks - will be very slow; quantile - better
+nclass = 10
+# classint_jk <- classIntervals(df$n_statement,n=nclass, style= "jenks"); classint_jk
+classint_qt <- classIntervals(df$n_statement,n=nclass, style="quantile"); classint_qt
+pal <- c("red", "blue") #'yellow', 
+plot(classint_qt, pal=pal, main="Quantile")
+
+classint    <- classint_qt
+brks <- c(unique(as.integer(classint$brk))); brks
+seqs <- seq(1, length(brks)-1); seqs
+
+```
+
+
+
+### For MS
+
+```{r - Final data}
+### the final version of data input for analysis
+df <- df %>%
+  dplyr::mutate(
+    ns = cut(n_statement, breaks = brks, 
+             labels = NULL, include.lowest = T, 
+             right = F, dig.lab = 3))
+unique(df$ns)
+unique(df$Company) %>% length() %>%
+  cat('\n There are', ., ' companies in the final human-coded data.\n\n')
+# str(df)
+
+fname <- paste0(dir.results, 'df.RData'); fname
+save(df, file = fname)
+load(fname)
+```
+
+
+
+### Check un-coded companies
+
+```
+(318)       (356)
+`df17`      `df18`
+    \        /
+     \      /
+      \    /
+      `df0` (443) ---> ... ---> `df`
+```
+
+  According to the flowchart in section 1.1, there are fewer than 500 companies either in each-year data or the combination. 
+  
+  We need to fill the gap, either by considering the combination, or only considering the 2018 data. 
+  
+
+```{r - match UNGSII 500}
+
+to_use_2018_only <- T
+# to_use_2018_only <- F
+
+
+if (to_use_2018_only == T) {years <- c(2018)} else {years <- c(2017, 2018)}
+years_label <- paste(years, collapse = "_"); cat('years_label:', years_label, '\n')
+
+## Here, we use `com_final` to check which company do not have coded data in `df`
+##    `com_final` --> 508 companies listed by UNGSII
+##    `df` ---------> 443 coded companies
+
+unique(df$Company) %>% length()
+
+com_inData <- df %>% 
+  dplyr::filter(yr %in% years) %>%
+  ungroup() %>% 
+  dplyr::rename(iso3_2 = iso3) %>% 
+  dplyr::select(Company, iso3_2, goal_id, yr) %>% ## 443 coded companies
+  arrange(desc(yr)) %>%
+  dplyr::distinct(Company, .keep_all = TRUE)
+
+unique(com_inData$Company) %>% length()
+
+
+
+### which companies do not have coded data? ----------------------------------------------
+com_inData_matchUN500 <- 
+  merge(x    = com_final %>% ungroup() %>% dplyr::select(1:6, iso3),   ## 508 companies
+        y    = com_inData, 
+        by.x = 'company_name', 
+        by.y = 'Company', 
+        all  = T) %>%
+  arrange(is.na(goal_id), company_name, iso3, goal_id)
+
+
+### double check
+# ls1 <- com_final$company_name
+# ls2 <- com_inData_matchUN500$company_name
+# setdiff(ls1, ls2)
+# setdiff(ls2, ls1) ## "Taiwan Semicondctor Manufacturing"
+```
+
+
+
+
+  The world's 500 largest companies generated USD 32.7 trillion *in revenues* and USD 2.15 trillion in profits in 2018. Together, this year's Fortune Global 500 companies employ 69.3 million people worldwide and are represented by 34 countries.
+  
+  Fortune Global 500 were ranked by **Revenues**. https://fortune.com/global500/2019/
+
+```{r - match Fortune 500, warning=FALSE}
+f <- paste0(dir.results, 'company_Fortune_Global500.RData'); 
+load(f) ## `com500ft_ToMatchName`
+
+### merge with Fortune-Global500 to get the ranking
+com_inData_matchFortune <- 
+  merge(x    = com500ft_ToMatchName,
+        y    = com_inData, 
+        by.x = 'company_name_tomatch', 
+        by.y = 'Company', 
+        all  = T) %>%
+  arrange(is.na(goal_id), company_name_tomatch, iso3_2, goal_id)
+```
+
+
+
+```{r - match UNGSII 500 and then Fortune 500, warning=FALSE}
+com_inData_matchUN500_Fortune <- 
+  merge(x = com_inData_matchUN500 %>% dplyr::select(company_name, Country, goal_id),  
+        y = com500ft_ToMatchName, # %>% 
+          # dplyr::select(company_name, rank, country) %>% 
+          # dplyr::rename(y.rank = rank, y.country = country),
+        by.x = 'company_name', 
+        by.y = 'company_name_tomatch', 
+        all = T) %>%
+  arrange(#Rank,is.na(goal_id), iso3, 
+          company_name, goal_id) %>%
+  as.data.frame()
+
+
+### filter the rows with NA, and to double-check name match 
+com_inData_matchUN500_Fortune19_name <- com_inData_matchUN500_Fortune %>%
+  dplyr::filter(is.na(Country)|is.na(country)) %>%
+  as.data.frame()
+
+
+### company that were coded by human and also in the Fortune 500 list --------------------
+com_inData_matchUN500_inFortune <- com_inData_matchUN500_Fortune %>%
+  dplyr::filter(!is.na(goal_id)) %>%
+  dplyr::filter(!is.na(rank2019) | !is.na(rank2018)) %>%
+  dplyr::select(-Country, -goal_id, -company_name_Fortune19) %>%
+  as.data.frame()
+f <- paste0(dir.raw, 'com_list_HumanCoded_inFortune.xlsx'); f
+writexl::write_xlsx(x = com_inData_matchUN500_inFortune, path = f)
+```
+
+
+
+
+```{r - add missing companies to the list, include=FALSE}
+
+### This depends on which list to use, UNGSII 500 or Fortune 500
+
+### 1. add missing ones according to the UNGSII 500 List ------------------------------------
+com_final_naCheckMissing <- com_inData_matchUN500_Fortune %>%
+  janitor::clean_names() %>%
+  dplyr::filter(is.na(goal_id) &        ## companies that are missing in data
+                  !is.na(country)) %>%  ## countries that are in the reference list but not in data
+  # dplyr::select(1:4, Rank, country) %>%
+  # dplyr::rename(Rank_Fortune = Rank) %>%
+  as.data.frame()
+skimr::skim(com_final_naCheckMissing)
+f <- paste0(dir.raw, 'com_final_naCheckNA_UN500_', years_label, '.xlsx'); f
+writexl::write_xlsx(x = com_final_naCheckMissing, path = f)
+
+
+### --> company list already done
+com_added <- readxl::read_excel(path = paste0(dir.raw, 'com_final_naCheckNA_UN500_2018_ManualFillna.xlsx')) %>%
+  dplyr::mutate(company_name = trimws(company_name)) %>%
+  # dplyr::mutate(
+  #   company_name = gsub('Anheuser\\-Busch \\(AB InBev\\)', 'AB InBev', company_name),
+  #   company_name = gsub('Flextronics International', 'Flex', company_name),
+  #   # company_name = gsub('xxx', 'xxx', company_name),
+  #   # company_name = gsub('xxx', 'xxx', company_name),
+  #   # company_name = gsub('xxx', 'xxx', company_name),
+  # ) %>%
+  as.data.frame()
+
+
+
+
+
+
+### 2. add missing ones according to the Fortune 500 List -----------------------------------
+com_final_naCheckMissing <- com_inData_matchFortune %>%
+  dplyr::filter(is.na(goal_id) &        ## companies that are missing in data
+                  !is.na(country)) %>%  ## countries that are in the reference list but not in data
+  as.data.frame()
+# skimr::skim(com_final_naCheckMissing)
+
+com_final_naCheckMissing2 <- com_final_naCheckMissing %>%
+  dplyr::mutate(company_name_tomatch = trimws(company_name_tomatch)) %>%
+  dplyr::rename(company_name = company_name_tomatch) %>%
+  merge(x = ., 
+        y = com_added %>% dplyr::select(company_name, iso3), 
+        by = 'company_name', all = T) %>%
+  dplyr::filter(company_name != "Merck") %>%        ## this one has been added but with the same name in two countries
+  dplyr::filter(is.na(iso3)) %>%                    ## remove the companies that have been added via `com_added`
+  dplyr::select(-yr, -iso3) %>%                     ## the remaining ones to be added
+  arrange(company_name) %>%
+  as.data.frame()
+
+f <- paste0(dir.raw, 'com_final_naCheckNA_Fortune_', years_label, '.xlsx'); f
+writexl::write_xlsx(x = com_final_naCheckMissing2, path = f)
+```
+
+
+```
+  Then, we manually append 
+  `com_final_naCheckNA_Fortune_2018.xlsx`
+                  |
+                  |
+                  | (add to)
+                  |
+                  V
+  `com_final_naCheckNA_UN500_2018_ManualFillna.xlsx` 
+                  |
+                  | (save as ...)
+                  |
+                  V                             
+  `com_final_naCheckNA_UN500_2018_ManualFillna_AddFortune.xlsx`
+            (worked on this to fill in more reports)
+
+```
+
+
+### Data for MS and Text mining
+
+```{r - Data for Text mining}
+
+fname <- paste0(dir.results, 'df.RData'); fname
+load(fname)
+
+
+comp_name <- 'Cemex'
+df_x <- df %>%
+  dplyr::filter(Company %in% c(comp_name))
+
+
+# comp_name <- 'Apple'
+# df_x <- df %>%
+#   dplyr::filter(Company %in% c(comp_name))
+# 
+# 
+# comp_name <- 'Pfizer'
+# df_x <- df %>%
+#   dplyr::filter(Company %in% c(comp_name))
+
+
+### save to local, and compare to the text mining approach 
+fname <- paste0(dir.tm, 'df_', comp_name, '_reference.xlsx'); fname
+writexl::write_xlsx(x = df_x, path = fname)
+
+### report pdf: 
+### - https://investor.apple.com/investor-relations/default.aspx#tabs_content--2019
+### - https://s2.q4cdn.com/470004039/files/doc_financials/2018/q4/10-K-2018-(As-Filed).pdf
+
+```
+
+
+
+
+```{r - Number for MS}
+### To look at the details for MS writing
+d1 <- df1.2 %>% dplyr::filter(Target_id == '3_c') %>% 
+  left_join(., com700, 'Company') 
+
+d2 <- df1.2 %>% dplyr::filter(Target_id == '16_6') %>% 
+  left_join(., com700, 'Company') 
+```
+
+
+
+
+
+
+```
+# 2. Data summary
+
+```
+
