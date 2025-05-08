@@ -1,0 +1,173 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+## Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## load work dir
+source('./Code/_directories.R')
+
+source('./Code/_packages.R')
+source('./Code/helper_theme_NS_map.R')
+
+version <- '_R1'
+```
+
+
+## Load data
+
+```{r}
+### load the geolocation data
+f <- paste0(dir.results, 'geodf500_update.rds')
+geodf500_update <- readRDS(f)
+
+
+### load the average commitments and evenness at company level
+load(paste0(dir.results, 'com_cmt_evenness_all.RData'))
+```
+
+
+## Map plot
+
+```{r}
+shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
+  dplyr::select(name, type, iso_a3, economy, income_grp) %>%
+  dplyr::filter(name != 'Antarctica')
+
+geodf500_update1 <- geodf500_update %>%
+  dplyr::filter(!is.na(lat)) %>%
+  # dplyr::select(name:Country) %>% 
+  mutate(lat1 = case_when(
+    str_detect(lat, "S") ~ as.numeric(as.character(gsub('°S', '', lat)))*(-1),
+    TRUE ~ as.numeric(as.character(gsub('°N', '', lat)))
+  )) %>% 
+  mutate(lon1 = case_when(
+    str_detect(lon, "W") ~ as.numeric(gsub('°W', '', lon))*(-1),
+    TRUE ~ as.numeric(gsub('°E', '', lon))
+  )) %>%
+  ### some locations are the same, and here we make a small adjustment to the lat/lon to avoid overlaps
+  ### the result look not change much - may not useful
+  # dplyr::mutate(
+  #   i = runif(n = nrow(.), min= -0.5, max = 0.5),
+  #   j = runif(n = nrow(.), min= -0.5, max = 0.5),
+  #   lat2 = lat1 + i,
+  #   lon2 = lon1 + j
+  #   ) %>%
+  arrange(!is.na(lat1)) 
+geodf_pt <- st_as_sf(geodf500_update1, coords = c("lon1", "lat1"), remove = F, crs = 4326)
+```
+
+
+```{r}
+### Link geo-location with commitments and evenness data -------------------------------------------------------------
+
+### link with the geo-location data
+geodf_pt_cmt <- merge(
+  x = geodf_pt, 
+  y = com_cmt_evenness_all, 
+  by.x = 'name', by.y = 'Company', all = T) %>%
+  arrange(!is.na(lat1))
+
+### get the list that needs to be updated
+geosi2 <- geodf_pt_cmt %>%
+  dplyr::filter(is.na(location))
+
+com_list_to_update2  <- unique(geosi2$name);  com_list_to_update2 
+
+### return to the 'data cleaning' section and add these companies
+
+
+### check the data
+geodf_pt_cmt_filtered <- geodf_pt_cmt %>%
+  dplyr::filter(!is.na(location))
+```
+
+
+
+```{r}
+### plot commitment and evenness at company level
+map_com <- ggplot() +
+  geom_sf(data = shp, fill = 'gray90', color='gray70', size = 0.1) +
+  geom_sf(data = geodf_pt_cmt_filtered, aes(size = cmt_mean, color = (evenness)), alpha = 0.6) +
+  scale_size_continuous(range = c(0.1, 5)) +
+  # scale_color_continuous(direction = -1) +
+  # scale_color_continuous(trans = 'reverse') +
+  scale_color_viridis(option = "D", direction = 1, na.value = "grey50")+
+  #edit legends
+  guides(
+    #reverse color order (higher value on top)
+    color = guide_colorbar(reverse = F, 
+                           barwidth = 0.5,
+                           barheight = 2.5),
+    #reverse size order (higher diameter on top) 
+    size = guide_legend(reverse = TRUE))+
+  # geom_text_repel(data = geodf500_test, aes(x = lon1, y = lat1, label = name)) +
+  labs(color = "Evenness", size = 'Number of \ncommitments') +
+  theme_bw() +
+  theme_ns+
+  theme(
+    legend.position = c(0.12, 0.4),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # panel.border = element_rect(colour = 'transparent'),
+    panel.border = element_blank()); map_com
+  
+
+### save as jpg
+fname <- paste0(dir.figures, 'company_location_map', version, '.jpg');fname
+ggsave(fname, plot = last_plot(), width = width_2col, 
+       height = width_2col/2.2, units = unit_ns, dpi = 1200)
+
+```
+
+
+
+```{r - zoom in - EU}
+zoom_to <- c(5.38, 52.52)  # EU
+zoom_level <- 3
+lon_span <- 360 / 2^zoom_level
+lat_span <- 180 / 2^zoom_level
+lon_bounds <- c(zoom_to[1] - lon_span / 2, zoom_to[1] + lon_span / 2)
+lat_bounds <- c(zoom_to[2] - lat_span / 2, zoom_to[2] + lat_span / 2)
+
+map_com +
+  geom_sf(data = st_sfc(st_point(zoom_to), crs = 4326), color = 'transparent', size = 0.1) +
+  coord_sf(xlim = lon_bounds, ylim = lat_bounds) +
+  theme(legend.position = "none", 
+        panel.border = element_rect(colour = "black", fill=NA, size=.5))
+### save as jpg
+fname <- paste0(dir.figures, '/company_location_map_EU', version, '.jpg');fname
+ggsave(fname, plot = last_plot(), 
+       width = width_2col/2.2, 
+       height = width_2col/2.2, units = unit_ns, dpi = 1200)
+```
+
+
+```{r - zoom in - US}
+zoom_to <- c(126.9780, 37.5665) ## Seoul
+zoom_to <- c(-90.8033, 40.5428) ## Pennsylvania in US
+lon_bounds <- c(zoom_to[1] - lon_span / 2, zoom_to[1] + lon_span / 2)
+lat_bounds <- c(zoom_to[2] - lat_span / 2, zoom_to[2] + lat_span / 2)
+map_com +
+  geom_sf(data = st_sfc(st_point(zoom_to), crs = 4326), color = 'transparent', size = 0.1) +
+  coord_sf(xlim = lon_bounds, ylim = lat_bounds) +
+  theme(legend.position = "none", 
+        panel.border = element_rect(colour = "black", fill=NA, size=.5))
+### save as jpg
+fname <- paste0(dir.figures, '/company_location_map_asia', version, '.jpg');fname
+ggsave(fname, plot = last_plot(), 
+       width = width_2col/2.2, 
+       height = width_2col/2.2, units = unit_ns, dpi = 1200)
+```
+
+
+
+
