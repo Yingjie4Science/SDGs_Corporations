@@ -16,11 +16,8 @@ editor_options:
 ### To clear your environment 
 remove(list = ls())
 
-## set work dir
-
-dir.raw     <- './data/data_raw/'
-dir.results <- './data/data_results/'
-dir.figures <- './figures/';      dir.figures
+## load work dir
+source('./Code/_directories.R')
 
 
 source('./Code/_packages.R')
