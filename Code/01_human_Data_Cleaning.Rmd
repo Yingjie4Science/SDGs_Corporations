@@ -284,6 +284,15 @@ com_df2_byYear_w %>%
 ```
 
 
+```{r - Number for MS}
+### To look at the details for MS writing
+d1 <- df1.2 %>% dplyr::filter(Target_id == '3_c') %>% 
+  left_join(., com700, 'Company') 
+
+d2 <- df1.2 %>% dplyr::filter(Target_id == '16_6') %>% 
+  left_join(., com700, 'Company') 
+```
+
 
 ### - Save data
 

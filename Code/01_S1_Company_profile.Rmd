@@ -385,7 +385,9 @@ com500_plus <- com500_plus %>% dplyr::select(-Region)
 ```
 
 
-## * Com final list + Save
+
+## * Save final list + 
+
 ```{r}
 com_final <- com500_plus %>%
   ## left join with the all companies data table

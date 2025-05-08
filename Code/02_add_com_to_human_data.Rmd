@@ -331,6 +331,8 @@ fname <- paste0(dir.results, 'df.RData'); fname
 load(fname)
 
 
+
+## selected companies for double-checking ------------------------------------------------
 comp_name <- 'Cemex'
 df_x <- df %>%
   dplyr::filter(Company %in% c(comp_name))
@@ -356,25 +358,4 @@ writexl::write_xlsx(x = df_x, path = fname)
 
 ```
 
-
-
-
-```{r - Number for MS}
-### To look at the details for MS writing
-d1 <- df1.2 %>% dplyr::filter(Target_id == '3_c') %>% 
-  left_join(., com700, 'Company') 
-
-d2 <- df1.2 %>% dplyr::filter(Target_id == '16_6') %>% 
-  left_join(., com700, 'Company') 
-```
-
-
-
-
-
-
-```
-# 2. Data summary
-
-```
 

@@ -16,10 +16,9 @@ remove(list = ls())
 
 
 # directories for Yingjie
-  dir.reports <- './Data/data_TextMining/annual_reports/'
-  dir.results <- './Data/data_results/'
-  dir.figures <- './figures/'
-  dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  source('./Code/_directories.R')
+  dir.tm.data <- paste0(dir.reports, 'pdf_coded_human/')
+  dir.tm.fig  <- paste0(dir.figures, 'figure_tm/')
 
 # directories for Veronica
   # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
@@ -80,7 +79,7 @@ color_hex
 ### 1. machine-coded results
 ```{r}
 ## load data
-ls_f <- list.files(path = paste0(dir.tm, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
+ls_f <- list.files(path = paste0(dir.tm.data, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
 tail(ls_f, n = 1)
 load(tail(ls_f, n = 1)) ## load the latest/last data
 
@@ -156,7 +155,7 @@ ls_com_fewCmt <- unique(ls_com_fewCmt$company)
 ## - the top 20
 ls_com_top20 <- dfs_h_desc %>% slice(1:25) %>% dplyr::select(1) %>% unlist() %>% unname(); ls_com_top20
 
-fname <- paste0('./Data/data_TextMining/database/', 'ls_com_top20.RData'); fname
+fname <- paste0(dir.tm, 'database/', 'ls_com_top20.RData'); fname
 save(ls_com_top20, file = fname)
 ```
 
@@ -323,7 +322,7 @@ g_goal <- dfs_2w_goal %>%
   geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
   facet_wrap(~goal, scales = 'free') +
   theme_bw()
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_byGoal_', ymd, '.png'); fname
+fname <- paste0(dir.tm.fig, 'H_M_byGoal_', ymd, '.png'); fname
 # ggsave(filename = fname, plot = g_goal, width = 12, height = 9, units = 'in', dpi = 300)
 
 
@@ -341,8 +340,8 @@ dfs_2w_targ %>%
   facet_wrap(~goal, scales = 'free') +
   theme_bw()
 
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_byTarget_', ymd, '.png'); fname
-# ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+fname <- paste0(dir.tm.fig, 'H_M_byTarget_', ymd, '.png'); fname
+ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
 ```
 
 
@@ -408,8 +407,8 @@ dfs_2w_targ %>%
   facet_wrap(~company, scales = 'free') +
   theme_bw()
 
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_target_raw_', today, '.png'); fname
-# ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
+fname <- paste0(dir.tm.fig, 'H_M_target_raw_', today, '.png'); fname
+ggsave(filename = fname, plot = last_plot(), width = 12, height = 9, units = 'in', dpi = 300)
 
 
 
@@ -461,7 +460,7 @@ dfs_2w_goal %>%
   geom_abline(slope = 1, linetype = 'dashed', color = 'gray', size = 1, show.legend = F) +
   facet_wrap(~company, scales = 'free') +
   theme_bw()
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'H_M_goal_byComp_', today, '.png'); fname
+fname <- paste0(dir.tm.fig, 'H_M_goal_byComp_', today, '.png'); fname
 ggsave(filename = fname, plot = last_plot(), width = 10, height = 10, units = 'in', dpi = 300)
 
 
@@ -565,7 +564,7 @@ g_m <- dfs_2w_targ %>%
   theme_bw() +
   ggtitle(company_name) +
   ylab('Number of SDG statements') + xlab('')
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'Test_', company_name, '_M_', today, '.png'); fname
+fname <- paste0(dir.tm.fig, 'Test_', company_name, '_M_', today, '.png'); fname
 ggplot2::ggsave(filename = fname, plot = g_m, width = 16, height = 9, units = 'in', dpi = 300)
 
 
@@ -583,7 +582,7 @@ g_h <- dfs_2w_targ %>%
   ggtitle(company_name) +
   theme(strip.background = element_rect(fill="orange")) +
   ylab('Number of SDG statements') + xlab('')
-fname <- paste0('./Data/data_TextMining/text_mining_figs/', 'Test_', company_name, '_H_', 
+fname <- paste0(dir.tm.fig, 'Test_', company_name, '_H_', 
                 # today, 
                 '.png'); fname
 ggsave(filename = fname, plot = g_h, width = 16, height = 9, units = 'in', dpi = 300)
@@ -591,7 +590,7 @@ ggsave(filename = fname, plot = g_h, width = 16, height = 9, units = 'in', dpi =
 
 
 ### to screen the coded data for refining --------
-f <- list.files(path = paste0(dir.tm, 'DF_coded'), pattern = company_name, full.names = T); f
+f <- list.files(path = paste0(dir.tm.data, 'DF_coded'), pattern = company_name, full.names = T); f
 load(f) ## `coded`
 fname <- paste0('./Data/data_TextMining/coded_inspection/inspect_', company_name, '.xlsx'); fname
 writexl::write_xlsx(x = coded, path = fname)

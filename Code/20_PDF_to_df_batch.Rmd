@@ -18,12 +18,7 @@ remove(list = ls())
 getwd()
 
 # directories
-  dir.raw     <- './Data/data_raw/'
-  # dir.reports <- './Data/data_TextMining/annual_reports/'
-  dir.reports <- './Data/data_TextMining/annual_reports/' ## PDFs are stored here to save space
-  dir.results <- './Data/data_results/'
-  dir.figures <- './figures/'
-  dirpath     <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  source('./Code/_directories.R')
   dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
 
 # load packages

@@ -6,14 +6,21 @@ output: html_document
 ---
 
 ## Dirs and packages
+
 ```{r include=FALSE}
+
 ### To clear your environment 
 remove(list = ls())
 
 ## load work dir
 source('./Code/_directories.R')
 
-source('./Code/_packages.R')
+library(dplyr)
+library(stringr)
+library(sf)
+library(ggplot2)
+library(viridis)
+
 source('./Code/helper_theme_NS_map.R')
 
 version <- '_R1'
@@ -30,14 +37,18 @@ geodf500_update <- readRDS(f)
 
 ### load the average commitments and evenness at company level
 load(paste0(dir.results, 'com_cmt_evenness_all.RData'))
+
+
+##
+f <- paste0(dir.results, 'shp.rds'); f
+shp <- readRDS(f)
 ```
 
 
 ## Map plot
 
 ```{r}
-shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
-  dplyr::select(name, type, iso_a3, economy, income_grp) %>%
+shp <- shp %>%
   dplyr::filter(name != 'Antarctica')
 
 geodf500_update1 <- geodf500_update %>%

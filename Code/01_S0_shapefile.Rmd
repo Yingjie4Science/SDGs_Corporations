@@ -26,10 +26,8 @@ source('./Code/_packages.R')
 
 
 
+## Shapefile data
 
-#  1.  Data
-
-## 1.4 Shapefile data
 ```{r}
 
 shp <- ne_countries(scale = 'medium', type = 'countries', returnclass = 'sf') %>%
@@ -72,6 +70,9 @@ grp <- shp %>%
 ### save 
 fname <- paste0(dir.results, 'grp.RData'); fname
 save(grp, shp, file = fname)
+
+f <- paste0(dir.results, 'shp.rds'); f
+saveRDS(shp, file = f)
 
 ### save a copy to the `SDGdetector` package
 getwd()
