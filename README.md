@@ -64,18 +64,22 @@ library(RColorBrewer)
 ├── data/
 │   ├── 
 │   ├── 
-│   └── data_tm/
-│       ├── database
-│       ├── annual_reports
-│       ├── 
+│   └── data_tm/                          # text mining (tm) folder
+│       ├── database                      # regex database for tm 
+│       ├── annual_reports                # raw PDF data by year
+│       ├── coded_results                 # tm results
+│       |   ├── coded_combined_with_raw_351.csv
+|       |
+|       ├── 
 │
 ├── code/
 │   ├── 
 │   ├── 
-│   ├── 20_PDF_to_df_batch.Rmd
-│   ├── 21_Text_mining_batch.Rmd
+│   ├── 20_PDF_to_df_batch.Rmd            # convert PDF to df
+│   ├── 21_Text_mining_batch.Rmd          # tm - add sdg labels
+│   ├── 21a_format_tm_data.Rmd
 │   ├── 
-│   ├── 30_Compare_human_tm.Rmd
+│   ├── 30_Compare_human_tm.Rmd           # compare tm to human coded results
 │   ├──
 │   ├── 
 │   ├── 50_coded_analysis_humanData.Rmd
@@ -83,7 +87,7 @@ library(RColorBrewer)
 │   ├──
 │   ├──
 │   ├── 
-│   └── function_*.R                              # Various data processing functions
+│   └── function_*.R                      # Various data processing functions
 │      
 
 ```
