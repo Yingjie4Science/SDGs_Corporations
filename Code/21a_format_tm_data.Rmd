@@ -4,7 +4,7 @@ author: "Yingjie"
 date: "6/17/2021"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 
@@ -17,6 +17,7 @@ remove(list = ls())
 # directories 
   source('./Code/_directories.R')
   dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
+  dir.coded   <- paste0(dir.tm, 'coded_results/')
   
 
 # load packages
@@ -60,6 +61,88 @@ fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
 
 
 # 3. Format results
+
+
+## coded data with original text
+
+```{r - load coded data}
+
+dir_input <- dirpath_pdf
+
+ls <- list.files(path = paste0(dir_input, 'DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); 
+# ls
+
+cat('There are', ls %>% length(), 'corporate reports were CODED.')
+
+```
+
+
+```{r - clean and combine the data}
+coded_combined <- data.frame()
+
+for (f in ls) {
+  com_name <- gsub('\\.RData|_coded', '', basename(f)); 
+  # print(com_name)
+  load(f) ## all coded reports were named "coded" as Rdata
+
+  ## clean the data 
+  coded_i <- coded %>%
+    ## only keep the rows with SDG hits
+    filter(n_total > 0) %>%
+    mutate(
+      company = com_name,
+      sdgs    = str_remove(sdgs, "^,"),
+      sdgs_n  = str_remove(sdgs_n, "^,"),
+      sdgs_n  = str_squish(sdgs_n),
+      human_coded = "yes",
+      year = 2018, 
+      token_count = str_count(statement, "\\S+")) %>%
+    select(company, everything()) %>%
+    as.data.frame()
+  
+  ## combine data 
+  coded_combined <- rbind(coded_combined, coded_i)
+}
+```
+
+
+```{r - save combined data}
+
+## count the number of companies
+n <- unique(coded_combined$company) %>% length(); n
+
+
+## count the total tokens
+sum(coded_combined$token_count, na.rm = T) %>% 
+  round(1) %>% 
+  format(big.mark = ",", scientific = F) %>% 
+  cat('\nIn total, there are', ., 'tokens in the 2018 dataset.\n\n')
+
+
+total_tokens <- sum(coded_combined$token_count, na.rm = TRUE)
+total_million <- round(total_tokens / 1e6, 2)
+cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset, which incldues", n, "companies.\n\n")
+
+
+
+
+## save all the hits to xlsx for easier inspection.
+# f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.xlsx');  f
+# writexl::write_xlsx(x = coded_combined, path = f)
+
+
+f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.csv');  f
+readr::write_csv(x = coded_combined, file = f)
+
+
+# f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.rds'); f
+# save(coded_combined, file = f)
+
+```
+
+
+
+## coded data with only sdg counts
 
 ```{r - function}
 
@@ -122,12 +205,6 @@ func_format <- function(coded) {
 
 
 ```{r - run}
-
-dir_input <- dirpath_pdf
-
-ls <- list.files(path = paste0(dir_input, 'DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
-
-cat('There are', ls %>% length(), 'corporate reports were CODED.')
 
 dfs <- data.frame()
 
