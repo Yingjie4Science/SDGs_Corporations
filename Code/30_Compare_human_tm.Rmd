@@ -101,11 +101,11 @@ cat('There are', com_ls %>% length(), 'companies.')
 ```{r }
 fname <- paste0(dir.results, 'df.RData'); fname
 load(fname)
-dfs_human <- df %>%
+dfs_h <- df %>%
   dplyr::filter(yr == 2018)
-names(dfs_human)
+names(dfs_h)
 
-cat('There are', unique(dfs_human$Company) %>% length(), 'companies.')
+cat('There are', unique(dfs_h$Company) %>% length(), 'companies.')
 
 ## a subset of data
 # company_name <- 'Cemex'
@@ -114,7 +114,7 @@ cat('There are', unique(dfs_human$Company) %>% length(), 'companies.')
 # cols_selected <- names(human)[1:6]; cols_selected
 
 
-dfs_h <- dfs_human %>%  
+dfs_h <- dfs_h %>%  
   dplyr::filter(Company %in% com_ls) %>%
   ### some duplicated Target ids ------------------------------
   ungroup() %>%

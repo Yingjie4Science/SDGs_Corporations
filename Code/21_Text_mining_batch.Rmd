@@ -15,12 +15,6 @@ editor_options:
 remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
 getwd()
 
 # directories for Yingjie
@@ -59,6 +53,7 @@ today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 
 ## load the function
 source('./Code/function_sdg_detector.R') ## `sdg_detector()`
+
 ```
 
 
@@ -259,7 +254,7 @@ stopImplicitCluster()
 
 ### - run parallel - txt2sdg
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 ## install the package if not already installed
 if (!requireNamespace("text2sdg", quietly = TRUE)) {
@@ -273,9 +268,8 @@ if (!requireNamespace("text2sdg", quietly = TRUE)) {
 library(text2sdg)
 
 
-# ensemble approach
-hits = detect_sdg(texts)
 
+## test data
 f <- ls[1]; f
 
 ## --> get company name
@@ -286,9 +280,13 @@ df <- get(load(f))
 ##' 
 ##' 1. using `sdgdetector`
 ##' 
-coded1 <- sdg_detector(df = df)
-coded3 <- sdg_detector(df = df) ### change grepl() to str_detect() in the function
-# coded1 <- SDGdetector(x = df, col = 'statement')
+# coded1 <- sdg_detector(df = df)
+# coded1 <- coded1 %>% 
+#   mutate(
+#     sdgs    = str_remove(sdgs, "^,"),
+#     sdgs_n  = str_remove(sdgs_n, "^,"),
+#     sdgs_n  = str_squish(sdgs_n)
+#   )
 
 
 
