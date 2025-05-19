@@ -25,10 +25,8 @@ getwd()
   source('./Code/_packages.R')
 
   library(tm)        # text mining: readPDF(), Corpus()
-  library(tidyverse) # piping and wrangling
   library(tabulizer) # importing PDFs
-  #library(remotes)  # installing from remote repositories
-  
+
   ## for parallel computing
   library(parallel)
   library(doParallel)
@@ -70,7 +68,7 @@ union(setdiff(a,b), setdiff(b,a)) %>% sort()
 ```
 
 
-```{r - 146 not human-coded}
+```{r - 146 not human-coded, eval=FALSE, include=FALSE}
 ### for the not-human-coded PDF
 files <- list.files(path = paste0(dir.reports, 'pdf_not_coded'), 
                     pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
@@ -89,13 +87,18 @@ cat('\n There are', (length(files)-n_unique), 'unique companies.')
 
 
   (2) Convert each PDF to text format
+  
 ```{r - Batch Convert, eval=FALSE, include=FALSE}
 
 ### Custom function
 source('./Code/function_pdf2text.R') # `pdf2text`
 
+## output directory of the converted PDF data
+dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF/')           #' not using `tokenize_sentences()`
+dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF_tokenize/')
 
-company_name_checker <- '' ## initially, this is blank
+## initially, this is blank
+company_name_checker <- '' 
 
 ### loop all the PDF ---------------------------------------------------------------------
 for (pdf in files) {
@@ -107,11 +110,13 @@ for (pdf in files) {
 
   
   ## --> read and clean the pdf ---------------------------------------------------------#
-  txt_sentence_df <- pdf2text(filename = pdf) %>%
+  txt_sentence_df <- 
+    # pdf2text(pdf) %>%             # update on 5/19/2022
+    pdf2text_tokenize(pdf) %>%    # update on 5/19/2025
     ## remove sentences that are too short
     dplyr::filter(nchar(statement) > 5) %>%
     ## replace the company names to avoid string mismatch
-    dplyr::mutate(statement = gsub(pattern = paste0("\\b", company_name, "\\b"), "XXXNAME", statement)) %>%
+    dplyr::mutate(statement = gsub(pattern = paste0("\\b", company_name, "\\b"), "This company", statement)) %>%
     ## again, exclude sentences that are too short
     dplyr::filter(nchar(statement) > 5) %>%
     ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
@@ -129,7 +134,7 @@ for (pdf in files) {
   
   
   ## --> save as R data
-  fname <- paste0(dirname(pdf), '/DF/',  company_name[1], '.RData'); print(fname)
+  fname <- paste0(dir_txt,  company_name[1], '.RData'); print(fname)
   save(txt_sentence_df, file = fname)
 
   ## --> update the PDF list, if error occurs
