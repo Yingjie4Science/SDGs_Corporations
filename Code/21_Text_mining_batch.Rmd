@@ -25,8 +25,6 @@ getwd()
 # load packages
   source('./Code/_packages.R')
 
-  library(tm)        # text mining: readPDF(), Corpus()
-  
   ## for parallel computing
   library(parallel)
   library(doParallel)
@@ -81,6 +79,8 @@ source('./Code/function_sdg_detector.R') ## `sdg_detector()`
 ```{r - 350 + reports with human data}
 
 dir_input <- dirpath_pdf
+dir_output<- paste0(dir_input, 'DF_tokenize_coded/')
+
 
 ## 1. load the `txt` data
 # ls <- list.files(path = paste0(dir_input, 'TXT/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
@@ -149,6 +149,8 @@ ls <- d2
 ## 2022-06-01: 391 reports without human data (use Fortune 500)
 
 dir_input <- paste0(dir.reports, "pdf_not_coded/"); dir_input
+dir_output<- paste0(dir_input, 'DF_tokenize_coded/')
+
 ls  <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
 
 cat('There are', ls %>% length(), 'corporate reports were converted.') ## 146 => 389
@@ -236,7 +238,7 @@ system.time({
     
     coded <- sdg_detector(df = df)
 
-    fname <- paste0(dir_input, 'DF_coded/', company_name, '_coded.RData'); #fname
+    fname <- paste0(dir_output, company_name, '_coded.RData'); #fname
     save(coded, file = fname)
     
     ## --> To clear up the memory for next loop

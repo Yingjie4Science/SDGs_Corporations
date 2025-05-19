@@ -61,7 +61,9 @@ sdg_detector <- function(df) {
   
   
   ### sort from most SDG hits to least (or, none)
-  coded <- code %>% arrange(desc(nchar(sdgs)), id)
+  coded <- code %>% 
+    # arrange(desc(nchar(sdgs)), id) %>%
+    as.data.frame()
   
   return(coded)
   

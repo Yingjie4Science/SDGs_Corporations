@@ -2,11 +2,7 @@
 
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-dir_root <- dirname(dir)
-setwd(dir_root)
-getwd()
+dir_root <- getwd()
 
 
 
