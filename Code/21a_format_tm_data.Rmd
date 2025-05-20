@@ -15,20 +15,13 @@ editor_options:
 remove(list = ls())
 
 # directories 
-  source('./Code/_directories.R')
-  dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
-  dir.coded   <- paste0(dir.tm, 'coded_results/')
-  
+source('./Code/_directories.R')
+dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
+dir.coded   <- paste0(dir.tm, 'coded_results/')
+
 
 # load packages
-  source('./Code/_packages.R')
-
-  library(tm)        # text mining: readPDF(), Corpus()
-  
-  ## for parallel computing
-  library(parallel)
-  library(doParallel)
-  library(foreach)
+source('./Code/_packages.R')
   
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ```
@@ -88,7 +81,7 @@ for (f in ls) {
   ## clean the data 
   coded_i <- coded %>%
     ## only keep the rows with SDG hits
-    filter(n_total > 0) %>%
+    # filter(n_total > 0) %>%
     mutate(
       company = com_name,
       sdgs    = str_remove(sdgs, "^,"),
@@ -106,10 +99,18 @@ for (f in ls) {
 ```
 
 
-```{r - save combined data}
+
+
+```{r - save combined data - full text}
 
 ## count the number of companies
 n <- unique(coded_combined$company) %>% length(); n
+
+
+
+coded_combined <- coded_combined %>%
+  arrange(company, id) %>%
+  as.data.frame()
 
 
 ## count the total tokens
@@ -131,7 +132,7 @@ cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset,
 # writexl::write_xlsx(x = coded_combined, path = f)
 
 
-f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.csv');  f
+f <- paste0(dir.coded, 'coded_combined_all_with_raw_', n, '.csv');  f
 readr::write_csv(x = coded_combined, file = f)
 
 
@@ -140,6 +141,40 @@ readr::write_csv(x = coded_combined, file = f)
 
 ```
 
+
+```{r - save combined data - subset}
+
+coded_combined_sdg <- coded_combined %>%
+  ## only keep the rows with SDG hits
+    filter(n_total > 0)
+  
+## count the total tokens
+sum(coded_combined_sdg$token_count, na.rm = T) %>% 
+  round(1) %>% 
+  format(big.mark = ",", scientific = F) %>% 
+  cat('\nIn total, there are', ., 'tokens in the 2018 dataset.\n\n')
+
+
+total_tokens <- sum(coded_combined_sdg$token_count, na.rm = TRUE)
+total_million <- round(total_tokens / 1e6, 2)
+cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset, which incldues", n, "companies.\n\n")
+
+
+
+
+## save all the hits to xlsx for easier inspection.
+# f <- paste0(dir.coded, 'coded_combined_sdg_with_raw_', n, '.xlsx');  f
+# writexl::write_xlsx(x = coded_combined_sdg, path = f)
+
+
+f <- paste0(dir.coded, 'coded_combined_sdg_with_raw_', n, '.csv');  f
+readr::write_csv(x = coded_combined_sdg, file = f)
+
+
+# f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.rds'); f
+# save(coded_combined, file = f)
+
+```
 
 
 ## coded data with only sdg counts
