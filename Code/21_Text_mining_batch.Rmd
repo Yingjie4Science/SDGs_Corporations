@@ -86,7 +86,7 @@ dir_output<- paste0(dir_input, 'DF_tokenize_coded/')
 # ls <- list.files(path = paste0(dir_input, 'TXT/'), pattern = '*.RData$', ignore.case = T, full.names = T); ls
 
 ## 2. load the `txt to df` data
-ls <- list.files(path = paste0(dir_input, 'DF/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
+ls <- list.files(path = paste0(dir_input, 'DF_tokenize/'), pattern = '*.RData$', ignore.case = T, full.names = T); #ls
 
 cat('There are', ls %>% length(), 'corporate reports were converted.') ## 352
 ```

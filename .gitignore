@@ -38,6 +38,10 @@ Data/data_TextMining/annual_reports/pdf_coded_human/*.pdf
 Data/data_TextMining/annual_reports/txt_cleaned/
 WordNet/
 text2sdg/
+SDGDetector/
+SDGDetector_supp_docs/
+_archive/
+figures/
 
 
 TXT/
@@ -48,14 +52,14 @@ DF_coded/
 findSDGs/
 
 
-MS/*
+docs/*
 Refs/*
 
 
 
 *gitignore
 #*.Rproj
-test_*
+*test*
 *.zip
 *.lnk
 *.tmp
