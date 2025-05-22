@@ -70,9 +70,15 @@ pdf2text <- function(pdf){
 
 
 
+# Function to count words with less than 3 letters
+count_short_words <- function(x) {
+  sum(nchar(x) < 3)
+}
+
+
 
 ## ##################################################################################### #
-## Use `tokenize` to splits the text into sentences [TBD]
+## Use `tokenize` to splits the text into sentences
 ## ##################################################################################### #
 
 library(tabulizer)
@@ -95,6 +101,7 @@ pdf2text_tokenize <- function(pdf) {
     str_replace_all("http[s]?://\\S+", "") %>%                 # Remove URLs
     str_replace_all("\\s*www\\.\\S+", "") %>%                  # Remove www. URLs not caught by http
     str_replace_all("\\.{2,}", ".") %>%                        # Replace multiple dots with one
+    str_replace_all("(-\\s){2,}", "- ") %>%                    # Replace repeated "- " with a single "- "
     str_replace_all("[—–]", " ") %>%                           # Normalize dashes to space
     str_replace_all("[‘’]", "'") %>%                           # Normalize single curly quotes
     str_replace_all("[“”]", "\"") %>%                          # Normalize double curly quotes
@@ -147,6 +154,19 @@ pdf2text_tokenize <- function(pdf) {
   sentence_df <- tibble(sentence = sentences) %>%
     dplyr::mutate(nchr = nchar(sentence)) %>%
     dplyr::rename(statement = sentence) 
+  
+  
+  # === 3.1 Add word count and short word count columns ===
+  
+  # Tokenize statements once for efficiency
+  tokens_list <- tokenize_words(sentence_df$statement)
+  
+  # Add total word count
+  sentence_df$word_count <- sapply(tokens_list, length)
+  
+  # Add short word count (words with fewer than 3 characters)
+  sentence_df$short_word_count <- sapply(tokens_list, count_short_words)
+  
   
   # === 4. Save to CSV ===
   # write.csv(txt_sentence_df2, "sentences.csv", row.names = FALSE)

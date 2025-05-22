@@ -44,6 +44,9 @@ today <- format(Sys.time(), "%Y%m%d_%H%M"); today
   
   (1) get the list of the downloaded PDFs. 
   
+
+## PDF data
+  
 ```{r - 356 company}
 ## read the company information list from XLS file. 
 f <- paste0(dir.raw, "com_list_HumanCoded_URL.xlsx")
@@ -85,13 +88,12 @@ cat('\n There are', (length(files)-n_unique), 'unique companies.')
 ```
 
 
-
-  (2) Convert each PDF to text format
+## Batch convert PDF to text sentences
   
 ```{r - Batch Convert, eval=FALSE, include=FALSE}
 
 ### Custom function
-source('./Code/function_pdf2text.R') # `pdf2text`
+source('./code/function_pdf2text.R') # `pdf2text`
 
 ## output directory of the converted PDF data
 dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF/')           #' not using `tokenize_sentences()`
@@ -119,6 +121,10 @@ for (pdf in files) {
     dplyr::mutate(statement = gsub(pattern = paste0("\\b", company_name, "\\b"), "This company", statement)) %>%
     ## again, exclude sentences that are too short
     dplyr::filter(nchar(statement) > 5) %>%
+    
+    ## remove sentences that have too many short words, likely due to format issues
+    dplyr::filter(short_word_count < 500) %>%
+    
     ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
     dplyr::distinct(statement, .keep_all = T) %>%
     as.data.frame()
@@ -164,15 +170,15 @@ for (pdf in files) {
 
 
 ```{r - Make a copy to project dir, eval=FALSE, include=FALSE}
-## for data 1
-files <- list.files(path = paste0(dir.reports, 'pdf_coded_human/DF'), pattern = '*.RData$', full.names = T); #files
-toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir
-file.copy(from = files, to = toDir, overwrite = T, copy.date = T)
-
-
-## for data 2
-files <- list.files(path = paste0(dir.reports, 'pdf_not_coded/DF'), pattern = '*.RData$', full.names = T); #files
-toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir
-file.copy(from = files, to = toDir, overwrite = T, copy.date = T)
+# ## for data 1
+# files <- list.files(path = paste0(dir.reports, 'pdf_coded_human/DF'), pattern = '*.RData$', full.names = T); #files
+# toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir
+# file.copy(from = files, to = toDir, overwrite = T, copy.date = T)
+# 
+# 
+# ## for data 2
+# files <- list.files(path = paste0(dir.reports, 'pdf_not_coded/DF'), pattern = '*.RData$', full.names = T); #files
+# toDir <- gsub('D:/_papers/SDGs/SDGs_Corporations/', './', files); #toDir
+# file.copy(from = files, to = toDir, overwrite = T, copy.date = T)
 ```
 
