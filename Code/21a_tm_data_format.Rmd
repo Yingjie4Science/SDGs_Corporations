@@ -16,8 +16,10 @@ remove(list = ls())
 
 # directories 
 source('./Code/_directories.R')
-dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
-dir.coded   <- paste0(dir.tm, 'coded_results/')
+dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
+dir.coded      <- paste0(dir.pdf, 'DF_coded/');           v <- ''
+dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/')
 
 
 # load packages
@@ -60,9 +62,7 @@ fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
 
 ```{r - load coded data}
 
-dir_input <- dirpath_pdf
-
-ls <- list.files(path = paste0(dir_input, 'DF_coded/'), pattern = '*.RData$', ignore.case = T, full.names = T); 
+ls <- list.files(path = dir.coded, pattern = '*.RData$', ignore.case = T, full.names = T); 
 # ls
 
 cat('There are', ls %>% length(), 'corporate reports were CODED.')
@@ -70,12 +70,12 @@ cat('There are', ls %>% length(), 'corporate reports were CODED.')
 ```
 
 
-```{r - clean and combine the data}
+```{r - clean and combine the data, include=FALSE}
 coded_combined <- data.frame()
 
 for (f in ls) {
   com_name <- gsub('\\.RData|_coded', '', basename(f)); 
-  # print(com_name)
+  print(com_name)
   load(f) ## all coded reports were named "coded" as Rdata
 
   ## clean the data 
@@ -90,6 +90,7 @@ for (f in ls) {
       human_coded = "yes",
       year = 2018, 
       token_count = str_count(statement, "\\S+")) %>%
+    select(-any_of(c('word_count', 'short_word_count'))) %>%
     select(company, everything()) %>%
     as.data.frame()
   
@@ -107,12 +108,6 @@ for (f in ls) {
 n <- unique(coded_combined$company) %>% length(); n
 
 
-
-coded_combined <- coded_combined %>%
-  arrange(company, id) %>%
-  as.data.frame()
-
-
 ## count the total tokens
 sum(coded_combined$token_count, na.rm = T) %>% 
   round(1) %>% 
@@ -128,15 +123,15 @@ cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset,
 
 
 ## save all the hits to xlsx for easier inspection.
-# f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.xlsx');  f
+# f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.xlsx');  f
 # writexl::write_xlsx(x = coded_combined, path = f)
 
 
-f <- paste0(dir.coded, 'coded_combined_all_with_raw_', n, '.csv');  f
+f <- file.path(dir.coded.comb, paste0('coded_combined_all_with_raw_', n, '_', v, '.csv'));  f
 readr::write_csv(x = coded_combined, file = f)
 
 
-# f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.rds'); f
+# f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.rds'); f
 # save(coded_combined, file = f)
 
 ```
@@ -163,15 +158,15 @@ cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset,
 
 
 ## save all the hits to xlsx for easier inspection.
-# f <- paste0(dir.coded, 'coded_combined_sdg_with_raw_', n, '.xlsx');  f
+# f <- paste0(dir.coded.comb, 'coded_combined_sdg_with_raw_', n, '.xlsx');  f
 # writexl::write_xlsx(x = coded_combined_sdg, path = f)
 
 
-f <- paste0(dir.coded, 'coded_combined_sdg_with_raw_', n, '.csv');  f
+f <- paste0(dir.coded.comb, 'coded_combined_sdg_with_raw_', n, '_', v, '.csv');  f
 readr::write_csv(x = coded_combined_sdg, file = f)
 
 
-# f <- paste0(dir.coded, 'coded_combined_with_raw_', n, '.rds'); f
+# f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.rds'); f
 # save(coded_combined, file = f)
 
 ```
@@ -258,9 +253,10 @@ for (f in ls) {
 n <- unique(dfs$company) %>% length(); n
 
 ### save all the hits to xlsx for easier inspection. 
-fname <- paste0(dir_input, 'DF_coded_results/coded_dfs_', n, '.xlsx');  fname
+fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '.xlsx');  fname
 writexl::write_xlsx(x = dfs, path = fname)
-fname <- paste0(dir_input, 'DF_coded_results/coded_dfs_', n, '.RData'); fname
+
+fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '.RData'); fname
 save(dfs, file = fname)
 
 ```
@@ -269,7 +265,7 @@ save(dfs, file = fname)
 
 
 
-# 4. Compare Machine to Human
+* 4. Compare Machine to Human - next script
 
-  See next script. 
+  `See next script`. 
 
