@@ -1,4 +1,3 @@
-
 # Dir and packages -----------------------------------------------------------------------
 
 ### To clear your environment 
@@ -21,18 +20,16 @@ if (any(!installed)) {
 # Load all packages
 lapply(pkgs, require, character.only = TRUE)
 
-R.Version()
+
 
 ## directories
-# dir_root  <- './data/data_tm/annual_reports/pdf_coded_human/'          # local 
-dir_root  <- '/scratch/users/yingjiel/sdg_corp/'                         # sherlock
+dir_root  <- '/scratch/users/yingjiel/sdg_corp/'
 dir_input <- paste0(dir_root, 'DF_tokenize/')
 dir_output<- paste0(dir_root, 'DF_tokenize_coded/')
 
 
 ## Load SDG search terms
-# f <- paste0(dir.tm, 'database/', 'SDG_keys.RData')                     # local
-f <- paste0(dir_root, 'SDG_keys.RData');                                 # sherloack
+f <- paste0(dir_root, 'SDG_keys.RData'); 
 load(f) ## --> SDG_keys_drc, SDG_keys_indrc, SDG_keys
 
 
