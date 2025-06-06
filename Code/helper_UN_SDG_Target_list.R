@@ -3,7 +3,8 @@
 
 ### UN Goal and Target list -----------------------------------------------------
 library(reshape2)
-library(tidyverse)
+library(dplyr)
+library(tidyr)
 
 goals_ls <- paste('SDG', seq(1,17), sep = ''); goals_ls
 goals_df <- data.frame(goal = goals_ls)
