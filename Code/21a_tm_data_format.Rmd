@@ -17,8 +17,11 @@ remove(list = ls())
 # directories 
 source('./Code/_directories.R')
 dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
+
 dir.coded      <- paste0(dir.pdf, 'DF_coded/');           v <- ''
 dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+
+
 dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/')
 
 
@@ -126,9 +129,11 @@ cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset,
 # f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.xlsx');  f
 # writexl::write_xlsx(x = coded_combined, path = f)
 
-
-f <- file.path(dir.coded.comb, paste0('coded_combined_all_with_raw_', n, '_', v, '.csv'));  f
+csvname <- paste0('coded_combined_all_with_raw_', n, '_', v, '.csv')
+f <- file.path(dir.coded.comb, csvname);  f
 readr::write_csv(x = coded_combined, file = f)
+
+
 
 
 # f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.rds'); f
@@ -162,7 +167,13 @@ cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset,
 # writexl::write_xlsx(x = coded_combined_sdg, path = f)
 
 
-f <- paste0(dir.coded.comb, 'coded_combined_sdg_with_raw_', n, '_', v, '.csv');  f
+csvname <- paste0('coded_combined_sdg_with_raw_', n, '_', v, '.csv')
+f <- paste0(dir.coded.comb, csvname);  f
+readr::write_csv(x = coded_combined_sdg, file = f)
+
+
+## make a copy for LLM test 
+f <- file.path('./data/data_tm/coded_combined_results', csvname);  f
 readr::write_csv(x = coded_combined_sdg, file = f)
 
 
