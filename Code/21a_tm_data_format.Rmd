@@ -17,8 +17,11 @@ remove(list = ls())
 # directories 
 source('./Code/_directories.R')
 dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
+
 dir.coded      <- paste0(dir.pdf, 'DF_coded/');           v <- ''
 dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+
+
 dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/')
 
 
