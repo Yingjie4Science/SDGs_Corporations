@@ -1,0 +1,85 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Dir and packages
+
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+getwd()
+source('./Code/_directories.R')
+dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
+
+
+```
+
+
+
+
+# Data
+  
+```{r }
+
+## output directory of the converted PDF data
+dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF/')           #' not using `tokenize_sentences()`
+dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF_tokenize/')
+
+
+ls <- list.files(path = dir_txt, pattern = '*.RData$', ignore.case = T, full.names = T); #ls
+
+cat('There are', ls %>% length(), 'corporate reports were converted.') ## 352
+
+txt_sentence_df_combined <- data.frame()
+
+# f <- ls[1]
+  
+for (f in ls) {
+
+  company_name <- gsub(".RData", "", basename(f)); 
+  print(company_name)
+  
+  df <- get(load(f)) %>%
+    mutate(company = company_name) %>%
+    select(company, everything()) %>%
+    as.data.frame()
+  
+    ## combine data 
+    txt_sentence_df_combined <- rbind(txt_sentence_df_combined, df)
+}
+```
+
+
+
+## Save the combined data
+```{r}
+## count the number of companies
+n <- unique(txt_sentence_df_combined$company) %>% length(); n
+
+
+## count the total tokens
+sum(txt_sentence_df_combined$nchr, na.rm = T) %>% 
+  round(1) %>% 
+  format(big.mark = ",", scientific = F) %>% 
+  cat('\nIn total, there are', ., 'tokens in the 2018 dataset.\n\n')
+
+
+total_tokens <- sum(txt_sentence_df_combined$nchr, na.rm = TRUE)
+total_million <- round(total_tokens / 1e6, 2)
+cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset, which incldues", n, "companies.\n\n")
+
+
+# 
+# f <- paste0(dir.coded, 'txt_sentence_df_combined_with_raw_', n, '.csv');  f
+# readr::write_csv(x = txt_sentence_df_combined, file = f)
+
+```
+
