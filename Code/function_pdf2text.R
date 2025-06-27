@@ -1,27 +1,54 @@
 
 
+## ##################################################################################### #
+## Install and load required packages 
+## ##################################################################################### #
+
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+
+# Install tabulizer and tabulizerjars packages from GitHub
 # remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), force = TRUE)
+
+packages <- c("tabulizerjars", "tabulizer")
+
+# Install missing packages from GitHub
+for (pkg in packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    remotes::install_github(paste0("ropensci/", pkg), force = TRUE)
+  }
+}
 
 library(dplyr)
 library(stringr)
 library(tabulizer)
 library(tabulizerjars)
 
-packageVersion('tabulizer')
-packageVersion('tabulizerjars')
-packageVersion('rJava')
+packageVersion('tabulizer')      # 0.2.3
+packageVersion('tabulizerjars')  # 1.0.1
+packageVersion('rJava')          # 1.0.6
 
 
 ##' Increase Java Memory for R (tabulizer/jars)
 ##' This gives Java 8GB of memory (adjust to 8g, 16g, etc. if you have lots of RAM).
 options(java.parameters = "-Xmx8g")
 
-### Custom function
+
+
+# -------------------------------------------------------------------------------------- #
+# Function to count words with less than 3 letters
+count_short_words <- function(x) {
+  sum(nchar(x) < 3)
+}
+
+
+## ##################################################################################### #
+## Use self-defined `sep` to splits the text into sentences
+## ##################################################################################### #
 pdf2text <- function(pdf){
- 
-  
-  
-  ## read and clean the pdf ------------------------------------------------------------ #
+
+  ## read and clean the pdf ---------------------- #
   txt <- tabulizer::extract_text(file = pdf) %>%
     iconv("UTF8", "ASCII", "") %>%                 # change encoding
     paste(sep = " ") %>%
@@ -37,7 +64,7 @@ pdf2text <- function(pdf){
 
   
   
-  ## text to DF ------------------------------------------------------------------------ #
+  ## text to DF ---------------------------------- #
   ### separate the large character chunk to short sentences by
   ###    '.' (period), ';' (semicolon), ':' (colon), and '/ ' (slash with space)
   ### --> used before 2022/02/06
@@ -69,11 +96,6 @@ pdf2text <- function(pdf){
 
 
 
-
-# Function to count words with less than 3 letters
-count_short_words <- function(x) {
-  sum(nchar(x) < 3)
-}
 
 
 
