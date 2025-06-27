@@ -16,24 +16,17 @@ remove(list = ls())
 
 
 # directories for Yingjie
-  source('./Code/_directories.R')
-  dir.tm.data <- paste0(dir.reports, 'pdf_coded_human/')
-  dir.tm.fig  <- paste0(dir.figures, 'figure_tm/')
+source('./Code/_directories.R')
+dir.pdf <- paste0(dir.reports, 'pdf_coded_human/')
+dir.tm.fig  <- paste0(dir.figures, 'figure_tm/')
 
-# directories for Veronica
-  # dir.reports <- '../Data/data_TextMining/annual_reports/' # VF added another '.'
-  # dir.results <- '../Data/data_results/'                   # VF added another '.'
-  # dir.figures <- '../Data/figures/';      dir.figures      # VF added another '.'
 
 # load packages
-  source('./Code/_packages.R')
+source('./Code/_packages.R')
 
-  library(tm)        # text mining: readPDF(), Corpus()
-  library(tidyverse) # piping and wrangling
-  library(tabulizer) # importing PDFs
-  #library(remotes)  # installing from remote repositories
-  
-  library(hydroGOF)  ## for `rmse`
+library(tm)        # text mining: readPDF(), Corpus()
+library(tabulizer) # importing PDFs
+library(hydroGOF)  ## for `rmse`
   
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ymd   <- format(Sys.time(), "%Y%m%d"); ymd
@@ -77,20 +70,29 @@ color_hex
 ## Data
 
 ### 1. machine-coded results
+
 ```{r}
 ## load data
-ls_f <- list.files(path = paste0(dir.tm.data, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
-tail(ls_f, n = 1)
+ls_f <- list.files(path = paste0(dir.pdf, 'DF_coded_comb'), pattern = 'RData$', full.names = T); ls_f
+tail(ls_f, n = 1) %>%
+  cat('\nLoading the latest data:', ., '\n')
 load(tail(ls_f, n = 1)) ## load the latest/last data
 
 ## machine-coded data
-dfs_m <- dfs %>%
+dfs_m <- dfs %>% 
+  dplyr::rename(target = coded_sdgs)
+
+
+## the other result by machine
+f <- ls_f[length(ls_f) - 1]; f
+load(f)
+dfs_m2 <- dfs %>% 
   dplyr::rename(target = coded_sdgs)
 
 
 ## company list
 com_ls <- unique(dfs_m$company); #com_ls
-cat('There are', com_ls %>% length(), 'companies.')
+cat('\nThere are', com_ls %>% length(), 'companies.')
 ```
 
 
@@ -98,6 +100,7 @@ cat('There are', com_ls %>% length(), 'companies.')
 
 
 ### 2. human-coded results by UNGSII
+
 ```{r }
 fname <- paste0(dir.results, 'df.RData'); fname
 load(fname)
@@ -174,10 +177,37 @@ myformat <- "R²: %s"
 ```
 
 
-```{r - data}
+
+
+```{r - data - case 1}
+
+names(dfs_m)
+names(dfs_m2)
+
+
+dfs_m_format <- dfs_m %>% 
+  dplyr::select(company, goal, target, n_statements) %>%
+  group_by(company, goal, target) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T))%>%
+  dplyr::mutate(coder = 'machine')
+
+dfs_h_format <- dfs_m2 %>% 
+  dplyr::select(company, goal, target, n_statements) %>%
+  group_by(company, goal, target) %>%
+  dplyr::summarise(n = sum(n_statements, na.rm = T)) %>%
+  dplyr::mutate(coder = 'human') ## should be 'machine_token' 
+
+dfs_2 <- rbind(dfs_m_format, dfs_h_format) %>%
+  dplyr::filter(!is.na(company))
+
+```
+
+
+
+```{r - data - case 2}
+
 names(dfs_m)
 names(dfs_h)
-
 
 dfs_m_format <- dfs_m %>% 
   dplyr::select(company, goal, target, n_statements) %>%
@@ -194,8 +224,13 @@ dfs_h_format <- dfs_h %>%
 dfs_2 <- rbind(dfs_m_format, dfs_h_format) %>%
   dplyr::filter(!is.na(company))
 
+```
 
 
+
+
+
+```{r - data format}
 ## data in a wide format
 dfs_2w_targ <- dfs_2 %>%
   ## remove SDG general 
@@ -590,7 +625,7 @@ ggsave(filename = fname, plot = g_h, width = 16, height = 9, units = 'in', dpi =
 
 
 ### to screen the coded data for refining --------
-f <- list.files(path = paste0(dir.tm.data, 'DF_coded'), pattern = company_name, full.names = T); f
+f <- list.files(path = paste0(dir.pdf, 'DF_coded'), pattern = company_name, full.names = T); f
 load(f) ## `coded`
 fname <- paste0('./Data/data_TextMining/coded_inspection/inspect_', company_name, '.xlsx'); fname
 writexl::write_xlsx(x = coded, path = fname)

@@ -18,27 +18,56 @@ remove(list = ls())
 getwd()
 
 # directories
-  source('./Code/_directories.R')
-  dirpath_pdf <- paste0(dir.reports, 'pdf_coded_human/')
+source('./Code/_directories.R')
 
 # load packages
-  source('./Code/_packages.R')
+source('./Code/_packages.R')
 
-  library(tm)        # text mining: readPDF(), Corpus()
-  library(tabulizer) # importing PDFs
+library(tm)        # text mining: readPDF(), Corpus()
+library(tabulizer) # importing PDFs
 
-  ## for parallel computing
-  library(parallel)
-  library(doParallel)
-  library(foreach)
+## for parallel computing
+library(parallel)
+library(doParallel)
+library(foreach)
   
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ```
 
 
 
+## Input and output directories
 
-# 1. PDF to clean TXT
+### Original project 
+
+```{r}
+
+## input directory of the downloaded PDF data
+dir_pdf <- paste0(dir.reports, 'pdf_coded_human/')
+
+
+
+## output directory of the converted PDF data
+dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF/')           #' not using `tokenize_sentences()`
+dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF_tokenize/')
+
+```
+
+
+
+### SSFP project 
+
+```{r}
+## 
+dir_ssfp <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/'
+  
+dir_pdf <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund')
+dir_txt <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund/DF_tokenize/')
+
+```
+
+
+# PDF to clean TXT
   
   Conversion to text --> and save .txt with name from list and move to another folder. 
   
@@ -48,6 +77,7 @@ today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ## PDF data
   
 ```{r - 356 company}
+
 ## read the company information list from XLS file. 
 f <- paste0(dir.raw, "com_list_HumanCoded_URL.xlsx")
 com_download <- readxl::read_excel(f) %>%
@@ -56,13 +86,13 @@ com_download_ls <- unique(com_download$Company)
 
 
 ## get the PDF names of all the downloaded company 
-files <- list.files(dirpath_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
+files <- list.files(dir_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
 com_name_ls <- gsub("\\--.*", "", basename(files))
 
 cat('There are', length(files), "PDF reports.\n"); ## 356
 
 
-## identify the difference between the two list
+## identify the difference between the two list -- in case any reports are missing
 a <- com_download_ls
 b <- com_name_ls
 setdiff(a, b)
@@ -72,6 +102,7 @@ union(setdiff(a,b), setdiff(b,a)) %>% sort()
 
 
 ```{r - 146 not human-coded, eval=FALSE, include=FALSE}
+
 ### for the not-human-coded PDF
 files <- list.files(path = paste0(dir.reports, 'pdf_not_coded'), 
                     pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
@@ -95,9 +126,6 @@ cat('\n There are', (length(files)-n_unique), 'unique companies.')
 ### Custom function
 source('./code/function_pdf2text.R') # `pdf2text`
 
-## output directory of the converted PDF data
-dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF/')           #' not using `tokenize_sentences()`
-dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF_tokenize/')
 
 ## initially, this is blank
 company_name_checker <- '' 
@@ -142,7 +170,13 @@ for (pdf in files) {
   ## --> save as R data
   fname <- paste0(dir_txt,  company_name[1], '.RData'); print(fname)
   save(txt_sentence_df, file = fname)
+  
+  
+  ## --> save as CSV data
+  fname <- paste0(dir_txt,  company_name[1], '.csv'); print(fname)
+  readr::write_csv(txt_sentence_df, file = fname)
 
+  
   ## --> update the PDF list, if error occurs
   remove <- pdf
   files  <- setdiff(files, remove)
