@@ -4,29 +4,33 @@
 ## Install and load required packages 
 ## ##################################################################################### #
 
+#' Note: 
+#' The package `tabulizer` (starting from version 0.2.2) has been renamed as `tabulapdf` (starting from version 1.0.5) since 2024-04-10
+#' See details in the NEWS.md file:
+#' https://github.com/ropensci/tabulapdf/commit/581cad83014dc083dcb97dfda390ae2f77e6873d#diff-51920e95310ebfbc1ae31709f3b95f89afffbf4f1a6e38e8b2b406e2fb6197eaR3
+#' https://github.com/ropensci/tabulapdf/blob/03cabea1c4cd5fec818a9539115d773c5cb4ff0b/NEWS.md#changes-to-tabulapdf-105
+
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
 }
 
-# Install tabulizer and tabulizerjars packages from GitHub
-# remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), force = TRUE)
 
-packages <- c("tabulizerjars", "tabulizer")
+pkg <- "tabulapdf"
 
-# Install missing packages from GitHub
-for (pkg in packages) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    remotes::install_github(paste0("ropensci/", pkg), force = TRUE)
-  }
+if (!requireNamespace(pkg, quietly = TRUE)) {
+
+  # on 64-bit Windows
+  remotes::install_github(c("ropensci/tabulapdf"), INSTALL_opts = "--no-multiarch")
+  
+  # # elsewhere, e.g., on Linux or macOS
+  # remotes::install_github(c("ropensci/tabulapdf"))
 }
+
 
 library(dplyr)
 library(stringr)
-library(tabulizer)
-library(tabulizerjars)
 
-packageVersion('tabulizer')      # 0.2.3
-packageVersion('tabulizerjars')  # 1.0.1
+packageVersion('tabulapdf')      # 1.0.5.5
 packageVersion('rJava')          # 1.0.6
 
 
@@ -49,7 +53,7 @@ count_short_words <- function(x) {
 pdf2text <- function(pdf){
 
   ## read and clean the pdf ---------------------- #
-  txt <- tabulizer::extract_text(file = pdf) %>%
+  txt <- extract_text(file = pdf) %>%
     iconv("UTF8", "ASCII", "") %>%                 # change encoding
     paste(sep = " ") %>%
     stringr::str_replace_all("\\.com", "") %>%     # avoid matching Comoros (iso3 code: COM)
@@ -103,14 +107,13 @@ pdf2text <- function(pdf){
 ## Use `tokenize` to splits the text into sentences
 ## ##################################################################################### #
 
-library(tabulizer)
 library(tokenizers)
 library(stringi)
 
 pdf2text_tokenize <- function(pdf) {
   
   # === 1. Read the PDF and extract text ===
-  raw_text <- tabulizer::extract_text(file = pdf) %>%
+  raw_text <- extract_text(file = pdf) %>%
     # paste(collapse = " ") %>%                                # Combine pages first before processing
     paste(collapse = "\n") %>%                                 # Preserve newlines
     iconv("UTF-8", "ASCII", sub = "") %>%                      # Convert encoding, remove non-ASCII
