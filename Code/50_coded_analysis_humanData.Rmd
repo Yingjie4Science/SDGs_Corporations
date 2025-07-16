@@ -2,12 +2,8 @@
 title: "Untitled"
 author: "Yingjie"
 date: "3/26/2020"
-output:
-  word_document: default
-  pdf_document: default
-  html_document: default
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
   This is the original script. 
@@ -30,7 +26,7 @@ getwd()
 
 dir.raw     <- './Data/data_raw/'
 dir.results <- './Data/data_results/'
-dir.figures <- './Data/figures/';      dir.figures
+dir.figures <- './figures/';      dir.figures
 
 
 source('./Code/_packages.R')
@@ -548,15 +544,16 @@ df1_summ <- df %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
     xlab(NULL)
 )
-ggsave('./Data/figures/goal_statement_mean_se.jpg', plot = pgoal.se, 
+ggsave(paste0(dir.figures, 'goal_statement_mean_se.jpg'), plot = pgoal.se, 
        width = 7, height = 7, units = 'in', dpi = 300)
 
 
 ggarrange(pgoal.box, pgoal.se,
           nrow = 1, ncol = 2, align = 'hv', labels = panel_labels,
           common.legend = F, legend = 'none')
-ggsave('./Data/figures/goal_count_box_se.jpg', plot = last_plot(), 
-       width = width_2col, height = width_2col/2, units = 'in', dpi = 300)
+f <- paste0(dir.figures, 'goal_count_box_se.jpg'); f
+ggsave(f, plot = last_plot(), 
+       width = width_2col, height = width_2col/2, units = 'mm', dpi = 300)
 
 ```
 
@@ -621,7 +618,8 @@ targ_n_com.w %>%
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
   ylab('Number of companies')
-ggsave('./Data/figures/targ_n_com_bar.jpg', plot = last_plot(), 
+f <- paste0(dir.figures, 'targ_n_com_bar.jpg')
+ggsave(f, plot = last_plot(), 
        width = 7, height = 7, units = 'in', dpi = 300)
 ```
 
@@ -641,8 +639,8 @@ targ_n_com.w %>%
     theme_bw() + theme(legend.position = "none")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
   ylab('Number of companies')
-ggsave('./Data/figures/target_n_com_l_p.jpg', plot = last_plot(), 
-       width = 7, height = 7, units = 'in', dpi = 300)
+f <- paste0(dir.figures, 'target_n_com_l_p.jpg')
+ggsave(f, plot = last_plot(), width = 7, height = 7, units = 'in', dpi = 300)
 ```
 
 
@@ -708,8 +706,8 @@ df %>% group_by(goal, Target_id) %>%
   coord_cartesian(ylim = c(sts[2]/2, max(sts)*2))
 
   # coord_flip()
-ggsave('./Data/figures/target_statement_box1.jpg', plot = last_plot(), 
-       width = 7, height = 7, units = 'in', dpi = 300)
+f <- paste0(dir.figures, 'target_statement_box1.jpg')
+ggsave(f, plot = last_plot(),  width = 7, height = 7, units = 'in', dpi = 300)
 ```
 
 
@@ -742,7 +740,9 @@ targ_cmt_mean %>%
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
   ylim(-15, 90)
 getwd()
-ggsave('./Data/figures/target_statement_mean_se1.jpg', plot = last_plot(), 
+
+f <- paste0(dir.figures, 'target_statement_mean_se1.jpg')
+ggsave(f, plot = last_plot(), 
        width = 8, height = 8, units = 'in', dpi = 300)
 
 

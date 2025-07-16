@@ -31,7 +31,7 @@ theme_ns <-
 
 theme_map <- ggpubr::theme_transparent()+
   theme(axis.title = element_blank(),
-        axis.text  = element_blank(),
+        # axis.text  = element_blank(),
         axis.ticks = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
