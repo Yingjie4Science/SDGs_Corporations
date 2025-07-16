@@ -24,7 +24,7 @@ source('./Code/_directories.R')
 source('./Code/_packages.R')
 
 library(tm)        # text mining: readPDF(), Corpus()
-library(tabulizer) # importing PDFs
+library(tabulapdf) # importing PDFs
 
 ## for parallel computing
 library(parallel)
