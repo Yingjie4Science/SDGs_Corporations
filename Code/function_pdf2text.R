@@ -36,7 +36,7 @@ packageVersion('rJava')          # 1.0.6
 
 ##' Increase Java Memory for R (tabulizer/jars)
 ##' This gives Java 8GB of memory (adjust to 8g, 16g, etc. if you have lots of RAM).
-options(java.parameters = "-Xmx8g")
+options(java.parameters = "-Xmx16g")
 
 
 

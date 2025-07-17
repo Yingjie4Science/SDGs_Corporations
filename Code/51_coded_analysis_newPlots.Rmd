@@ -19,11 +19,7 @@ remove(list = ls())
 ## set work dir
 getwd()
 
-dir.raw     <- './Data/data_raw/'
-dir.results <- './Data/data_results/'
-dir.figures <- './figures/'
-
-
+source('./code/_directories.R')
 source('./Code/_packages.R')
 library(stringr)
 # install.packages("devtools")
@@ -158,8 +154,8 @@ ls_un_id <- ls_un_id %>%
   The machine-coded results
 ```{r - machine-coded results, include=FALSE}
 ## dataset 1: the companies HAVE coded by UNGSII
-dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
-ls_f <- list.files(path = paste0(dir.tm, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
+dir.coded      <- paste0(dir.reports, 'pdf_coded_human/DF_coded_comb/')
+ls_f <- list.files(path = dir.coded, pattern = 'RData$', full.names = T); ls_f
 tail(ls_f, n = 1)
 load(tail(ls_f, n = 1)) ## load the latest/last data
 dfs_m1 <- dfs %>% dplyr::rename(target = coded_sdgs)
@@ -167,8 +163,8 @@ cat('There are', unique(dfs_m1$company) %>% length(), 'companies.') ## 352
 
 
 ## dataset 2: the companies NOT coded by UNGSII
-dir.tm      <- './Data/data_TextMining/annual_reports/pdf_not_coded/'
-ls_f <- list.files(path = paste0(dir.tm, 'DF_coded_results'), pattern = 'RData$', full.names = T); ls_f
+dir.coded      <- paste0(dir.reports, 'pdf_not_coded/DF_coded_comb')
+ls_f <- list.files(path = dir.coded, pattern = 'RData$', full.names = T); ls_f
 tail(ls_f, n = 1)
 load(tail(ls_f, n = 1)) ## load the latest/last data
 dfs_m2 <- dfs %>% dplyr::rename(target = coded_sdgs) %>%

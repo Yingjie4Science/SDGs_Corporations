@@ -78,21 +78,26 @@ dir_txt <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund/DF_tokenize/')
   
 ```{r - 356 company}
 
-## read the company information list from XLS file. 
-f <- paste0(dir.raw, "com_list_HumanCoded_URL.xlsx")
-com_download <- readxl::read_excel(f) %>%
-  dplyr::filter(str_starts(string = url_collection, pattern = "NA", negate = T))
-com_download_ls <- unique(com_download$Company)
-
-
 ## get the PDF names of all the downloaded company 
 files <- list.files(dir_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
 com_name_ls <- gsub("\\--.*", "", basename(files))
 
 cat('There are', length(files), "PDF reports.\n"); ## 356
 
+```
+
+
+```{r - 356 company - checking, eval=FALSE, include=FALSE}
+## -------------------------- ##
 
 ## identify the difference between the two list -- in case any reports are missing
+
+## read the company information list from XLS file. 
+f <- paste0(dir.raw, "com_list_HumanCoded_URL.xlsx")
+com_download <- readxl::read_excel(f) %>%
+  dplyr::filter(str_starts(string = url_collection, pattern = "NA", negate = T))
+com_download_ls <- unique(com_download$Company)
+
 a <- com_download_ls
 b <- com_name_ls
 setdiff(a, b)
