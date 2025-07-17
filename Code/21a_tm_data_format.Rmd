@@ -16,13 +16,22 @@ remove(list = ls())
 
 # directories 
 source('./Code/_directories.R')
-dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
-
-dir.coded      <- paste0(dir.pdf, 'DF_coded/');           v <- ''
-dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
 
 
-dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/')
+## 1. my data
+# dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
+# dir.coded      <- paste0(dir.pdf, 'DF_coded/');           v <- ''
+# dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+
+
+## 2. SSFP data
+dir.pdf  <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_pdf_Edmund/'
+dir.coded <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+
+
+
+## output directories
+dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/'); print(dir.coded.comb)
 
 
 # load packages
@@ -77,8 +86,14 @@ cat('There are', ls %>% length(), 'corporate reports were CODED.')
 coded_combined <- data.frame()
 
 for (f in ls) {
-  com_name <- gsub('\\.RData|_coded', '', basename(f)); 
+  company_name <- gsub('\\.RData|_coded|\\.pdf', '', basename(f)); 
+  # Extract company names (before first "_")
+  com_name <- str_extract(company_name, "^[^_]+")
   print(com_name)
+  
+  # Extract first 4-digit year
+  year <- str_extract(company_name, "\\d{4}"); print(year)
+  
   load(f) ## all coded reports were named "coded" as Rdata
 
   ## clean the data 
@@ -91,7 +106,7 @@ for (f in ls) {
       sdgs_n  = str_remove(sdgs_n, "^,"),
       sdgs_n  = str_squish(sdgs_n),
       human_coded = "yes",
-      year = 2018, 
+      year = year, 
       token_count = str_count(statement, "\\S+")) %>%
     select(-any_of(c('word_count', 'short_word_count'))) %>%
     select(company, everything()) %>%
@@ -142,11 +157,11 @@ readr::write_csv(x = coded_combined, file = f)
 ```
 
 
-```{r - save combined data - subset}
+```{r - save combined data - subset rows with sdgs detected}
 
 coded_combined_sdg <- coded_combined %>%
   ## only keep the rows with SDG hits
-    filter(n_total > 0)
+  filter(n_total > 0)
   
 ## count the total tokens
 sum(coded_combined_sdg$token_count, na.rm = T) %>% 
@@ -251,7 +266,11 @@ dfs <- data.frame()
 
 for (f in ls) {
   # print(f)
-  com_name <- gsub('\\.RData|_coded', '', basename(f)); print(com_name)
+  company_name <- gsub('\\.RData|_coded|\\.pdf', '', basename(f)); 
+  # Extract company names (before first "_")
+  com_name <- str_extract(company_name, "^[^_]+")
+  print(com_name)
+  
   load(f) ## all coded reports were named "coded" as Rdata
 
   d <- func_format(coded = coded)
