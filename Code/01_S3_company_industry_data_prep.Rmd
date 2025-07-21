@@ -1,0 +1,394 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+## Dirs and packages
+```{r include=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+getwd()
+
+source('./code/_directories.R')
+source('./Code/_packages.R')
+
+library(RColorBrewer)
+source('./Code/helper_theme_NS_map.R')
+library(skimr)
+
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+```
+
+
+
+```{r - select data}
+
+### load the list of downloaded and coded company lists
+
+### 1. the list have been coded by UNGSII
+f <- paste0(dir.raw, 'com_list_HumanCoded_URL.xlsx')
+com_ls11 <- readxl::read_excel(f)
+
+### 1.2 the list coded and with Fortune500 rank labels
+f <- paste0(dir.raw, 'com_list_HumanCoded_inFortune.xlsx')
+com_ls12 <- readxl::read_excel(f)
+
+com_ls1 <- merge(x = com_ls11, y = com_ls12, by.x = 'Company', by.y = 'company_name', all = T)
+
+ 
+### 2. the list not coded by UNGSII ------------------------------------------------------
+f <- paste0(dir.raw, 'com_final_naCheckNA_UN500_2018_ManualFillna_AddFortune.xlsx')
+com_ls2 <- readxl::read_excel(f) %>%
+  dplyr::mutate(
+    company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
+    company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
+    company_name = gsub("L'Oréal", "L'Oreal", company_name),
+    company_name = gsub('Fomento Económico Mexicano', 'Fomento Economico Mexicano', company_name),
+    company_name = gsub('SNCF Mobilités', 'SNCF Mobilites', company_name),
+    company_name = gsub('Société Générale', 'Societe Generale', company_name),
+    company_name = gsub('Koç Holding', 'Koc Holding', company_name),
+    company_name = gsub('Ultrapar Holdings', 'Ultrapar Participacoes', company_name),
+  )
+
+
+
+### 3. get the list of all the companies that were considered so far (checked links and recorded in excels)
+com_lss <- rbind(
+  com_ls1 %>% dplyr::select(Company, iso3, url_collection, rank2019, rank2018) %>% 
+    dplyr::mutate(humancoded = 'yes') %>%
+    as.data.frame(),
+  com_ls2 %>% dplyr::select(company_name, iso3, url_collection, rank2019, rank2018) %>% 
+    dplyr::rename(Company=company_name)%>% 
+    dplyr::mutate(humancoded = 'no') %>%
+    as.data.frame()
+) %>%
+  arrange(Company, rank2019, rank2018) %>%
+  dplyr::distinct(Company, .keep_all = T) %>%
+  arrange(rank2019, rank2018)
+
+
+unique(com_lss$rank2019) %>% length() ## 501 = 500 + 1 (NA)
+unique(com_lss$rank2018) %>% length() ## 501 = 500 + 1 (NA)
+
+
+helper_com_iso3 <- com_lss %>%
+  dplyr::distinct(Company, iso3)
+
+
+### 4. subset from the list with PDF and were coded so far 
+com_lss_pdf <- com_lss %>%
+  dplyr::filter(stringr::str_detect(string = url_collection, pattern = 'http')) %>%
+  arrange(Company, rank2019, rank2018) %>%
+  dplyr::distinct(Company, iso3, .keep_all = T) %>% ## "US Foods Holding" was in both `com_ls1` and `com_ls2`
+  as.data.frame()
+
+
+### --> the combination of fortune 2018 and 2019
+com_lss_ft <- com_lss %>%
+  dplyr::filter(!is.na(rank2019) | !is.na(rank2018)) %>%
+  arrange(desc(url_collection), Company) %>%  ## to check the company without PDF
+  # arrange(rank2019, rank2018) %>%             ##
+  as.data.frame()
+
+### --> with PDF and listed in Fortune (ft)
+com_lss_ft_pdf <- com_lss_ft %>%
+  dplyr::filter(stringr::str_detect(string = url_collection, pattern = 'http')) %>%
+  arrange(Company, rank2019, rank2018) %>%
+  dplyr::distinct(Company, iso3, .keep_all = T)
+
+com_lss_ft_pdf %>%
+  group_by(humancoded) %>%
+  tally()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## Company data
+
+ company help data.
+ 
+```{r}
+## load company profiles in the UGSII data -----------------------------------------------
+load(file = paste0(dir.results, 'com_final_500_scr.RData'))
+## --> this includes "com_final, com700, ctr, ind_levels, ind_labels"
+
+## fix a few company names to ensure good dataframe merge. 
+com700 <- com700 %>%
+  dplyr::mutate(
+    Company = gsub('Taiwan Semicondctor Manufacturing', 'Taiwan Semiconductor Manufacturing', Company),
+    Company = gsub('Julius Bär', 'Julius Baer', Company),
+    Company = gsub('Compañía de Minas Buenaventura', 'Compania de Minas Buenaventura', Company),
+  ) %>%
+  as.data.frame()
+
+## load company profiles in the Fortune Global 500 data ----------------------------------
+f <- paste0(dir.results, 'company_Fortune_Global500.RData'); 
+load(f) ## `com500ft_ToMatchName`, and `com500ft_profile_df`
+com500ft_profile_df_edit <- com500ft_profile_df %>%
+   dplyr::mutate(
+    company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
+    company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
+    company_name = gsub("L'Oréal", "L'Oreal", company_name),
+    company_name = gsub('Fomento Económico Mexicano', 'Fomento Economico Mexicano', company_name),
+    company_name = gsub('SNCF Mobilités', 'SNCF Mobilites', company_name),
+    company_name = gsub('Société Générale', 'Societe Generale', company_name),
+    company_name = gsub('Koç Holding', 'Koc Holding', company_name),
+  )
+  
+
+
+
+## merge `com700` and `com500ft_profile_df` for later use for matching -------------------
+names(com700)
+names(com500ft_profile_df)
+
+helper_industry <- rbind(
+  com700 %>% 
+    dplyr::mutate(source = 'com700') %>%
+    dplyr::select(Company, Industry, ind_agg, ind_7sys, ind_3, source),
+  
+  com500ft_profile_df_edit %>%
+    dplyr::mutate(source = 'com500ft') %>%
+    dplyr::rename(Company = company_name, 
+                  Industry = industry) %>%
+    dplyr::select(Company, Industry, ind_agg, ind_7sys, ind_3, source)
+) %>%
+  ### remove the duplicated records, keep the Fortune 500 as priority, as it is more accurate in industry classification
+  arrange(Company, source) %>%
+  dplyr::distinct(Company, .keep_all = T) %>%
+  as.data.frame()
+  
+
+
+## 3. other helper data ------------------------------------------------------------------
+load(file = paste0(dir.results, 'grp.RData'))      ## country income group; `grp`, `shp`
+load(file = paste0(dir.results, 'ls_un_id.RData')) ## `ls_un_id`
+ls_un_id <- ls_un_id %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un))
+```
+
+
+
+### * num of com by region
+
+```{r}
+
+## We use the 'region' and 'iso3' in `com_final` to match other data
+helper_ctr_region <- com_final %>% dplyr::distinct(region, iso3) %>%
+  rbind(., 
+        data.frame(region = c('Europe', 'Asia', 'Asia'), 
+                   iso3   = c('POL',    'SAU',  'TUR'))
+        )
+
+## --> if choose Fortune 500 list for analysis
+com_data <- com_lss_ft %>%
+  ## add region 
+  merge(x = ., y = helper_ctr_region, by = 'iso3', all.x = T)
+
+
+## --> update `com_final` to what we choose
+com_final_former <- com_final ## keep a copy just in case
+com_final <- com_data %>% dplyr::rename(company_name = Company)
+
+
+
+## how many companies in total this data? - 356 --------------------------------
+n.com <- com_final %>%
+  dplyr::distinct(company_name, .keep_all = T)
+
+## how many companies in each region or Continent? -----------------------------
+### 1. check if df$Region == df$Continent
+# all(df$Region == df$Continent)
+# df %>% dplyr::distinct(Region, Continent)
+
+
+### 2. number of companies in each region
+n.com %>%
+  dplyr::group_by(region) %>% 
+  dplyr::tally()
+
+```
+
+
+### * num of com by ctr (SI_3a)
+```{r}
+## how many companies in each country ------------------------------------
+n.com.country <- n.com %>%
+  group_by(iso3, region) %>% tally() %>% 
+  arrange(iso3, region, n) %>% as.data.frame() %>%
+  ungroup() 
+hist(n.com.country$n)
+sum(n.com.country$n)
+
+unique(n.com.country$region)
+str(n.com.country)
+
+(p.n.byCountry <- n.com.country %>%
+    arrange(region, n) %>%
+    dplyr::mutate(id = row_number()) %>%
+    ggplot(aes(x = reorder(iso3, id), y = n, group=region, fill = region)) +
+    geom_col() +
+    geom_text(aes(label = n), hjust = 0.5, vjust = -0.5, size = 2) +
+    # scale_fill_brewer(palette="RdYlBu", direction = -1) + ### best for 4 classes
+    # facet_wrap(~region, scales = 'free_y') +
+    # coord_flip() +
+    theme_ns +
+    # theme(legend.position = "none") +
+    theme(legend.position = c(0.08, 0.85), 
+          legend.key.width = unit(0.5, "lines"), legend.key.height = unit(0.5, "lines"),
+          legend.title = element_blank(),
+          text = element_text(size=font_size),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
+    # theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1))+
+    xlab('') + ylab('Number of companies'))
+# fname <- paste0(dir.figures, 'number of comp by country_region_new.jpg'); fname
+# ggsave(filename = fname, plot = p.n.byCountry, 
+#        width = width_2col, height = width_2col/2, units = unit_ns, dpi = 300)
+```
+
+
+
+## Industry summary
+
+  Industry info in the final data list. 
+  
+### * num of com by ind  (si 2ab)
+```{r}
+### revised industry classification for Fortune 500
+
+com_dt <- 
+  ### this was used before 7/27/2020
+  # df %>%
+  # distinct(Company, .keep_all = T) %>%
+  com_final %>%
+  merge(x = ., y = helper_industry, by.x = 'company_name', by.y = 'Company', all.x = T) %>%
+  dplyr::distinct(company_name, .keep_all = T) %>%
+  dplyr::mutate(ind = ind_7sys) %>%
+  ungroup() #%>%
+  
+
+
+
+
+### 8 industry ------------------------------------
+num_ind <- length(unique(com_dt$ind_7sys)); num_ind
+palette_ind <- 'YlGnBu'
+colors_ind  <- colorRampPalette((brewer.pal(9, palette_ind)))(num_ind)
+
+(p8 <- com_dt %>% 
+  dplyr::group_by(ind) %>% 
+  dplyr::tally() %>% 
+  arrange(n) %>%
+    ggplot() +
+    geom_col(aes(x= reorder(ind, n), y = n, fill = ind), color = 'gray90', show.legend = F) +
+    # scale_fill_brewer(palette = palette_ind) +
+    scale_fill_manual(values = colors_ind, na.value = 'gray') +
+    coord_flip() + theme_bw() +
+    theme_ns +
+    ylab('Number of companies') + xlab('Industry')
+)
+print(paste0('There are total ', length(unique(com_dt$ind)), ' industries.'))
+
+# fname <- paste0(dir.figures, 'num of com by ', num_ind, ' industry_500coms_new.jpg'); fname
+# ggsave(fname, last_plot(), width = width_2col, height = width_2col/3, units = unit_ns, dpi = 300)
+
+
+
+
+### doughnut chart with ggplot2 -------------------------------------------------------------
+com_dt8 <- com_dt %>% 
+  dplyr::group_by(ind) %>% 
+  dplyr::tally() %>% 
+  arrange(n) #%>%
+# Compute percentages
+com_dt8$fraction = com_dt8$n / sum(com_dt8$n)
+
+# Compute the cumulative percentages (top of each rectangle)
+com_dt8$ymax = cumsum(com_dt8$fraction)
+
+# Compute the bottom of each rectangle
+com_dt8$ymin = c(0, head(com_dt8$ymax, n=-1))
+ 
+# Compute label position
+com_dt8$labelPosition <- (com_dt8$ymax + com_dt8$ymin) / 2
+
+# Compute a good label
+library(scales)
+com_dt8$label <- percent(com_dt8$fraction)
+
+# Make the plot
+doughnut <- 
+  ggplot(com_dt8, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=ind)) +
+  geom_rect(show.legend = F) +
+  # scale_fill_brewer(palette = palette_ind) +
+  # scale_color_brewer(palette= palette_ind) +
+  scale_fill_manual(values = colors_ind, na.value = 'gray') +
+  scale_color_manual(values = colors_ind, na.value = 'gray') +
+  # geom_label(x = 3.5, aes(y = ymax, label = fraction * 100), show.legend = F) +
+  geom_text(x=2.7, aes(y=labelPosition, label=label), size=2) + # x here controls label position (inner / outer)
+  coord_polar(theta="y") + # Try to remove that to understand how the chart is built initially
+  xlim(c(1, 4)) + # Try to remove that to see how to make a pie chart  
+  labs(fill = 'Industry') +
+  theme_void()
+
+# doughnut
+
+
+### 4 levels industry -----------------------------
+com_dt %>% as.data.frame() %>%
+  dplyr::count(ind_3) %>% dplyr::arrange(n) 
+
+
+
+### 20+ industry ----------------------------------
+
+com_dt_i <-  com_dt %>% as.data.frame() %>% 
+  group_by(ind, 
+           # ind_7sys, 
+           ind_agg) %>%
+  dplyr::mutate(ind_agg = str_to_sentence(ind_agg)) %>%
+  dplyr::tally() #%>%
+i_ind <- length(unique(com_dt_i$ind_agg)); i_ind
+
+(p24 <- com_dt_i %>%
+  ggplot() +
+    geom_col(aes(x= reorder(ind_agg, n), y = n, fill = ind), color = 'gray90',show.legend = F) +
+    # scale_fill_brewer(palette = palette_ind) +
+    scale_fill_manual(values = colors_ind, na.value = 'gray') +
+    coord_flip() + theme_bw() + theme_ns +
+    ylab('Number of companies') + xlab('Industry') +
+    annotation_custom(grob = ggplotGrob(doughnut), xmin = -5, ymin = 15, ymax = 65) ## ymax = 55
+)
+# fname <- paste0(dir.figures, 'num of com by ', i_ind, ' industry_500_new.jpg'); fname
+# ggsave(fname, last_plot(), width = width_2col, height = width_2col, units = unit_ns, dpi = 300)
+
+
+
+ggpubr::ggarrange(p8, p24,
+          nrow = 2, ncol = 1, align = 'hv', labels = panel_labels, heights = c(1,2.5),
+          common.legend = F, legend = 'none')
+fname <- paste0(dir.figures, 'SM_Fig2ab_', ymd, '.jpg'); fname
+ggsave(fname, plot = last_plot(), 
+       width = width_2col, height = width_2col, units = unit_ns, dpi = 300)
+
+
+### save as pdf
+# fname <- gsub('\\.jpg', '\\.pdf', fname); fname
+# ggsave(fname, plot = last_plot(), width = width_2col, height = width_2col, units = unit_ns, dpi = 600)
+
+```
+
