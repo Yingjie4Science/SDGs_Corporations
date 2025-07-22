@@ -7,6 +7,7 @@ output: html_document
 
 
 ## Dirs and packages
+
 ```{r include=FALSE}
 ### To clear your environment 
 remove(list = ls())
@@ -17,7 +18,6 @@ getwd()
 source('./code/_directories.R')
 source('./Code/_packages.R')
 
-library(RColorBrewer)
 source('./Code/helper_theme_NS_map.R')
 library(skimr)
 
@@ -26,8 +26,22 @@ ymd   <- format(Sys.time(), "%Y%m%d"); ymd
 
 
 
-```{r - select data}
+## Help data
 
+```{r - country income group}
+
+load(file = paste0(dir.results, 'grp.RData'))      ## country income group; `grp`, `shp`
+load(file = paste0(dir.results, 'ls_un_id.RData')) ## `ls_un_id`
+ls_un_id <- ls_un_id %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un))
+
+```
+
+
+
+## Company data
+
+```{r - company-country match}
 ### load the list of downloaded and coded company lists
 
 ### 1. the list have been coded by UNGSII
@@ -44,6 +58,7 @@ com_ls1 <- merge(x = com_ls11, y = com_ls12, by.x = 'Company', by.y = 'company_n
 ### 2. the list not coded by UNGSII ------------------------------------------------------
 f <- paste0(dir.raw, 'com_final_naCheckNA_UN500_2018_ManualFillna_AddFortune.xlsx')
 com_ls2 <- readxl::read_excel(f) %>%
+  ## fix name inconsitency 
   dplyr::mutate(
     company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
     company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
@@ -76,15 +91,25 @@ unique(com_lss$rank2019) %>% length() ## 501 = 500 + 1 (NA)
 unique(com_lss$rank2018) %>% length() ## 501 = 500 + 1 (NA)
 
 
+## --> helper data for adding country info to company list -------------------------------
 helper_com_iso3 <- com_lss %>%
   dplyr::distinct(Company, iso3)
 
+## save data as csv
+fname <- paste0(dir.results, 'helper_com_iso3.csv'); fname
+write_csv(helper_com_iso3, file = fname)
+
+```
+
+
+```{r - company-country match - subset}
 
 ### 4. subset from the list with PDF and were coded so far 
 com_lss_pdf <- com_lss %>%
   dplyr::filter(stringr::str_detect(string = url_collection, pattern = 'http')) %>%
   arrange(Company, rank2019, rank2018) %>%
-  dplyr::distinct(Company, iso3, .keep_all = T) %>% ## "US Foods Holding" was in both `com_ls1` and `com_ls2`
+  ## "US Foods Holding" was in both `com_ls1` and `com_ls2`
+  dplyr::distinct(Company, iso3, .keep_all = T) %>% 
   as.data.frame()
 
 
@@ -95,7 +120,7 @@ com_lss_ft <- com_lss %>%
   # arrange(rank2019, rank2018) %>%             ##
   as.data.frame()
 
-### --> with PDF and listed in Fortune (ft)
+### --> Companies that with PDF and listed in Fortune (ft)
 com_lss_ft_pdf <- com_lss_ft %>%
   dplyr::filter(stringr::str_detect(string = url_collection, pattern = 'http')) %>%
   arrange(Company, rank2019, rank2018) %>%
@@ -109,25 +134,15 @@ com_lss_ft_pdf %>%
 
 
 
+```{r - company industry}
 
-
-
-
-
-
-
-
-## Company data
-
- company help data.
- 
-```{r}
 ## load company profiles in the UGSII data -----------------------------------------------
 load(file = paste0(dir.results, 'com_final_500_scr.RData'))
 ## --> this includes "com_final, com700, ctr, ind_levels, ind_labels"
 
 ## fix a few company names to ensure good dataframe merge. 
 com700 <- com700 %>%
+  ## fix company names
   dplyr::mutate(
     Company = gsub('Taiwan Semicondctor Manufacturing', 'Taiwan Semiconductor Manufacturing', Company),
     Company = gsub('Julius Bär', 'Julius Baer', Company),
@@ -135,11 +150,13 @@ com700 <- com700 %>%
   ) %>%
   as.data.frame()
 
+
 ## load company profiles in the Fortune Global 500 data ----------------------------------
 f <- paste0(dir.results, 'company_Fortune_Global500.RData'); 
 load(f) ## `com500ft_ToMatchName`, and `com500ft_profile_df`
 com500ft_profile_df_edit <- com500ft_profile_df %>%
-   dplyr::mutate(
+  ## fix company names
+  dplyr::mutate(
     company_name = gsub('Crédit Agricole', 'Credit Agricole', company_name),
     company_name = gsub('Caixa Econômica Federal', 'Caixa Economica Federal', company_name),
     company_name = gsub("L'Oréal", "L'Oreal", company_name),
@@ -147,10 +164,8 @@ com500ft_profile_df_edit <- com500ft_profile_df %>%
     company_name = gsub('SNCF Mobilités', 'SNCF Mobilites', company_name),
     company_name = gsub('Société Générale', 'Societe Generale', company_name),
     company_name = gsub('Koç Holding', 'Koc Holding', company_name),
-  )
+    )
   
-
-
 
 ## merge `com700` and `com500ft_profile_df` for later use for matching -------------------
 names(com700)
@@ -171,24 +186,24 @@ helper_industry <- rbind(
   arrange(Company, source) %>%
   dplyr::distinct(Company, .keep_all = T) %>%
   as.data.frame()
-  
 
-
-## 3. other helper data ------------------------------------------------------------------
-load(file = paste0(dir.results, 'grp.RData'))      ## country income group; `grp`, `shp`
-load(file = paste0(dir.results, 'ls_un_id.RData')) ## `ls_un_id`
-ls_un_id <- ls_un_id %>%
-  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un))
+## save data as csv
+fname <- paste0(dir.results, 'helper_industry.csv'); fname
+write_csv(helper_industry, file = fname)
 ```
 
 
+
+
+## Company data summary
 
 ### * num of com by region
 
 ```{r}
 
 ## We use the 'region' and 'iso3' in `com_final` to match other data
-helper_ctr_region <- com_final %>% dplyr::distinct(region, iso3) %>%
+helper_ctr_region <- com_final %>% 
+  dplyr::distinct(region, iso3) %>%
   rbind(., 
         data.frame(region = c('Europe', 'Asia', 'Asia'), 
                    iso3   = c('POL',    'SAU',  'TUR'))
@@ -225,7 +240,9 @@ n.com %>%
 
 
 ### * num of com by ctr (SI_3a)
+
 ```{r}
+
 ## how many companies in each country ------------------------------------
 n.com.country <- n.com %>%
   group_by(iso3, region) %>% tally() %>% 
