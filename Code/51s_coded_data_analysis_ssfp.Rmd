@@ -1,0 +1,329 @@
+---
+title: "Untitled"
+author: "Yingjie"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+* This script was prepared for SSFP students to analyze the machine-coded SDG results.
+
+# Dirs and packages
+
+```{r warning=FALSE}
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+getwd()
+
+dir.figures <- './figures/'
+
+library(sf)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(readr)
+library(RColorBrewer)
+library(ggplot2)
+
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+```
+
+
+
+# 2. Data
+
+## - Load helper data
+
+```{r warning=FALSE}
+
+f <-  "./data/data_results/helper_com_iso3.csv"
+helper_com_iso3 <- read_csv(f)
+
+f <- "./data/data_results/helper_industry.csv"
+helper_industry <- readr::read_csv(f)
+
+
+## world shapefile 
+shp <- readRDS('./data/data_results/shp.rds')
+```
+
+
+## - Load machine-coded results
+  
+```{r message=FALSE, warning=FALSE}
+
+dir.coded <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_pdf_Edmund/DF_coded_comb/'
+
+ls_f <- list.files(path = dir.coded, pattern = 'RData$', full.names = T); ls_f
+tail(ls_f, n = 1)
+load(tail(ls_f, n = 1)) ## load the latest/last data
+
+dfs_m <- dfs %>% 
+  dplyr::rename(target = coded_sdgs) %>%
+  ## change to the same names
+  dplyr::rename(Company = company, n_statement = n_statements, Target_id = target) %>%
+  ## add a column the same way as the old data
+  dplyr::mutate(
+                Target_id = gsub('^SDG', '', Target_id),
+                goal_desc = NA) %>%
+  as.data.frame()
+
+### company list in the data
+com_ls <- unique(dfs_m$Company); #com_ls
+cat('There are', com_ls %>% length(), 'companies.')
+
+
+## add country information 
+df <- dfs_m %>%
+  merge(x = ., 
+        y = helper_com_iso3, 
+        by = 'Company', all.x = T) 
+
+
+```
+
+
+# 3. Analysis
+
+## - Goal level
+
+```{r}
+## total number of company
+total_tar <- 169 ## total number of targets
+total_sdg <- 17  ## total number of SDGs
+
+unique(df$goal) %>% sort()
+unique(df$Target_id) %>% sort()
+n_sdg    <- length(unique(df$goal));      #n_sdg
+n_target <- length(unique(df$Target_id)); #n_target
+print(paste0('There are total ', n_sdg,    ' goals.'))
+print(paste0('There are total ', n_target, ' SDG targets.'))
+
+
+# skim(df)
+df_check_nStatement <- df %>% 
+  dplyr::filter(!is.na(n_statement)) %>%
+  group_by(year, Company, goal_id) %>%
+  dplyr::summarise(n_goal = sum(n_statement, na.rm = T)) %>%
+  as.data.frame()
+
+
+n_threshold_countable <- 4
+
+### how many times each goal was mentioned by unique companies
+unique_company <- df %>% 
+  distinct(Company, iso3)
+cat('There are', unique_company %>% nrow(), 'unique companies.')
+
+goal_cmt_by_com <- df %>% 
+  dplyr::filter(n_statement > n_threshold_countable) %>%
+  dplyr::distinct(Company, iso3, goal) %>%
+  dplyr::filter(!goal %in% c('noSDG')) %>%
+  ungroup() %>% dplyr::group_by(Company) %>% tally() 
+sort(unique(goal_cmt_by_com$n))
+n_com_cmt_goal <- nrow(goal_cmt_by_com); n_com_cmt_goal
+
+
+goal_cmt_by_com_spe <- df %>% 
+  dplyr::filter(n_statement > n_threshold_countable) %>%
+  dplyr::distinct(Company, iso3, goal) %>%
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  dplyr::group_by(Company) %>%  tally() 
+sort(unique(goal_cmt_by_com_spe$n))
+n_com_cmt_goal_spe <- nrow(goal_cmt_by_com_spe); n_com_cmt_goal_spe
+
+
+### which goal is most committed by, in terms of company number or pct?
+goal_n_com <- df %>% 
+  dplyr::filter(n_statement > 0) %>%
+  dplyr::distinct(Company, iso3, goal) %>%
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  ungroup() %>%
+  dplyr::group_by(goal) %>% 
+  tally() %>% 
+  dplyr::mutate(goal = factor(goal, levels = unique(goal)),
+         pct  = n/n_com_cmt_goal_spe,
+         pct500  = n) %>%
+  arrange(desc(pct))
+
+
+### how many times each goal was mentioned (in total, regardless unique company) ------------
+goal_n_cmt <- df %>% 
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  dplyr::group_by(goal) %>% 
+  dplyr::summarise(n_cmt = sum(n_statement, na.rm = T)) %>%
+  # dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  dplyr::mutate(goal = factor(goal, levels = unique(goal))) %>%
+  arrange(desc(n_cmt))
+
+(pgoal_n_cmt <- goal_n_cmt %>% 
+    ggplot() +
+    geom_col(aes(x = reorder(goal, n_cmt), y = n_cmt)) +
+    coord_flip() +
+    theme_bw() + 
+    # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+    xlab(NULL) + ylab('Number of commitments')
+)
+
+
+```
+
+
+## - by goal by company 
+
+```{r}
+
+### goal by company by country
+goal_com <- df %>%
+  dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
+  dplyr::group_by(iso3, Company, goal) %>%
+  dplyr::summarise(num_total = sum(n_statement, na.rm = T)) %>%
+  ungroup() %>%
+  arrange(Company, iso3, goal) %>%
+  as.data.frame()
+
+```
+
+
+
+
+## - Map of companies 
+
+```{r}
+
+com <- df %>%
+  distinct(iso3, Company)
+
+## number of companies by country
+n.com.country <- com %>%
+  group_by(iso3) %>%
+  tally(name = 'n') %>%
+  ungroup() %>%
+  arrange(desc(n)) %>%
+  mutate(iso3 = as.character(iso3)) %>%
+  as.data.frame()
+
+sum(n.com.country$n)
+
+legend.title <- 'Number of\ncompanies'
+shp_n.co <- merge(x = shp,
+                  y = n.com.country, ### the 500 company list
+                  by.x='iso_a3', by.y = 'iso3', all.x = T) %>%
+  filter(name != 'Antarctica')
+                  
+
+library(RColorBrewer)
+library(sf)
+
+str(shp_n.co)
+
+shp_n.co %>% 
+    ggplot() + 
+    geom_sf(aes(fill = n), color='gray70', size = 0.1) +
+    scale_fill_distiller('Count of \ncompanies', palette = "Purples", direction = 1, na.value = 'gray80') +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.border = element_blank(),
+  )+
+  theme(legend.position = c(0.09, 0.3))
+
+
+
+fname <- paste0(dir.figures, 'ssfp_num of com by ctr_', ymd, '.jpg'); fname
+ggsave(fname, plot = last_plot(), width = 7, height = 3, units = 'in', dpi = 300)
+
+```
+
+
+
+
+##  - Commitment per company by country 
+
+```{r}
+
+names(df)
+cmt_mean_goal <- df %>%
+  dplyr::select(Company, iso3,
+                goal, Target_id, n_statement) %>%
+  dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
+  arrange(goal, Company, iso3) %>%
+  group_by(iso3, Company, goal) %>%
+  ### the total number of commitment statement to each goal by each company
+  dplyr::summarise(n_cmt = sum(n_statement, na.rm = T)) %>%
+  ### the average number of commitment statement to each goal in each country
+  ungroup() %>%
+  group_by(iso3, goal) %>%
+  dplyr::summarise(n_cmt_mean = mean(n_cmt, na.rm = T)) %>%
+  arrange(iso3, goal)
+
+
+### plot ----------------------------------------------------------------
+
+cmt_mean_goal_brk <- cmt_mean_goal %>% 
+  spread(key = goal, value = n_cmt_mean) %>%
+  as.data.frame()
+
+
+### link the data to shapefile
+cmt_mean_goal_brk_shp <- 
+  merge(x = shp, 
+        y = cmt_mean_goal_brk, 
+        by.x='iso_a3', 
+        by.y = 'iso3', all.x = T) %>%
+  # st_drop_geometry() %>%
+  filter(name != 'Antarctica') %>%
+  dplyr::rename(iso3 = iso_a3)
+
+
+cmt_mean_goal_brk_shp_map <- cmt_mean_goal_brk_shp %>% 
+  # st_drop_geometry() %>%
+  gather(key = 'goal', 'n_cmt_mean', SDG1:SDG17) %>%
+  dplyr::filter(!is.na(goal)) %>%
+  dplyr::mutate(
+    n_cmt_mean = as.numeric(n_cmt_mean),
+    goal = factor(goal, levels = unique(goal)) )
+
+
+```
+
+
+
+
+
+
+## - Map of cmt number 
+```{r fig.height=7, fig.width=7}
+p2 <- 
+  cmt_mean_goal_brk_shp_map %>%  
+  ### plot
+  ggplot(data = .) + 
+  geom_sf(aes(fill = n_cmt_mean),
+          color='gray80', size = 0.1) +
+  scale_fill_distiller('Average commitments', palette = "YlGn", direction = 1, na.value = 'gray80') +
+  theme_bw() +
+  facet_wrap(~goal, ncol = 3) +
+  theme_minimal() + 
+  theme(legend.position = c(0.8, 0.08), 
+        panel.grid = element_blank(),
+        axis.text  =element_blank(),
+        axis.ticks =element_blank(),
+        strip.background = element_blank() )
+
+p2
+fname <- paste0(dir.figures, 'ssfp_map_cmt_by_goal_', ymd, '.jpg'); fname
+ggsave(fname, plot = p2,  width = 7, height = 7, units = 'in', dpi = 300)
+
+```
+
+
+
+

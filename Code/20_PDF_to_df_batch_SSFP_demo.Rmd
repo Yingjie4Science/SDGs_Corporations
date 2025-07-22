@@ -1,0 +1,124 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "7/9/2025"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Dir and packages
+
+```{r include=FALSE}
+
+### To clear your environment 
+remove(list = ls())
+
+## set work dir
+getwd()
+
+
+library(readr)
+library(dplyr)
+library(stringr)
+library(tabulapdf) # importing PDFs
+
+```
+
+
+
+## Input and output directories
+
+### Original project 
+
+```{r}
+
+## input directory of the downloaded PDF data
+dir_pdf <- 'path/to/your/pdf/data/' # e.g., 'C:/data_pdf_Zan/'
+
+## output directory of the converted PDF data
+dir_txt <- 'path/to/your/output/folder/' # e.g., 'C:/data_pdf_Zan/output/'
+
+```
+
+
+
+# PDF to clean TXT
+  
+  Conversion to text --> and save .txt with name from list and move to another folder. 
+  
+  (1) get the list of the downloaded PDFs. 
+  
+
+## PDF data
+  
+```{r}
+
+## get the PDF names of all the downloaded company 
+files <- list.files(dir_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
+
+com_name_ls <- gsub("\\--.*", "", basename(files))
+
+# cat('There are', length(files), "PDF reports.\n"); ## 356
+
+```
+
+
+## Batch convert PDF to text sentences
+  
+```{r - Batch Convert, eval=FALSE, include=FALSE}
+
+### Load the function
+source('path/to/the/function/function_pdf2text.R') # `pdf2text`
+
+
+## initially, this is blank
+company_name_checker <- '' 
+
+### loop all the PDF ---------------------------------------------------------------------
+for (pdf in files) {
+  
+  ## --> get company name 
+  company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
+  company_name <- company_name[1]
+  print(company_name)
+
+  
+  ## --> read and clean the pdf ---------------------------------------------------------#
+  txt_sentence_df <- 
+    # pdf2text(pdf) %>%             # update on 5/19/2022
+    pdf2text_tokenize(pdf) %>%    # update on 5/19/2025
+    ## remove sentences that are too short
+    dplyr::filter(nchar(statement) > 5) %>%
+    ## replace the company names to avoid string mismatch
+    dplyr::mutate(statement = gsub(pattern = paste0("\\b", company_name, "\\b"), "This company", statement)) %>%
+    ## again, exclude sentences that are too short
+    dplyr::filter(nchar(statement) > 5) %>%
+    
+    ## remove sentences that have too many short words, likely due to format issues
+    dplyr::filter(short_word_count < 500) %>%
+    
+    ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
+    dplyr::distinct(statement, .keep_all = T) %>%
+    as.data.frame()
+  
+  
+  ## --> if new file is for the same company, then append the data
+  if (company_name == company_name_checker) {
+    cat('\t More than one, need to append data.\t\t', company_name, '\n') 
+    txt_sentence_df <- rbind(txt_sentence_df, txt_sentence_df_forAppend)
+  } else {
+    txt_sentence_df <- txt_sentence_df
+  }
+  
+  
+  
+  ## --> save as CSV data
+  fname <- paste0(dir_txt,  company_name[1], '.csv'); print(fname)
+  readr::write_csv(txt_sentence_df, file = fname)
+
+}
+
+```
+
