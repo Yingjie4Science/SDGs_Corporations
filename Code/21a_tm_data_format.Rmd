@@ -271,10 +271,15 @@ for (f in ls) {
   com_name <- str_extract(company_name, "^[^_]+")
   print(com_name)
   
+  # Extract first 4-digit year
+  year <- str_extract(company_name, "\\d{4}"); print(year)
+  
   load(f) ## all coded reports were named "coded" as Rdata
 
   d <- func_format(coded = coded)
   d$company = com_name
+  d$year <- year
+  
   d <- d %>% dplyr::select(company, everything())
 
   dfs <- rbind(dfs, d)
