@@ -1,0 +1,1023 @@
+---
+title: "sdg_llm"
+author: "Yingjie"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r setup}
+
+library(dplyr)
+library(readxl)
+library(purrr)
+library(stringr)
+library(ggplot2)
+
+
+dir.code <- getwd()
+## set working directory
+setwd(dirname(dir.code))
+
+
+# Load custom functions
+source("./code/function_expand_col_to_long.R") ## for expand the sdgdetector column
+
+dir.llm <- "G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_llm/"
+dir.assignments <- file.path(dirname(dir.llm), "data_LLM_validation")   # output folder
+
+```
+
+
+
+```{r  - functions}
+
+##' Helper: sort one character vector of tokens
+##'   sort numerically (by the leading number), then by the part after the dot with this order:
+##'   no suffix (e.g., 13) < numeric suffix (e.g., 13.2) < letter suffix (e.g., 13.b).
+##'   Within each category, we sort by value/letter.
+##'   
+sort_mixed_codes <- function(v) {
+  u <- unique(trimws(v))                    # de-dupe + trim spaces
+  tibble(tok = u) %>%
+    mutate(
+      major = as.numeric(str_extract(tok, "^\\d+")),
+      minor_num = suppressWarnings(as.numeric(str_match(tok, "^\\d+\\.(\\d+)")[,2])),
+      minor_chr = str_match(tok, "^\\d+\\.([A-Za-z]+)")[,2],
+      # order: none (0) < numeric (1) < letter (2)
+      minor_type = case_when(
+        is.na(minor_num) & is.na(minor_chr) ~ 0L,
+        !is.na(minor_num)                    ~ 1L,
+        TRUE                                 ~ 2L
+      )
+    ) %>%
+    arrange(major, minor_type, minor_num, minor_chr) %>%
+    pull(tok)
+}
+
+```
+
+
+## load llm data 
+
+```{r}
+
+## -- test code on one file --- 
+# f <- file.path(dir.llm, "sdg_llm_output_20250623.xlsx")
+# f <- file.path(dir.llm, "sdg_llm_output_20250804.xlsx")
+# llm <- readxl::read_excel(path = f)
+# 
+# 
+# llm_sub <- llm %>%
+#   dplyr::select(-any_of(c("nchr", "n_total", "sdgs_n", "human_coded", "token_count"))) %>%
+#   rename_with(~ gsub("(_|-)?-4o-mini-\\d{4}-\\d{2}-\\d{2}", "", .x, ignore.case = TRUE)) %>%
+#   dplyr::select(-any_of(c("gpt"))) %>%
+#   rename(
+#     'sdgdetector' = 'sdgs'
+#   ) %>%
+#   dplyr::mutate(
+#     sdgdetector = gsub("SDG|_general", "", sdgdetector, ignore.case = TRUE),
+#     sdgdetector = gsub("_", ".", sdgdetector, ignore.case = TRUE),
+#     sdgdetector = gsub(",", ", ", sdgdetector, ignore.case = TRUE),
+#   ) %>%
+#   dplyr::select(company, year, statement, sdgdetector, sdg_goal_gpt, sdg_target_gpt, engagement_level_gpt) %>%
+#   as.data.frame()
+# 
+# names(llm_sub) 
+```
+
+
+```{r}
+
+# List all matching files
+files <- list.files(
+  path = dir.llm,
+  pattern = "^sdg_llm_output_\\d{8}\\.xlsx$",
+  full.names = TRUE
+)
+
+# Function to read & clean one file
+clean_llm_file <- function(file_path) {
+  readxl::read_excel(file_path) %>%
+    dplyr::select(-any_of(c("nchr", "n_total", "sdgs_n", "human_coded", "token_count"))) %>%
+    # Remove model+date suffixes in column names
+    dplyr::rename_with(~ gsub(
+      "(_|-)?-4o-mini-\\d{4}-\\d{2}-\\d{2}",
+      "",
+      .x,
+      ignore.case = TRUE
+    )) %>%
+    dplyr::select(-any_of(c("gpt"))) %>%
+    dplyr::rename(sdgdetector = sdgs) %>%
+    dplyr::mutate(
+      sdgdetector = gsub("SDG|_general", "", sdgdetector, ignore.case = TRUE),
+      sdgdetector = gsub("_", ".", sdgdetector, ignore.case = TRUE),
+      sdgdetector = gsub(",", ", ", sdgdetector, ignore.case = TRUE)
+    ) %>%
+    dplyr::select(company, year, statement, sdgdetector,
+           sdg_goal_gpt, sdg_target_gpt, engagement_level_gpt) %>%
+    as.data.frame()
+}
+
+# Apply to all files and bind
+llm_sub <- files %>%
+  map_dfr(clean_llm_file, .id = "source_file") %>%
+  dplyr::select(-source_file) %>%
+  dplyr::distinct(company, year, statement, .keep_all = TRUE) %>%
+  arrange(sdgdetector) 
+
+```
+
+
+```{r tidy data}
+
+llm_sub_ <- llm_sub %>%
+  dplyr::mutate(
+    statement_id = paste0(company, "_", year, "_", row_number()),
+    ## clean up the json format columns
+    sdg_goal_gpt   = gsub("\\[|\\]|\'", "", sdg_goal_gpt),
+    sdg_target_gpt = gsub("\\[|\\]|\'", "", sdg_target_gpt),
+    
+    ## sort the sdg codes in each cell
+    sdg_target_gpt =  sdg_target_gpt %>%
+      str_split(",\\s*") %>%
+      map(sort_mixed_codes) %>%
+      map_chr(~ paste(.x, collapse = ", ")),
+    
+    ## replace blank `sdg_target_gpt` with "NA"
+    sdg_goal_gpt   = ifelse(sdg_goal_gpt == "", 'NA', sdg_goal_gpt),
+    sdg_target_gpt = ifelse(sdg_target_gpt == "", 'NA', sdg_target_gpt),
+    
+    sdgdetector   = sdgdetector %>%
+      str_split(",\\s*") %>%
+      map(sort_mixed_codes) %>%
+      map_chr(~ paste(.x, collapse = ", "))
+  ) %>%
+  
+  dplyr::rename(
+    'targets_nlp' = 'sdgdetector',
+    'goals_llm'   = 'sdg_goal_gpt',
+    'targets_llm' = 'sdg_target_gpt',
+    'engagement_llm' = 'engagement_level_gpt'
+  ) %>%
+  # select(1:targets_nlp, targets_nlp2, everything()) %>%
+  as.data.frame()
+```
+
+
+
+## Freq of SDG goals detected by LLM and SDGdetector
+
+```{r stats}
+
+llm_sub_l_gpt <- llm_sub_ %>%
+  ## expand the `targets_nlp` column
+  expand_col_to_long(data = ., target_col = "goals_llm", sep_list = c(", ")) %>%
+  # expand_col_to_long(data = ., target_col = "sdg_target_gpt", sep_list = c(", ")) %>%
+  as.data.frame()
+
+llm_sub_l_nlp <- llm_sub_ %>%
+  ## expand the `targets_nlp` column
+  expand_col_to_long(data = ., target_col = "targets_nlp", sep_list = c(", ")) %>%
+  as.data.frame()
+```
+
+
+```{r plot}
+# Process and summarize
+llm_sub_goal_summary_gpt <- llm_sub_l_gpt %>%
+  filter(!is.na(goals_llm)) %>%
+  filter(!goals_llm %in% c('', 'NA')) %>%
+  mutate(
+    goals_llm = trimws(goals_llm)
+  ) %>%
+  count(goals_llm, sort = TRUE) %>%
+  mutate(
+    percent = 100 * n / sum(n)                       # calculate percentage
+  )
+
+library(tidyr)
+
+llm_sub_goal_summary_nlp <- llm_sub_l_nlp %>%
+  ## extract the integer part of the SDG goal
+  mutate(targets_nlp = str_split(targets_nlp, ",\\s*")) %>%
+  unnest(targets_nlp) %>%
+  mutate(
+    targets_nlp = trimws(targets_nlp),
+    goal_detector = str_extract(targets_nlp, "^\\d+")   # integer part only
+  ) %>%
+  select(1:targets_nlp, goal_detector, everything()) %>%
+  
+  ## filter out empty or NA values, and count occurrences
+  filter(!is.na(goal_detector)) %>%
+  filter(!goal_detector %in% c('', 'NA')) %>%
+  mutate( goal_detector = trimws(goal_detector) ) %>%
+  count(goal_detector, sort = TRUE) %>%
+  mutate(
+    percent = 100 * n / sum(n)                       # calculate percentage
+  )
+
+
+p.gpt <- 
+  ggplot(llm_sub_goal_summary_gpt, aes(x = reorder(goals_llm, -n), y = n)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            vjust = -0.5, size = 3) +
+  labs(x = "SDG Goal", y = "Count", title = "Distribution of SDG Goals detected by LLM") +
+  theme_minimal()
+
+p.det <- 
+  ggplot(llm_sub_goal_summary_nlp, aes(x = reorder(goal_detector, -n), y = n)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            vjust = -0.5, size = 3) +
+  labs(x = "SDG Goal", y = "Count", title = "Distribution of SDG Goals detected by SDGdetector") +
+  theme_minimal()
+
+## combine the two plots
+library(cowplot)
+plot_combined <- plot_grid(p.gpt, p.det, ncol = 1, labels = 'auto', align = "v", axis = "tb")
+plot_combined
+```
+
+
+
+## Sampling
+
+  This function enforces coverage of all 17 goals (if available), oversamples rare goals and target-bearing statements, then fills the remainder by weighted random sampling. It returns both the sample and diagnostics.
+  
+  We will sample N statements, ensuring at least k per goal, oversampling rare goals by a factor of x and target-bearing statements by a factor of y.
+
+```{r - function }
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+
+
+# ## test data
+# df <- llm_sub_
+# 
+# N_total = 800
+# min_per_goal = 10
+# rare_rule = "prevalence"
+# rare_threshold = 0.05
+# topk_common = 5
+# rare_boost = 3.0
+# target_boost = 1.5
+# seed = 42
+
+
+## function 
+sample_statements <- function(df,
+                              N_total = 800,
+                              min_per_goal = 10,       # guarantee per-goal coverage up to this cap
+                              rare_rule = c("prevalence","topk"),
+                              rare_threshold = 0.05,    # <5% prevalence = rare (if prevalence rule)
+                              topk_common = 5,          # top-k common (if topk rule)
+                              rare_boost = 3.0,         # weight multiplier if any rare goal present
+                              target_boost = 1.5,       # weight multiplier if has any target
+                              seed = 42) {
+
+  rare_rule <- match.arg(rare_rule)
+
+  # clean + explode goals
+  goals_long <- df %>%
+    mutate(goals_llm = ifelse(is.na(goals_llm), "NA", goals_llm)) %>%
+    separate_rows(goals_llm, sep = ",\\s*") %>%
+    mutate(goals_llm = str_to_upper(str_trim(goals_llm))) %>%
+    filter(!goals_llm %in% c("", "NA")) 
+  
+  
+  G_pre <- goals_long %>%
+    group_by(statement_id) %>%
+    summarise(primary_goal = first(sort(unique(goals_llm))), .groups = "drop") %>%
+    filter(!is.na(primary_goal), primary_goal != "NA") #%>%
+    # dplyr::n_distinct(primary_goal)
+  
+  
+  # Step 3: Count distinct primary goals present
+  G_present <- n_distinct(G_pre$primary_goal)
+  target_share <- 0.25  # aim for 25% from ensured stage (tune to taste)
+  min_per_goal_new <- floor((target_share * N_total) / G_present)
+  
+  message("Auto-tuned min_per_goal = ", min_per_goal_new, 
+        " (G_present = ", G_present, ", target_share = ", target_share, ")")
+
+
+  # compute prevalence
+  goal_freq <- goals_long %>%
+    count(goals_llm, name = "n_goal") %>%
+    mutate(p_goal = n_goal / sum(n_goal)) %>%
+    arrange(desc(p_goal))
+
+  # rarity tags
+  goal_freq <- goal_freq %>%
+    mutate(rarity = dplyr::case_when(
+      rare_rule == "prevalence" & p_goal < rare_threshold ~ "RARE",
+      rare_rule == "prevalence" ~ "COMMON",
+      rare_rule == "topk" & row_number() <= topk_common ~ "COMMON",
+      TRUE ~ "RARE"
+    ))
+
+  # per-statement features
+  per_stmt <- goals_long %>%
+    left_join(select(goal_freq, goals_llm, rarity), by = "goals_llm") %>%
+    group_by(statement_id) %>%
+    summarize(
+      goals = paste(sort(unique(goals_llm)), collapse = "; "),
+      any_rare_goal = any(rarity == "RARE"),
+      primary_goal = first(sort(unique(goals_llm))),  # simple "primary"
+      .groups = "drop"
+    )
+
+  df2 <- df %>%
+    left_join(per_stmt, by = "statement_id") %>%
+    mutate(
+      has_target = !is.na(targets_llm) & targets_llm != "" & targets_llm != "NA",
+      any_rare_goal = if_else(is.na(any_rare_goal), FALSE, any_rare_goal),
+      weight = 1 * (if_else(any_rare_goal, rare_boost, 1)) * (if_else(has_target, target_boost, 1))
+    )
+
+  # Stage 1: ensure per-goal coverage (up to min_per_goal each)
+  set.seed(seed)
+  ensured <- df2 %>%
+    filter(!is.na(primary_goal)) %>%
+    group_by(primary_goal) %>%
+    
+    ##' `group_modify()` hands you each group .x as a data frame, so you can safely 
+    ##'   compute nrow(.x) and pass a constant n_take into slice_sample() for that group.
+    group_modify(\(.x, .y) {
+      n_take <- min(min_per_goal, nrow(.x))
+      dplyr::slice_sample(.x, n = n_take, weight_by = weight, replace = FALSE)
+    }) %>%
+    ungroup()
+
+  # Stage 2: fill remaining N with weighted sample excluding already selected
+  remaining_needed <- max(0, N_total - nrow(ensured))
+  pool <- df2 %>%
+    filter(!statement_id %in% ensured$statement_id)
+
+  filler <- if (remaining_needed > 0 && nrow(pool) > 0) {
+    dplyr::slice_sample(pool, n = min(remaining_needed, nrow(pool)),
+                        weight_by = weight, replace = FALSE)
+  } else {
+    pool[0,]
+  }
+
+  sampled <- bind_rows(ensured, filler) %>% distinct(statement_id, .keep_all = TRUE)
+
+  # Diagnostics
+  diag_goal_cov <- sampled %>%
+    mutate(primary_goal = if_else(is.na(primary_goal), "NONE", primary_goal)) %>%
+    count(primary_goal, name = "n_sampled") %>%
+    arrange(desc(n_sampled))
+
+  diag_rare_rate <- sampled %>%
+    summarize(
+      n = n(),
+      rare_statements = sum(any_rare_goal, na.rm = TRUE),
+      rare_rate = rare_statements / n
+    )
+
+  list(
+    sample = sampled,
+    goal_frequency = goal_freq,
+    diagnostics = list(
+      per_goal_sample_counts = diag_goal_cov,
+      rare_rate = diag_rare_rate,
+      ensured_n = nrow(ensured),
+      filled_n = nrow(filler)
+    )
+  )
+}
+
+```
+
+
+`rare_rate`: Proportion of sampled statements flagged as containing rare goals. 
+  Why it matters: If your plan was to oversample rare goals with a multiplier (e.g., rare_boost = 3), this number should be higher than the rare-goal prevalence in the full dataset.
+
+```{r - Run sampling}
+
+N_total_sample <- 400  # Total sample size
+
+
+# Run the sampling function
+result <- sample_statements(
+  df = llm_sub_,
+  N_total = N_total_sample,
+  min_per_goal = 10,            # guarantee per-goal coverage up to this cap
+  rare_rule = "prevalence",     # or "topk"
+  rare_threshold = 0.05,        # <5% prevalence = rare (if prevalence rule)
+  topk_common = 5,              # top-k common (if topk rule)
+  rare_boost = 3.0,             # weight multiplier if any rare goal present
+  target_boost = 1.5,           # weight multiplier if has any target - if you want more emphasis on statements that include any target (helps when target PPV is a key metric).
+  seed = 2025
+)
+
+
+sampled_df <- result$sample %>%
+  ##' creates this `stratum` column to
+  ##'   Ensures coders see both common and rare targets, not just common ones
+  ##'   Balanced coverage across engagement levels
+  mutate(stratum = paste0(any_rare_goal, "_", engagement_llm)) 
+  
+  
+result$diagnostics$per_goal_sample_counts
+result$diagnostics$rare_rate
+
+
+##' Or rare_rule = "topk" with topk_common = 5 to define “common = top-5 most frequent; rest rare”.
+##' 
+##' Diversity check: Ensure filled_n is large enough to give variety beyond the guaranteed picks.
+result$diagnostics$filled_n
+
+library(scales)
+
+pct_ensured <- (result$diagnostics$ensured_n) / N_total_sample ## Aim for ~20–35%. 
+pct_ensured_str <- scales::percent(pct_ensured, accuracy = 0.1)
+pct_random_str  <- scales::percent(1 - pct_ensured, accuracy = 0.1)
+
+cat(
+  pct_ensured_str, "of your sample came from the guaranteed-minimum stage [aiming for 20-35%],",
+  "and the rest (~", pct_random_str, ") came from weighted random sampling.\n"
+)
+
+##' 
+##' Parameter tuning:
+##' If this percentage is too high (>50%), your random stage may be too small, reducing diversity. 
+##'   We can 1) increase `N_total`, 2) Lower `min_per_goal` cap.
+##' If this percentage is too low (<5%), your coverage rule may not be doing much — and rare goals might be missed.
+##' 
+```
+
+
+```{r - sample stats / plots}
+
+
+# ---- Requirements ----
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(forcats)
+library(ggplot2)
+library(scales)
+
+# df: full dataset with columns statement_id and goals_llm (semicolon-separated)
+# result: output from sample_statements(df, ...)
+#   - result$sample (sampled statements with primary_goal, any_rare_goal, etc.)
+#   - result$goal_frequency (goal-level frequency table with 'rarity' column)
+
+build_goal_distribution_plot <- function(df, result, label_percent_accuracy = 0.1) {
+
+  # 1) Compute ORIGINAL per-statement primary_goal (match the sampler’s logic)
+  orig_goals_long <- df %>%
+    mutate(goals_llm = if_else(is.na(goals_llm), "", goals_llm)) %>%
+    tidyr::separate_rows(goals_llm, sep = ",\\s*") %>%
+    mutate(goals_llm = str_to_upper(str_trim(goals_llm))) %>%
+    filter(goals_llm != "")
+
+  orig_per_stmt <- orig_goals_long %>%
+    group_by(statement_id) %>%
+    summarise(primary_goal = first(sort(unique(goals_llm))), .groups = "drop")
+
+  original_counts <- orig_per_stmt %>%
+    count(primary_goal, name = "count_original")
+
+  # 2) SAMPLED per-statement primary_goal (already present in result$sample)
+  sampled_counts <- result$sample %>%
+    filter(!is.na(primary_goal), primary_goal != "NA") %>%
+    count(primary_goal, name = "count_sampled")
+
+  # 3) Merge + rarity from result$goal_frequency (goal-level rarity)
+  rarity_map <- result$goal_frequency %>%
+    transmute(primary_goal = goals_llm, rarity)
+
+  df_counts <- full_join(original_counts, sampled_counts, by = "primary_goal") %>%
+    replace_na(list(count_original = 0L, count_sampled = 0L)) %>%
+    left_join(rarity_map, by = "primary_goal") %>%
+    mutate(rarity = if_else(is.na(rarity), "COMMON", rarity)) %>%
+    filter(!is.na(primary_goal), primary_goal != "NA") %>%
+    ## Reorder primary_goal by count_original
+    mutate(primary_goal = forcats::fct_reorder(primary_goal, count_original, .desc = TRUE)  )
+
+  # 4) Long format + percentages
+  df_long <- df_counts %>%
+    pivot_longer(cols = c(count_original, count_sampled),
+                 names_to = "set", values_to = "count") %>%
+    mutate(set = recode(set,
+                        count_original = "Original",
+                        count_sampled  = "Sampled"))
+
+  # Totals for percent
+  totals <- df_long %>%
+    group_by(set) %>% 
+    summarise(total = sum(count), .groups = "drop")
+
+  df_long <- df_long %>%
+    left_join(totals, by = "set") %>%
+    mutate(pct = if_else(total > 0, 100 * count / total, 0))
+
+  # 5) Determine which goals are "oversampled rare":
+  # rare goal AND (Sampled % > Original %)
+  wide_pct <- df_long %>%
+    select(primary_goal, set, pct) %>%
+    pivot_wider(names_from = set, values_from = pct, values_fill = 0)
+
+  df_counts <- df_counts %>%
+    left_join(wide_pct, by = "primary_goal") %>%
+    mutate(oversampled_rare = rarity == "RARE" & (Sampled > Original)) 
+
+  # 6) Order goals by Original share (or change to Sampled if you prefer)
+  goal_order <- df_long %>%
+    filter(set == "Original") %>%
+    arrange(desc(pct)) %>%
+    pull(primary_goal)
+
+  df_long <- df_long %>%
+    mutate(primary_goal = factor(primary_goal, levels = goal_order))
+
+  # 7) Aesthetic category for outline color
+  #    "Rare (oversampled)" vs "Rare" vs "Common"
+  goal_category <- df_counts %>%
+    transmute(primary_goal,
+              goal_cat = case_when(
+                oversampled_rare ~ "Rare (oversampled)",
+                rarity == "RARE" ~ "Rare",
+                TRUE ~ "Common"
+              ))
+
+  df_long <- df_long %>% 
+    left_join(goal_category, by = "primary_goal")
+
+  # 8) Build the plot
+  p <- ggplot(df_long, aes(x = primary_goal, y = pct, fill = set, color = goal_cat)) +
+    geom_col(position = position_dodge(width = 0.8), width = 0.75, alpha = 0.9) +
+    # bar labels: count + percent
+    geom_text(
+      aes(label = paste0(count, "\n(", percent(pct/100, accuracy = label_percent_accuracy), ")")),
+      position = position_dodge(width = 0.8),
+      vjust = -0.35, 
+      size = 2, ## in mm
+      show.legend = FALSE
+    ) +
+    labs(
+      x = NULL,
+      y = "Share of statements (%)",
+      title = "SDG Goal Distribution: Original vs Sampled",
+      subtitle = "Bars show percentage within each set; labels show count (percent)",
+      fill = "Set",
+      color = "Goal Type"
+    ) +
+    ## Formatting 
+    scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.02, 0.1))) +
+    # Colors: keep fills for Original/Sampled; outline color for goal type
+    scale_fill_manual(values = c("Original" = "#9fb5d0", "Sampled" = "#3a6ea5")) +
+    scale_color_manual(values = c(
+      "Common" = "#666666",
+      "Rare" = "#bb8800",
+      "Rare (oversampled)" = "#d22000"
+    )) +
+    guides(color = guide_legend(override.aes = list(fill = NA)) ) +
+    theme_minimal(base_size = 7) +
+    theme(
+      text = element_text(size = 7),                # global default for all text
+      legend.key = element_rect(fill = "transparent", colour = NA), # remove gray box
+      legend.position = c(0.8, 0.6),
+      # axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank()
+    )
+
+  list(
+    plot = p,
+    table = df_long %>%
+      select(primary_goal, set, count, pct, rarity = goal_cat) %>%
+      arrange(primary_goal, set),
+    oversampled_rare_goals = df_counts %>% filter(oversampled_rare) %>% pull(primary_goal)
+  )
+}
+
+
+
+# After you run:
+#   result <- sample_statements(df, N_total = 800, min_per_goal = 10, rare_rule = "prevalence", rare_threshold = 0.05)
+
+viz <- build_goal_distribution_plot(df = llm_sub_, result)
+
+# Show the plot
+print(viz$plot)
+
+ggsave(
+  filename = "./figures/sdg_goal_sampling_distribution.png",
+  plot = viz$plot,
+  width = 7, height = 5, unit = 'in', dpi = 300
+)
+
+# Inspect the tidy table (counts + %)
+head(viz$table)
+
+# Which goals are rare AND oversampled?
+viz$oversampled_rare_goals
+
+
+```
+
+
+
+## Assignment with double-coding
+
+  20% triples, rest doubles
+
+```{r - double-annotated}
+# INPUTS ---------------------------------------------------------------
+set.seed(2025)
+
+# annotators <- c("A01","A02","A03")  # 6–10 experts
+annotators <- c("A01","A02","A03", "A04", "A05", "A06")  # 6–10 experts
+per_item_coders <- 2                                     # double-coding
+triple_share <- 0.20                                     # 20% triple-annotated
+duplicate_rate <- 0.05                                   # 5% or 10% per coder
+
+# sampled_df: result$sample from your sampler (one row per statement)
+# Expected columns at minimum:
+#   statement_id, statement_text, stratum,
+#   llm_pred_target, llm_pred_engagement, primary_goal (optional)
+stopifnot(all(c("statement_id", "statement") %in% names(sampled_df)))
+
+# 1) Build coder pairs per statement (round-robin by stratum to keep balance)
+# ---------------------------------------------------------------------------
+# Strategy: within each stratum, rotate coder pairs so each coder sees a fair mix.
+pair_grid <- t(combn(annotators, per_item_coders)) %>% as.data.frame()
+names(pair_grid) <- paste0("coder_", seq_len(per_item_coders))
+stopifnot(nrow(pair_grid) > 0)  # ensure combinations exist
+
+assign_pairs <- function(df_stratum) {
+  n <- nrow(df_stratum)
+  if (n == 0) return(df_stratum)  # nothing to assign
+  # repeat the pair grid to at least n rows (THIS was the bug)
+  pairs_rep <- pair_grid[rep(seq_len(nrow(pair_grid)), length.out = n), , drop = FALSE]
+
+  bind_cols(df_stratum, pairs_rep)
+}
+
+assigned_pairs <- sampled_df %>%
+  mutate(.strat_order = row_number()) %>%                 # stable order
+  group_by(stratum) %>%
+  arrange(.strat_order, .by_group = TRUE) %>%
+  group_modify(~assign_pairs(.x)) %>%
+  ungroup() %>%
+  select(-.strat_order)
+
+
+## --> quick check 
+# 1) No NA coders
+assigned_pairs %>% summarise(
+  n = n(),
+  na_coder1 = sum(is.na(coder_1)),
+  na_coder2 = sum(is.na(coder_2))
+)
+
+# 2) Per-coder load
+assigned_pairs %>%
+  pivot_longer(starts_with("coder_"), names_to = "slot", values_to = "coder_id") %>%
+  count(coder_id, name = "items") %>%
+  arrange(desc(items))
+```
+
+
+
+```{r}
+
+# 2) Convert wide (coder_1, coder_2) to long (one row per (statement, coder))
+# ---------------------------------------------------------------------------
+assign_long <- assigned_pairs %>%
+  pivot_longer(cols = starts_with("coder_"),
+               names_to = "coder_slot", values_to = "coder_id") %>%
+  mutate(is_duplicate = 0L,
+         duplicate_group_id = NA_character_)
+
+# 3) Add salted duplicates per coder (~duplicate_rate of their unique items)
+# ---------------------------------------------------------------------------
+inject_duplicates <- function(df_one_coder, dup_rate = 0.10) {
+  # Keep only originals first
+  base_rows <- df_one_coder %>%
+    dplyr::filter(is_duplicate == 0L) %>%
+    dplyr::arrange(statement_id) %>%               # or any stable order
+    dplyr::mutate(position_hint = dplyr::row_number())
+  
+  n_unique <- nrow(base_rows)
+  if (n_unique == 0L) return(df_one_coder)
+
+  n_dups <- max(1, floor(n_unique * dup_rate))
+  # Pick which statements to duplicate
+  to_dup_ids <- sample(base_rows$statement_id, size = min(n_dups, n_unique), replace = FALSE)
+
+  # Build duplicates *from* base_rows so we inherit position_hint
+  to_dup <- base_rows %>%
+    dplyr::filter(statement_id %in% to_dup_ids) %>%
+    dplyr::mutate(
+      is_duplicate = 1L,
+      duplicate_group_id = paste0("DUP_", coder_id, "_", statement_id),
+      # push duplicates roughly to the second half of the queue
+      position_hint = position_hint + ceiling(n_unique / 2)
+    )
+
+  # Combine and finalize order
+  out <- dplyr::bind_rows(base_rows, to_dup) %>%
+    dplyr::arrange(position_hint) %>%
+    dplyr::select(-position_hint)
+
+  out
+}
+
+assignment_per_coder <- assign_long %>%
+  group_split(coder_id) %>%
+  map_df(~inject_duplicates(.x, dup_rate = duplicate_rate))
+
+# 4) Create per-coder CSVs and a master assignment table
+# ---------------------------------------------------------------------------
+# # (Uncomment to write files)
+# dir.create(dir.assignments, showWarnings = FALSE)
+# assignment_per_coder %>%
+#   group_by(coder_id) %>%
+#   group_walk(~ readr::write_csv(.x, file = file.path("assignments", paste0(.y$coder_id[1], "_queue.csv"))))
+
+assignment_master <- assignment_per_coder %>%
+  arrange(coder_id, statement_id)
+
+
+## Check the master assignment
+total_dupes <- sum(assignment_master$is_duplicate, na.rm = TRUE)
+dupes_per_coder <- total_dupes / length(annotators)
+
+cat(
+  total_dupes, "total duplicates injected across all coders.\n",
+  "On average,", round(dupes_per_coder, 1), "duplicates per coder.\n"
+)
+
+```
+
+
+
+
+```{r - triple-annotated}
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+# -------------------------
+# Inputs
+# -------------------------
+set.seed(2025)
+annotators <- c("A01","A02","A03","A04","A05","A06")   # >= 3 coders needed
+stopifnot(length(annotators) >= 3)                     # need at least 3 for triples
+
+
+# assignment knobs
+per_item_coders_default <- 2      # double-annotated baseline
+triple_share   <- 0.20            # 20% triple-annotated
+duplicate_rate <- 0.05            # 5% salted duplicates per coder
+
+
+
+# Make coder combination grids
+pair_grid   <- t(combn(annotators, 2)) |> as.data.frame()
+triple_grid <- t(combn(annotators, 3)) |> as.data.frame()
+names(pair_grid)   <- paste0("coder_", 1:2)
+names(triple_grid) <- paste0("coder_", 1:3)
+stopifnot(nrow(pair_grid) > 0, nrow(triple_grid) > 0)
+
+
+# Helper: repeat a grid to length n and bind as columns with df
+assign_k <- function(df_group, grid){
+  n <- nrow(df_group)
+  if (n == 0) return(df_group)
+  grid_rep <- grid[rep(seq_len(nrow(grid)), length.out = n), , drop = FALSE]
+  bind_cols(df_group, grid_rep)
+}
+
+# -------------------------
+# Choose triple-annotated statements (stratified if `stratum` exists)
+# -------------------------
+if ("stratum" %in% names(sampled_df)) {
+  picked <- sampled_df %>%
+    group_by(stratum) %>%
+    mutate(.row = row_number()) %>%
+    group_modify(~{
+      n_triple <- ceiling(nrow(.x) * triple_share)
+      .x %>%
+        dplyr::slice_sample(n = min(n_triple, nrow(.x))) %>%
+        mutate(triple_flag = TRUE)
+    }) %>%
+    ungroup() %>%
+    select(statement_id, triple_flag)
+
+  sampled_marked <- sampled_df %>%
+    left_join(picked, by = "statement_id") %>%
+    mutate(triple_flag = if_else(is.na(triple_flag), FALSE, triple_flag))
+} else {
+  n_triple <- ceiling(nrow(sampled_df) * triple_share)
+  ids_triple <- sampled_df %>% slice_sample(n = n_triple) %>% pull(statement_id)
+  sampled_marked <- sampled_df %>%
+    mutate(triple_flag = statement_id %in% ids_triple)
+}
+
+# -------------------------
+# Assign coders: triples get 3, others get 2
+# -------------------------
+triples <- sampled_marked %>% filter(triple_flag)
+pairs   <- sampled_marked %>% filter(!triple_flag)
+
+assigned_triples_wide <- assign_k(triples, triple_grid)   # adds coder_1..coder_3
+assigned_pairs_wide   <- assign_k(pairs,   pair_grid)     # adds coder_1..coder_2
+
+assigned_wide <- bind_rows(assigned_pairs_wide, assigned_triples_wide)
+
+# -------------------------
+# Long format (one row per statement × coder)
+# -------------------------
+assigned_long <- assigned_wide %>%
+  pivot_longer(
+    cols = starts_with("coder_"),
+    names_to = "coder_slot",
+    values_to = "coder_id"
+  ) %>%
+  filter(!is.na(coder_id)) %>%            # keep only real slots (pairs won’t have coder_3)
+  mutate(
+    is_duplicate = 0L,
+    duplicate_group_id = NA_character_
+  )
+
+# -------------------------
+# (Optional) inject salted duplicates per coder (~10%)
+# Reuse your working inject_duplicates() that preserves coder_id.
+# -------------------------
+per_coder_queues <- assigned_long %>%
+  group_split(coder_id) %>%
+  map_df(~inject_duplicates(.x, dup_rate = duplicate_rate))
+
+## or if you’re not injecting duplicates immediately:
+# per_coder_queues <- assigned_long
+
+
+
+# ================================
+# 5) Exports: per-coder CSVs + master
+# ================================
+dir.create(dir.assignments, showWarnings = FALSE)
+
+# Per-coder queues ------
+## remove unnecessary columns 
+per_coder_queues_clean <- per_coder_queues %>%
+  select(-any_of(c("company", "year", "primary_goal", "goals", "any_rare_goal", "has_target", 
+                   "weight", "triple_flag", "is_duplicate", "duplicate_group_id", 
+                   "goals_llm",
+                   "coder_slot", "stratum"))) %>%
+  ## add additional columns
+  mutate(
+    targets_coder        = NA_character_,
+    targets_rationale    = NA_character_,
+    engagement_coder     = NA_character_,
+    engagement_rationale = NA_character_,
+    comments_coder       = NA_character_,
+
+  ) %>%
+  ## change the order of columns 
+  select(coder_id, statement_id, statement, 
+         targets_nlp,	targets_llm,	targets_coder,	targets_rationale,
+         engagement_llm,	engagement_coder,	engagement_rationale,
+         comments_coder, 
+         everything()) 
+names(per_coder_queues_clean)
+
+## split the tasks and save as CSV / xlsx files
+per_coder_queues_clean %>%
+  group_by(coder_id) %>%
+  # group_walk(~ readr::write_csv(.x, file = file.path(dir.assignments, paste0(.y$coder_id[1], "_queue.csv"))))
+  group_walk(~ writexl::write_xlsx(.x, path = file.path(dir.assignments, paste0(.y$coder_id[1], "_queue.xlsx"))))
+
+
+
+## -------------------------
+library(openxlsx)
+
+per_coder_queues_clean %>%
+  group_by(coder_id) %>%
+  group_walk(~ {
+    # Create workbook
+    wb <- createWorkbook()
+    addWorksheet(wb, "Queue")
+    
+    # Write data
+    writeData(wb, "Queue", .x)
+    
+    # Set same width for all columns
+    setColWidths(wb, "Queue", cols = 1:ncol(.x), widths = 25)
+    
+    # # Optional: wrap text for readability
+    # openxlsx::wrapText(wb, "Queue", cols = 1:ncol(.x), rows = 1:(nrow(.x) + 1))
+    
+    # Create style with wrap text enabled
+    wrap_style <- createStyle(wrapText = TRUE, valign = "top")
+    
+    # Apply wrap style to all data cells
+    addStyle(
+      wb, "Queue", wrap_style,
+      rows = 1:(nrow(.x) + 1), cols = 1:ncol(.x),
+      gridExpand = TRUE
+    )
+    
+    
+    # Save workbook
+    saveWorkbook(wb, file.path(dir.assignments, paste0(.y$coder_id[1], "_queue-.xlsx")), overwrite = TRUE)
+  })
+
+## -------------------------
+
+# Master assignments (for tracking) ------
+assignment_master <- per_coder_queues %>%
+  arrange(coder_id, statement_id)
+
+# readr::write_csv(assignment_master, file.path(dir.assignments, "master_assignments.csv"))
+
+
+
+
+# -------------------------
+# Sanity checks
+# -------------------------
+
+total_dupes <- sum(assignment_master$is_duplicate, na.rm = TRUE)
+dupes_per_coder <- total_dupes / length(annotators)
+cat(
+  total_dupes, "total duplicates injected across all coders.\n",
+  "On average,", round(dupes_per_coder, 1), "duplicates per coder.\n"
+)
+
+
+# % triple annotated
+pct_triple <- mean(sampled_marked$triple_flag)
+message("Triple-annotated share = ", scales::percent(pct_triple, accuracy = 0.1))
+
+pct_ensured <- (result$diagnostics$ensured_n) / N_total_sample
+cat("Ensured stage share:", percent(pct_ensured, accuracy = 0.1), "\n")
+
+# No NAs in coder_id
+stopifnot(sum(is.na(per_coder_queues$coder_id)) == 0)
+
+# Per-coder load overview
+load_table <- per_coder_queues %>%
+  count(coder_id, name = "items") %>%
+  arrange(desc(items))
+print(load_table)
+
+# How many triples vs pairs?
+table_triple <- sampled_marked %>% count(triple_flag, name = "n_statements")
+print(table_triple)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r - adjudication, eval=FALSE, include=FALSE}
+# 5) Build an adjudication skeleton (to be filled after coding)
+#    One row per statement, final labels filled when coder A/B disagree.
+# ---------------------------------------------------------------------------
+adjudication_skeleton <- sampled_df %>%
+  transmute(
+    statement_id,
+    statement,
+    # stratum,
+    targets_llm,
+    engagement_llm,
+    triple_flag,
+    coderA_id = NA_character_, coderA_target = NA_character_, coderA_engagement = NA_character_,
+    coderB_id = NA_character_, coderB_target = NA_character_, coderB_engagement = NA_character_,
+    coderC_id = NA_character_, coderC_target = NA_character_, coderC_engagement = NA_character_,
+    adjudicator_id = NA_character_,
+    final_target = NA_character_,
+    final_engagement = NA_character_,
+    adjudication_notes = NA_character_
+  )
+
+# You’ll populate coderA/B fields by merging back the submitted annotations later.
+
+# readr::write_csv(adjudication_skeleton, file.path(dir.assignments, "adjudication_skeleton.csv"))
+```
+
+
