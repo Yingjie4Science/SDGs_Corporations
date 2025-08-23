@@ -31,7 +31,7 @@ library(parallel)
 library(doParallel)
 library(foreach)
   
-today <- format(Sys.time(), "%Y%m%d_%H%M"); today
+today <- format(Sys.time(), "%Y%m%d"); today
 ```
 
 
@@ -61,10 +61,55 @@ dir_txt <- paste0(dir.reports, 'pdf_coded_human/DF_tokenize/')
 ## 
 dir_ssfp <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/'
   
-dir_pdf <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund')
+dir_pdf <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund/NEWEST FILES/')
 dir_txt <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund/DF_tokenize/')
 
 ```
+
+
+
+
+```{r - name and year in df}
+
+##' Check all the download PDFs, this is different from the above ones that are going to 
+##'   be processed. 
+
+library(stringr)
+library(dplyr)
+
+
+dir_main <- dirname(dir_pdf)
+
+fs <- list.files(dir_main, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = T); #fs
+com_fs <- gsub("\\--.*", "", basename(fs))
+
+# Function to extract company and year
+extract_info <- function(filename) {
+  # Remove file extension and redundant tags
+  clean_name <- gsub("\\.pdf|\\.RData|_coded", "", basename(filename))
+  
+  # Extract company (first word before first "_")
+  company <- str_extract(clean_name, "^[^_]+")
+  
+  # Extract first 4-digit year
+  year <- str_extract(clean_name, "\\d{4}")
+  
+  return(data.frame(file = filename, company = company, year = year, stringsAsFactors = FALSE))
+}
+
+# Apply to all filenames and bind into a dataframe
+com_name_df <- bind_rows(lapply(com_fs, extract_info)) %>%
+  add_count(company, name = 'n_files')
+
+com_name_df_missing <- com_name_df %>%
+  filter(n_files <3) %>%
+  arrange(n_files, company)
+
+
+f <- paste0(dir_pdf, '_please-check-the-missing-ones-', today, '.CSV')
+readr::write_csv(x = com_name_df_missing, file = f)
+```
+
 
 
 # PDF to clean TXT
@@ -82,9 +127,36 @@ dir_txt <- paste0(dir_ssfp, 'data/', 'data_pdf_Edmund/DF_tokenize/')
 files <- list.files(dir_pdf, pattern = '*.pdf$', ignore.case = T, full.names = T, recursive = F); #files
 com_name_ls <- gsub("\\--.*", "", basename(files))
 
-cat('There are', length(files), "PDF reports.\n"); ## 356
+cat('There are', length(files), "PDF reports.\n") ## 356
 
+
+# 1. Apply to all filenames and bind into a dataframe
+com_ls_df_tbd <- bind_rows(lapply(com_name_ls, extract_info)) %>%
+  add_count(company, name = 'n_files') %>%
+  mutate(com_yr = paste0(company, '_', year))
+
+# 2. Load processed pdf
+files <- list.files(dir_txt, pattern = '*.RData$', ignore.case = T, full.names = T, recursive = F); #files
+com_ls_done <- gsub("\\--.*", "", basename(files))
+com_ls_df_done <- bind_rows(lapply(com_ls_done, extract_info)) %>%
+  add_count(company, name = 'n_files') %>%
+  mutate(com_yr = paste0(company, '_', year))
+
+
+## 3. find out the to be processed ones
+a <- com_ls_df_tbd$com_yr
+b <- com_ls_df_done$com_yr
+setdiff(a, b)
+setdiff(b, a)
+
+prefixes <- setdiff(a, b)
+
+## 4. get the new list of PDF to be processed 
+files <- list.files(dir_pdf, 
+                    pattern = paste0("^(", paste(prefixes, collapse = "|"), ").*\\.pdf$"),, 
+                    ignore.case = T, full.names = T, recursive = F);
 ```
+
 
 
 ```{r - 356 company - checking, eval=FALSE, include=FALSE}
@@ -124,9 +196,12 @@ cat('\n There are', (length(files)-n_unique), 'unique companies.')
 ```
 
 
+
+
+
 ## Batch convert PDF to text sentences
   
-```{r - Batch Convert, eval=FALSE, include=FALSE}
+```{r - Batch Convert}
 
 ### Custom function
 source('./code/function_pdf2text.R') # `pdf2text`
@@ -138,10 +213,23 @@ company_name_checker <- ''
 ### loop all the PDF ---------------------------------------------------------------------
 for (pdf in files) {
   
-  ## --> get company name 
+  ## --> get company name - 1
   company_name <- str_split(string = basename(pdf), pattern = "--", n = 2) %>% unlist()
   company_name <- company_name[1]
+  
+   ## --> get company name - 2
+  filename <- gsub('\\.RData|_coded|\\.pdf', '', basename(pdf)); 
+  # Extract company names (before first "_")
+  company_name <- str_extract(filename, "^[^_]+")
+
+  ## --> check if the company name is the same as the previous one
   print(company_name)
+  
+  # Extract first 4-digit year
+  year <- str_extract(filename, "\\d{4}"); print(year)
+  
+  
+  
 
   
   ## --> read and clean the pdf ---------------------------------------------------------#
@@ -160,33 +248,34 @@ for (pdf in files) {
     
     ## remove repeated sentences, most of which come from 'Header' and 'Footer', adding many noise and computation pressure
     dplyr::distinct(statement, .keep_all = T) %>%
+    dplyr::mutate(year = year) %>%
     as.data.frame()
   
-  
-  ## --> if new file is for the same company, then append the data
-  if (company_name == company_name_checker) {
-    cat('\t More than one, need to append data.\t\t', company_name, '\n') 
-    txt_sentence_df <- rbind(txt_sentence_df, txt_sentence_df_forAppend)
-  } else {
-    txt_sentence_df <- txt_sentence_df
-  }
+  ## --> better to save data by year
+  # ## --> if new file is for the same company, then append the data
+  # if (company_name == company_name_checker) {
+  #   cat('\t More than one, need to append data.\t\t', company_name, '\n') 
+  #   txt_sentence_df <- rbind(txt_sentence_df, txt_sentence_df_forAppend)
+  # } else {
+  #   txt_sentence_df <- txt_sentence_df
+  # }
   
   
   ## --> save as R data
-  fname <- paste0(dir_txt,  company_name[1], '.RData'); print(fname)
+  fname <- paste0(dir_txt,  company_name[1], '_', year, '.RData'); print(fname)
   save(txt_sentence_df, file = fname)
   
   
-  ## --> save as CSV data
-  fname <- paste0(dir_txt,  company_name[1], '.csv'); print(fname)
-  readr::write_csv(txt_sentence_df, file = fname)
+  # ## --> save as CSV data
+  # fname <- paste0(dir_txt,  company_name[1], '_', year, '.csv'); print(fname)
+  # readr::write_csv(txt_sentence_df, file = fname)
 
   
   ## --> update the PDF list, if error occurs
   remove <- pdf
   files  <- setdiff(files, remove)
   company_name_checker      <- company_name     ## keep this information for checking the next loop
-  txt_sentence_df_forAppend <- txt_sentence_df  ## keep this data in case we need to append the multiple files for 1 company
+  # txt_sentence_df_forAppend <- txt_sentence_df  ## keep this data in case we need to append the multiple files for 1 company
   
   
   ## --> To clear up the memory
@@ -196,8 +285,23 @@ for (pdf in files) {
 ```
 
 
+  If error occurs above, mostly due to memory issue, then we can save the file list and restart R as a way to solve the issue by re-run the script above. 
+
+```{r - temp, eval=FALSE, include=FALSE}
+getwd()
+
+# save(files, file = 'temp_files.RData') # `files`
+load('temp_files.RData')
+files
+
+# # if need to skip one file, use the following line
+# files <- files[2:length(files)]
+
+```
+
 **To-do**: (if any files failed - need to re-process these files)
   "Kia Motors"
+  "WPP_2022_LSE_WPP_2022.pdf"
   
   ## cannot open compressed file
   "Koç Holding"           

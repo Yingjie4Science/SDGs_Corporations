@@ -129,7 +129,13 @@ com_lss_ft_pdf <- com_lss_ft %>%
 com_lss_ft_pdf %>%
   group_by(humancoded) %>%
   tally()
+
+
+## 
+f <- paste0(dir.results, 'company_list_fortune_2018_2019.csv'); f
+write_csv(com_lss_ft, file = f)
 ```
+
 
 
 
@@ -217,7 +223,12 @@ com_data <- com_lss_ft %>%
 
 ## --> update `com_final` to what we choose
 com_final_former <- com_final ## keep a copy just in case
-com_final <- com_data %>% dplyr::rename(company_name = Company)
+com_final <- com_data %>% 
+  dplyr::rename(company_name = Company)
+
+## save data
+fname <- paste0(dir.results, 'com_final_fortune.csv'); fname
+write_csv(com_final, file = fname)
 
 
 
@@ -275,6 +286,10 @@ str(n.com.country)
 # fname <- paste0(dir.figures, 'number of comp by country_region_new.jpg'); fname
 # ggsave(filename = fname, plot = p.n.byCountry, 
 #        width = width_2col, height = width_2col/2, units = unit_ns, dpi = 300)
+
+## save figure
+f <- paste0(dir.results, 'fig_file_p.n.byCountry.RData'); f
+save(p.n.byCountry, file = f)
 ```
 
 
@@ -303,7 +318,8 @@ com_dt <-
 
 ### 8 industry ------------------------------------
 num_ind <- length(unique(com_dt$ind_7sys)); num_ind
-palette_ind <- 'YlGnBu'
+# palette_ind <- 'YlGnBu'
+source('./code/_colors.R')
 colors_ind  <- colorRampPalette((brewer.pal(9, palette_ind)))(num_ind)
 
 (p8 <- com_dt %>% 

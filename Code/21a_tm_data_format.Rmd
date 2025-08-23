@@ -19,14 +19,14 @@ source('./Code/_directories.R')
 
 
 ## 1. my data
-# dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
+dir.pdf  <- paste0(dir.reports, 'pdf_coded_human/')
 # dir.coded      <- paste0(dir.pdf, 'DF_coded/');           v <- ''
-# dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+dir.coded      <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
 
 
 ## 2. SSFP data
-dir.pdf  <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_pdf_Edmund/'
-dir.coded <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
+# dir.pdf  <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_pdf_Edmund/'
+# dir.coded <- paste0(dir.pdf, 'DF_tokenize_coded/');  v <- 'tokenize'
 
 
 
@@ -37,6 +37,7 @@ dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/'); print(dir.coded.comb)
 # load packages
 source('./Code/_packages.R')
   
+ymd <- format(Sys.time(), "%Y%m%d"); ymd
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
 ```
 
@@ -124,7 +125,7 @@ for (f in ls) {
 
 ## count the number of companies
 n <- unique(coded_combined$company) %>% length(); n
-
+ys <- unique(coded_combined$year); ys
 
 ## count the total tokens
 sum(coded_combined$token_count, na.rm = T) %>% 
@@ -135,26 +136,33 @@ sum(coded_combined$token_count, na.rm = T) %>%
 
 total_tokens <- sum(coded_combined$token_count, na.rm = TRUE)
 total_million <- round(total_tokens / 1e6, 2)
-cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset, which incldues", n, "companies.\n\n")
+cat("\nIn total, there are", total_million, "million tokens in the dataset, which incldues", 
+    n, "companies, in", paste(ys, collapse= ', '), ".\n\n")
 
 
 
+## -----------------------------------------------------------------------------
+## save data
+## -----------------------------------------------------------------------------
 
-## save all the hits to xlsx for easier inspection.
-# f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.xlsx');  f
+## 1. save as xlsx
+# f <- paste0(dir.coded.comb, 'coded_combined_all_with_raw_', n, '.xlsx');  f
 # writexl::write_xlsx(x = coded_combined, path = f)
 
-csvname <- paste0('coded_combined_all_with_raw_', n, '_', v, '.csv')
-f <- file.path(dir.coded.comb, csvname);  f
-readr::write_csv(x = coded_combined, file = f)
+
+## 2. save as csv
+# csvname <- paste0('coded_combined_all_with_raw_', n, '_', v, '.csv')
+# f <- file.path(dir.coded.comb, csvname);  f
+# readr::write_csv(x = coded_combined, file = f)
 
 
-
-
-# f <- paste0(dir.coded.comb, 'coded_combined_with_raw_', n, '.rds'); f
-# save(coded_combined, file = f)
+## 3. save as rds
+f <- paste0(dir.coded.comb, 'coded_combined_all_with_raw_', n, '_', v, 
+            '_', paste(ys, collapse= '_'), '.rds'); f
+save(coded_combined, file = f)
 
 ```
+
 
 
 ```{r - save combined data - subset rows with sdgs detected}
@@ -167,12 +175,12 @@ coded_combined_sdg <- coded_combined %>%
 sum(coded_combined_sdg$token_count, na.rm = T) %>% 
   round(1) %>% 
   format(big.mark = ",", scientific = F) %>% 
-  cat('\nIn total, there are', ., 'tokens in the 2018 dataset.\n\n')
+  cat('\nIn total, there are', ., 'tokens in the dataset.\n\n')
 
 
 total_tokens <- sum(coded_combined_sdg$token_count, na.rm = TRUE)
 total_million <- round(total_tokens / 1e6, 2)
-cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset, which incldues", n, "companies.\n\n")
+cat("\nIn total, there are", total_million, "million tokens in the dataset, which incldues", n, "companies.\n\n")
 
 
 
@@ -182,7 +190,7 @@ cat("\nIn total, there are", total_million, "million tokens in the 2018 dataset,
 # writexl::write_xlsx(x = coded_combined_sdg, path = f)
 
 
-csvname <- paste0('coded_combined_sdg_with_raw_', n, '_', v, '.csv')
+csvname <- paste0('coded_combined_sdg_with_raw_', n, '_', v, '_', paste(ys, collapse= '_'), '.csv')
 f <- paste0(dir.coded.comb, csvname);  f
 readr::write_csv(x = coded_combined_sdg, file = f)
 
@@ -196,6 +204,7 @@ readr::write_csv(x = coded_combined_sdg, file = f)
 # save(coded_combined, file = f)
 
 ```
+
 
 
 ## coded data with only sdg counts
@@ -263,6 +272,7 @@ func_format <- function(coded) {
 ```{r - run}
 
 dfs <- data.frame()
+skipped_files <- data.frame(file = character(), reason = character(), stringsAsFactors = FALSE)
 
 for (f in ls) {
   # print(f)
@@ -275,7 +285,20 @@ for (f in ls) {
   year <- str_extract(company_name, "\\d{4}"); print(year)
   
   load(f) ## all coded reports were named "coded" as Rdata
+  
+  ## Check if 'coded' exists and is not empty
+  if (!exists("coded") || is.null(coded)) {
+    skipped_files <- rbind(skipped_files, data.frame(file = f, reason = "coded missing or NULL"))
+    next
+  }
 
+  if (is.data.frame(coded) && nrow(coded) == 0) {
+    skipped_files <- rbind(skipped_files, data.frame(file = f, reason = "coded is empty"))
+    next
+  }
+
+  
+  ## formatting process
   d <- func_format(coded = coded)
   d$company = com_name
   d$year <- year
@@ -288,11 +311,16 @@ for (f in ls) {
 n <- unique(dfs$company) %>% length(); n
 
 ### save all the hits to xlsx for easier inspection. 
-fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '.xlsx');  fname
+fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '_', paste(ys, collapse= '_'), '.xlsx');  fname
 writexl::write_xlsx(x = dfs, path = fname)
 
-fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '.RData'); fname
+fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '_', paste(ys, collapse= '_'), '.RData'); fname
 save(dfs, file = fname)
+
+
+## data check log
+fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_skipped_files_log_', ymd,'.xlsx');  fname
+writexl::write_xlsx(skipped_files, fname)
 
 ```
 
