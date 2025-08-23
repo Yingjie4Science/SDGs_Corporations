@@ -1,0 +1,518 @@
+---
+title: "sdg_llm"
+author: "Yingjie"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r setup}
+
+# rm(list = ls())
+
+
+dir.code <- getwd(); dir.code
+## set working directory
+setwd(dirname(dir.code))
+
+
+library(purrr)
+source('./code/_packages.R')
+
+# Load custom functions
+source("./code/function_expand_col_to_long.R") ## for expand the sdgdetector column
+
+dir.llm <- "G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_llm/"
+dir.assignments <- file.path(dirname(dir.llm), "data_LLM_validation")   # output folder
+
+```
+
+
+
+### Plan 3 - double + based on preferred SDGs
+
+Only load in the remaining un-coded ones
+
+```{r - load data}
+
+## load in all files
+library(readxl)
+library(dplyr)
+library(purrr)
+library(stringr)
+
+
+f <- paste0(dir.assignments, 'sample_result.RData') ## `sample_result`, `sampled_df`
+load(f)
+
+
+# List all .xlsx files in the folder
+xlsx_files <- list.files(dir.assignments, pattern = "^A\\d{2}_queue_.*\\.xlsx$", full.names = TRUE)
+xlsx_files
+# Read and combine all files with filename as a new column
+all_data <- map_dfr(xlsx_files, function(file) {
+  df <- read_excel(file)
+  df$source_file <- basename(file)  # Add filename as a column
+  return(df)
+})
+
+
+## remove already coded data
+all_data_left <- all_data %>%
+  mutate(coder = substr(source_file, 1, 3)) %>%
+  filter(!coder %in% c('A04', 'A05', 'A06')) %>%
+  distinct(statement_id, .keep_all = T) %>%
+  ## remove the remaining coded data (a small portion)
+  mutate(
+    targets_coder        = NA_character_,
+    targets_rationale    = NA_character_,
+    engagement_coder     = NA_character_,
+    engagement_rationale = NA_character_,
+    comments_coder       = NA_character_,
+    company_year  = str_remove(statement_id, "_\\d+$") 
+  ) %>%
+  select(-any_of(c('source_file', 'coder'))) %>%
+  ## add `goals_llm`
+  left_join(., 
+            sampled_df %>% 
+              select(statement_id, goals_llm), 
+            by = 'statement_id') %>%
+  select(1:targets_nlp, goals_llm, everything())
+  
+```
+
+
+
+
+```{r - add statements before and after}
+
+filter_company_year <- unique(all_data_left$company_year)
+
+
+
+
+## -----------------------------------------------------------------------------
+## coded data with text and sdgs, including rows without detected sdgs 
+## -----------------------------------------------------------------------------
+
+
+## 1.1 coded data for 2020, 2022, 2024
+csvname <- paste0('coded_combined_all_with_raw_330_tokenize_2020_2022_2024.csv')
+f <- paste0(dir.coded.comb, csvname);  f
+coded_combined_after2018 <- readr::read_csv(f, show_col_types = F) 
+
+
+## 1.2. coded data for 2018
+csvname <- paste0('coded_combined_all_with_raw_352_tokenize_2018.csv')
+f <- paste0(dir.reports, 'pdf_coded_human/DF_coded_comb/', csvname);  f
+coded_combined_before2018 <- readr::read_csv(f, show_col_types = F) 
+
+
+## 1.3 combine all 4 years data
+coded_combined_all <- rbind(coded_combined_before2018, coded_combined_after2018) %>%
+  group_by(company, year) %>%
+  # add a row ID within each group
+  mutate(row_id = row_number() ) %>%
+  ungroup() %>%
+  mutate(
+    company_year  = paste0(company, "_", year),
+    statement_oid = paste0(company, "_", year, "_", row_id)
+  ) 
+
+
+## filter the full data to reduce data size 
+coded_combined_all_filter <- coded_combined_all %>%
+  filter(company_year %in% filter_company_year) %>%
+  select(statement_oid, company_year, statement)
+
+
+
+
+## 3. join to the original data to add more sentences
+
+all_data_left_plus <- all_data_left %>%
+  mutate(.row_id = row_number()) %>%
+  left_join(., 
+            coded_combined_all_filter, 
+            by = c('statement', 'company_year'))
+
+
+# Count how many rows each original x row became
+duplicates <- all_data_left_plus %>%
+  count(.row_id) %>%
+  filter(n > 1)
+
+# Inspect the actual duplicated rows if needed
+duplicated_rows <- all_data_left_plus %>% 
+  filter(.row_id %in% duplicates$.row_id)
+
+## if there are just a few duplicates, we simply keeo the first match 
+all_data_left_plus <- all_data_left_plus %>%
+  dplyr::distinct(statement_id, .keep_all = T) %>%
+  select(-any_of(c('company_year', '.row_id')))
+
+target_oids <- unique(all_data_left_plus$statement_oid)
+
+
+## 4. subset a data frame based on a list of `statement_oid` and include one row before and one row after each match
+
+# Step 1: Decompose statement_oid into components
+# df_with_keys <- all_data_left_plus %>%
+#   mutate(
+#     company = str_extract(statement_oid, "^[^_]+"),
+#     year = str_extract(statement_oid, "(?<=_)[0-9]{4}(?=_)"),
+#     row_id = as.integer(str_extract(statement_oid, "[0-9]+$"))
+#   )
+
+# Step 2: Parse target_oids into company, year, row_id
+target_oids_split <- tibble(statement_oid = target_oids) %>%
+  mutate(
+    company = str_extract(statement_oid, "^[^_]+"),
+    year = str_extract(statement_oid, "(?<=_)[0-9]{4}(?=_)"),
+    row_id = as.integer(str_extract(statement_oid, "[0-9]+$")),
+    group_id = row_number()
+  ) %>%
+  ## add "statement_id" back
+  left_join(., all_data_left_plus %>% select(statement_id, statement_oid),
+            by = 'statement_oid')
+
+# Step 3: Add +/- 1 row_id per target
+target_oids_expanded <- target_oids_split %>%
+  rowwise() %>%
+  dplyr::mutate(neighbor_ids = list(row_id + c(-1, 0, 1))) %>%
+  unnest(neighbor_ids) %>%
+  ungroup() %>%
+  ## create unique oid for later use
+  dplyr::mutate(oid_expanded = paste(company, year, neighbor_ids, sep='_')) %>%
+  # dplyr::rename('statement_oid_llm' = 'statement_oid') %>%
+  as.data.frame()
+
+# Step 3. To combine each set of three neighbor rows into one single string from the "statement" column
+coded_text_expanded <- target_oids_expanded %>% 
+  select(group_id, statement_id, statement_oid, oid_expanded) %>%
+  ## link to the statement text 
+  left_join(., coded_combined_all_filter, 
+             by = c('oid_expanded' = 'statement_oid')) %>%
+  group_by(group_id, statement_id, statement_oid) %>%
+  dplyr::summarise(statement_expanded = paste(statement, collapse = " "), .groups = "drop") %>%
+  select(-group_id)
+
+
+# Step 4: add the `statement_expanded` to the assignment data
+all_data_left_plus_expanded <- all_data_left_plus %>%
+  select(-statement_oid) %>%
+  left_join(., coded_text_expanded, 
+            by = 'statement_id') %>%
+  select(1:statement, statement_expanded, everything())
+```
+
+
+
+```{r - assign}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+
+
+all_data_left_bygoal <- all_data_left_plus_expanded %>%
+  ## split a column with comma-separated SDGs and convert the data frame to long format
+  separate_rows(goals_llm, sep = ",") %>%         # Split by comma
+  mutate(goals_llm = trimws(goals_llm))           # Remove any leading/trailing whitespace
+
+
+
+# Coder preferences: list of SDG goals per coder -------------------------------
+# Use the SAME format you keep in goals_llm after normalization (see normalizer below).
+# Below are examples; replace with your team’s real preferences.
+coder_sdgs <- list(
+  B1 = c(1, 6, 13, 14),
+  B2 = c(5, 6, 9, 10, 14, 16),
+  B3 = c(1, 3, 4, 5, 10, 17),
+  B4 = c(2, 7, 8, 12, 15),
+  B5 = c(2, 7, 11, 13, 15, 17),
+  B6 = c(3, 4, 8, 9, 11, 16, 12)
+)
+
+
+# ------------------------------------------------------------------
+# INPUTS
+# ------------------------------------------------------------------
+# df: your statements, one row per statement
+# must contain:
+#   - statement_id
+#   - statement_text
+#   - goals_llm (semicolon-separated, e.g., "SDG07; SDG13" or "7;13" is fine)
+# Optional:
+#   - any other columns you want to carry through
+
+
+
+
+# ----------------------------
+# Inputs & guards
+# ----------------------------
+stopifnot(all(c("statement_id", "statement", "goals_llm") %in% names(all_data_left_bygoal)))
+
+annotators <- names(coder_sdgs)  # e.g., c("B1","B2","B3","B4","B5","B6")
+stopifnot(length(annotators) >= 2)
+
+
+
+
+# ----------------------------
+# Helpers
+# ----------------------------
+
+# parse goals_llm to integer SDG codes (1..17)
+parse_goals_to_int <- function(x) {
+  if (is.na(x) || x == "") return(integer(0))
+  toks <- unlist(strsplit(x, ";"))
+  toks <- str_trim(toks)
+  # extract digits (handles "SDG7", "sdg07", "7")
+  nums <- as.integer(stringr::str_extract(toks, "\\d+"))
+  nums <- nums[!is.na(nums)]
+  nums <- nums[nums >= 1 & nums <= 17]
+  unique(nums)
+}
+
+# overlap score between statement SDGs and coder's preference
+overlap_score <- function(stmt_sdgs, coder_pref) {
+  if (length(stmt_sdgs) == 0 || length(coder_pref) == 0) return(0L)
+  sum(stmt_sdgs %in% coder_pref)
+}
+
+# choose best coder given overlap then current load; optionally exclude one coder
+pick_best_coder <- function(candidates, stmt_sdgs, loads, prefs_list, exclude = character(0)) {
+  cands <- setdiff(candidates, exclude)
+  if (length(cands) == 0) return(NA_character_)
+  sc <- vapply(cands, function(cdr) overlap_score(stmt_sdgs, prefs_list[[cdr]] %||% integer(0)),
+               FUN.VALUE = integer(1))
+  tibble(coder_id = cands, score = sc, load = loads[cands]) %>%
+    arrange(desc(score), load, coder_id) %>%
+    slice(1) %>%
+    pull(coder_id)
+}
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+
+
+
+# ----------------------------
+# Prepare per-statement SDG set
+# ----------------------------
+stmts <- all_data_left_bygoal %>%
+  mutate(sdg_set = lapply(goals_llm, parse_goals_to_int))
+
+# If stratum missing, create a single stratum
+if (!"stratum" %in% names(stmts)) {
+  stmts <- stmts %>% mutate(stratum = "_ALL_")
+}
+
+
+# ----------------------------
+# Preference-aware, balanced double assignment
+# ----------------------------
+assign_pref_double <- function(df_group, coder_prefs) {
+  N <- nrow(df_group)
+  if (N == 0) return(df_group %>% mutate(coder_1 = NA_character_, coder_2 = NA_character_))
+
+  # initialize loads at 0 for all annotators
+  loads <- setNames(rep(0L, length(coder_prefs)), names(coder_prefs))
+
+  coder1 <- character(N)
+  coder2 <- character(N)
+
+  # pass 1: best match → lower load
+  for (i in seq_len(N)) {
+    s_sdgs <- df_group$sdg_set[[i]]
+    c1 <- pick_best_coder(names(coder_prefs), s_sdgs, loads, coder_prefs)
+    if (is.na(c1)) {
+      # fallback to least loaded
+      c1 <- names(sort(loads, decreasing = FALSE))[1]
+    }
+    coder1[i] <- c1
+    loads[c1] <- loads[c1] + 1L
+  }
+
+  # pass 2: different coder, same rule
+  for (i in seq_len(N)) {
+    s_sdgs <- df_group$sdg_set[[i]]
+    c1 <- coder1[i]
+    c2 <- pick_best_coder(names(coder_prefs), s_sdgs, loads, coder_prefs, exclude = c1)
+    if (is.na(c2)) {
+      # fallback: least loaded not equal to c1
+      least <- setdiff(names(sort(loads, decreasing = FALSE)), c1)
+      c2 <- least[1]
+    }
+    coder2[i] <- c2
+    loads[c2] <- loads[c2] + 1L
+  }
+
+  df_group %>% mutate(coder_1 = coder1, coder_2 = coder2)
+}
+
+
+
+# Run within each stratum to keep mixes balanced across strata
+assigned_pairs <- stmts %>%
+  mutate(.row_order = row_number()) %>%
+  group_by(stratum) %>%
+  arrange(.row_order, .by_group = TRUE) %>%
+  group_modify(~ assign_pref_double(.x, coder_sdgs)) %>%
+  ungroup() %>%
+  select(-.row_order)
+```
+
+
+
+```{r - assign - diagnostics}
+# ----------------------------
+# Quick diagnostics
+# ----------------------------
+# NA check
+assigned_pairs %>%
+  dplyr::summarise(
+    n = n(),
+    na_coder1 = sum(is.na(coder_1)),
+    na_coder2 = sum(is.na(coder_2)))
+
+# # per-coder load
+# assigned_pairs %>%
+#   pivot_longer(cols = starts_with("coder_"), names_to = "slot", values_to = "coder_id") %>%
+#   count(coder_id, name = "items") %>%
+#   # arrange(desc(items)) %>%
+#   arrange(coder_id)
+
+# preference hit rates (how often a coder got at least one preferred SDG)
+pref_hit <- assigned_pairs %>%
+  pivot_longer(cols = c(coder_1, coder_2), names_to = "slot", values_to = "coder_id") %>%
+  rowwise() %>%
+  mutate(hit = as.integer(any((sdg_set %||% integer(0)) %in% (coder_sdgs[[coder_id]] %||% integer(0))))) %>%
+  ungroup() %>%
+  group_by(coder_id) %>%
+  summarise(pref_hits = sum(hit), total = n(), hit_rate = pref_hits / total) %>%
+  arrange(desc(hit_rate)) %>%
+  arrange(coder_id)
+
+pref_hit
+
+# ----------------------------
+# Long format for downstream (salted dupes, exports, etc.)
+# ----------------------------
+assign_long <- assigned_pairs %>%
+  pivot_longer(cols = c(coder_1, coder_2),
+               names_to = "coder_slot", values_to = "coder_id") %>%
+  mutate(is_duplicate = 0L,
+         duplicate_group_id = NA_character_)
+
+```
+
+
+
+
+```{r - add salted duplicates}
+
+
+# ------------------------------------------------------------
+# Salted duplicates per coder
+# ------------------------------------------------------------
+
+duplicate_rate = 0.05
+
+source(here('code', 'function_inject_duplicates.R'))
+
+# Apply per coder
+per_coder_queues <- assign_long %>%
+  group_split(coder_id) %>%
+  map_df(~ inject_duplicates(.x, dup_rate = duplicate_rate))
+
+# Optional: ensure no accidental double-duplication within the same coder
+# (Each coder should have at most 2 rows per statement: original + one duplicate)
+per_coder_queues <- per_coder_queues %>%
+  group_by(coder_id, statement_id) %>%
+  mutate(dup_rank = row_number(desc(is_duplicate))) %>%
+  ungroup() %>%
+  filter(dup_rank <= 2) %>%                # drop extras if any
+  select(-dup_rank)
+
+
+
+# ------------------------------------------------------------
+# Diagnostics
+# ------------------------------------------------------------
+total_dupes <- sum(per_coder_queues$is_duplicate, na.rm = TRUE)
+per_coder_dupes <- per_coder_queues %>%
+  group_by(coder_id) %>%
+  summarise(
+    items_total   = n(),
+    dupes         = sum(is_duplicate, na.rm = TRUE),
+    originals     = items_total - dupes,
+    dup_rate_real = ifelse(items_total > 0, dupes / originals, NA_real_)
+  ) %>%
+  # arrange(desc(dupes)) %>%
+  arrange(coder_id)
+
+cat(total_dupes, "total salted duplicates injected across all coders.\n")
+print(per_coder_dupes)
+```
+
+
+
+
+
+```{r - export tasks}
+
+xlsx_postfix <- paste0("_task_", 'YourFirstName',".xlsx"); xlsx_postfix
+
+## Per-coder queues ------
+## the input df should be `per_coder_queues_clean`
+per_coder_queues_clean <- per_coder_queues %>%
+  ## remove unnecessary columns 
+  select(-any_of(c("company", "year", "primary_goal", "goals", "any_rare_goal", "has_target", 
+                   "weight", "triple_flag", "is_duplicate", "duplicate_group_id", 
+                   # "goals_llm",
+                   "sdg_set",
+                   "coder_slot", "stratum"))) %>%
+  as.data.frame()
+
+## load this script to export assignment 
+getwd()
+source('./code/helper_write_xlsx_with_style.R')
+
+```
+
+
+
+## Adjudication
+
+```{r - adjudication, eval=FALSE, include=FALSE}
+# 5) Build an adjudication skeleton (to be filled after coding)
+#    One row per statement, final labels filled when coder A/B disagree.
+# ---------------------------------------------------------------------------
+adjudication_skeleton <- sampled_df %>%
+  transmute(
+    statement_id,
+    statement,
+    # stratum,
+    targets_llm,
+    engagement_llm,
+    triple_flag,
+    coderA_id = NA_character_, coderA_target = NA_character_, coderA_engagement = NA_character_,
+    coderB_id = NA_character_, coderB_target = NA_character_, coderB_engagement = NA_character_,
+    coderC_id = NA_character_, coderC_target = NA_character_, coderC_engagement = NA_character_,
+    adjudicator_id = NA_character_,
+    final_target = NA_character_,
+    final_engagement = NA_character_,
+    adjudication_notes = NA_character_
+  )
+
+# You’ll populate coderA/B fields by merging back the submitted annotations later.
+
+# readr::write_csv(adjudication_skeleton, file.path(dir.assignments, "adjudication_skeleton.csv"))
+```
+
+
