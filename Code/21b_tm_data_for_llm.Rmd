@@ -1,0 +1,136 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "6/17/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Dir and packages
+
+```{r include=FALSE}
+### To clear your environment 
+# remove(list = ls())
+
+# directories 
+source('./Code/_directories.R')
+
+dir.gshare <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/'
+dir.pdf    <- paste0(dir.gshare, 'data/data_pdf_Edmund/')
+
+## output directories
+dir.coded.comb <- paste0(dir.pdf, 'DF_coded_comb/'); print(dir.coded.comb)
+
+
+# load packages
+source('./Code/_packages.R')
+  
+ymd <- format(Sys.time(), "%Y%m%d"); ymd
+```
+
+
+# Data
+
+## Helper data
+
+```{r - UN SGD target list}
+source('./Code/helper_UN_SDG_Target_list.R') ## --> ls_un_id; goals_ls
+
+goals_df <- ls_un_id %>%
+  dplyr::select(goalname, target_id_un, target_id_un2) %>%
+  # group_by(goalname) %>%
+  # arrange(goalname, target_id_un2) %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un),
+                target_id_un = paste0('SDG', target_id_un)) %>%
+  dplyr::mutate(id = row_number()) %>%
+  dplyr::mutate(target_id_un = factor(target_id_un, levels = unique(target_id_un)),
+                target_id_un = reorder(target_id_un, id)) %>%
+  as.data.frame()
+
+## save to `SDG_TM` for R package development
+fname <- paste0(dirname(getwd()), '/SDG_TM/data/goals_df.RData'); fname
+# save(goals_df, file = fname)
+```
+
+
+
+
+# 3. Format results
+
+
+```{r}
+n <- 330              ## number of company - used to identify data version
+v <- 'tokenize'
+
+
+
+## -----------------------------------------------------------------------------
+## coded data with text and sdgs, including rows without detected sdgs 
+## -----------------------------------------------------------------------------
+csvname <- paste0('coded_combined_all_with_raw_', n, '_', v, '.csv')
+f <- paste0(dir.coded.comb, csvname);  f
+# readr::write_csv(x = coded_combined_sdg, file = f)
+coded_combined_all <- readr::read_csv(f, show_col_types = F) 
+
+
+
+## -----------------------------------------------------------------------------
+## coded data with text and sdgs, only keep rows with detected sdgs 
+## -----------------------------------------------------------------------------
+csvname <- paste0('coded_combined_sdg_with_raw_', n, '_', v, '.csv')
+f <- paste0(dir.coded.comb, csvname);  f
+# readr::write_csv(x = coded_combined_sdg, file = f)
+coded_combined_sdg <- readr::read_csv(f, show_col_types = F) 
+
+names(coded_combined_sdg)
+```
+
+
+
+
+```{r - for llm input}
+
+## subset data for LLM
+set.seed(123)
+coded_combined_sdg_subset <- coded_combined_sdg %>%
+  dplyr::select(-human_coded, -n_total, -sdgs_n) %>%
+  dplyr::select(company, year, nchr, token_count, everything()) %>%
+  slice_sample(n = 600)
+
+## save as csv
+csv <- paste0('sdg_llm_input_', ymd, '.xlsx')
+f <- file.path(dir.gshare, 'data', 'data_LLM', csv);  f
+# writexl::write_xlsx(x = coded_combined_sdg_subset, path = f)
+```
+
+
+```{r}
+## coded data without raw text 
+fname <- paste0(dir.coded.comb, 'coded_dfs_', n, '_', v, '.RData'); fname
+# save(dfs, file = fname)
+load(fname)
+```
+
+
+
+```{r}
+dat_com_sdg_year <- dfs %>%
+  group_by(company, goal, year) %>%
+  dplyr::summarise(total = sum(n_statements, na.rm = TRUE), .groups = "drop")
+  
+
+
+dat_com_year <- dat_com_sdg_year %>%
+  group_by(company, year) %>%
+  dplyr::summarise(total = sum(total, na.rm = TRUE), .groups = "drop")
+
+## average count by company 
+dat_com_avg <- dat_com_year %>%
+  group_by(company) %>%
+  dplyr::summarise(total_avg = mean(total, na.rm = TRUE), .groups = "drop")
+```
+
+
+
