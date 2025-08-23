@@ -18,27 +18,22 @@ editor_options:
 # remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
 getwd()
 
 # directories for Yingjie
-  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.reports <- './Data/data_tm/annual_reports/'
   dir.results <- './Data/data_results/'
   dir.figures <- './Data/figures/'
-  dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  dir.tm      <- './Data/data_tm/annual_reports/pdf_coded_human/'
 
 # load packages
   source('./Code/_packages.R')
 
   library(tm)        # text mining: readPDF(), Corpus()
-  library(tidyverse) # piping and wrangling
-  library(tabulizer) # importing PDFs
+  library(dplyr) # piping and wrangling
+  # library(tabulizer) # importing PDFs
   #library(remotes)  # installing from remote repositories
+  # install.packages("metagear_0.7.tar.gz", repos = "http://cran.us.r-project.org", type = "source", dependencies = TRUE)
   library(metagear)  # for `effort_distribute()`
   
 today <- format(Sys.time(), "%Y%m%d_%H%M"); today
@@ -169,7 +164,7 @@ save(dfs, file = fname)
    - duplicate the rows with multiple SDGs identified
 
 ```{r}
-fname <- paste0(dirname(dir.reports), '/coded_validation_coder/screening_dfs_', n, '.RData'); fname
+fname <- paste0(dirname(dir.reports), '/coded_validation_coder/planA/screening_dfs_', n, '.RData'); fname
 load(fname)
 names(dfs)
 
@@ -181,7 +176,9 @@ dfs_format <- dfs %>%
   dplyr::mutate(
     statement = str_to_sentence(statement),
     statement = trimws(statement),
-    correct_or_not = "", which_target_ifnot = "", coder_notes = "")
+    correct_or_not = "", 
+    which_target_ifnot = "", 
+    coder_notes = "")
 
 ### duplicate the rows with multiple SDGs identified
 dfs_format1 <- dfs_format %>%
@@ -201,7 +198,7 @@ for (i in 1:nrow(dfs_format1)) {
     
     ## 2. gather the multiple columns with SDGs into one column and remove duplicated ones
     d2 <- d1 %>% gather(key = "id2", value = "target_by_machine", 8:ncol(.)) %>%
-      distinct(target_by_machine, .keep_all = T) %>%
+      dplyr::distinct(target_by_machine, .keep_all = T) %>%
       dplyr::filter(str_detect(string = target_by_machine, pattern = "general", negate = T)) %>%
       dplyr::select(company, id, statement, target_by_machine, everything()) %>%
       dplyr::select(-sdg_by_machine, -id2) %>%
@@ -218,6 +215,7 @@ for (i in 1:nrow(dfs_format1)) {
 
 
 ## Generate spreadsheets for each coder
+
   - Arrange the text rows by SDGs, so that it is easier for coders to focus on one SDG a time. 
   - distribute tasks
   
@@ -249,10 +247,14 @@ dfs_task1 <- dfs_format3 %>%
 
 dir_eff <- paste0(dirname(dir.reports), '/coded_validation_coder/split1');  dir_eff
 file.remove(list.files(path = dir_eff, full.names = TRUE))
-metagear::effort_distribute(dfs_task1, initialize = TRUE, 
-                  reviewers = paste0('coder', seq(1:n_coders)), 
-                  save_split = TRUE, 
-                  directory  = dir_eff)
+
+##' `effort_distribute()`: Randomly distributes screening tasks evenly or unevenly across multiple team members. 
+##'   It populates this effort in a data frame column that includes this screening work (e.g., ABSTRACTS and TITLES).
+metagear::effort_distribute(aDataFrame = dfs_task1, 
+                            initialize = TRUE, 
+                            reviewers = paste0('coder', seq(1:n_coders)), 
+                            save_split = TRUE, 
+                            directory  = dir_eff)
 
 
 

@@ -25,6 +25,7 @@ library(stringr)
 # install.packages("devtools")
 # devtools::install_github("ropensci/skimr") ## summary statistics
 library(skimr)
+library(sf)
 
 ymd   <- format(Sys.time(), "%Y%m%d"); ymd
 ```
@@ -80,12 +81,39 @@ source('./Code/helper_theme_NS_map.R')
 ## 1. coded data: `df1`, `df2`, `df`
 load(file = paste0(dir.results, 'df1_df2.RData'))
 load(file = paste0(dir.results, 'df.RData'))
+load(file = paste0(dir.results, 'ls_un_id.RData')) ## `ls_un_id`
+
+ls_un_id <- ls_un_id %>%
+  dplyr::mutate(target_id_un = gsub('\\.', '_', target_id_un))
 
 ## rename the old data so that we can refer to it later
 df_old <- df
 
 ## the Region info of UltraTech, Emirates Group is wrong, should use the `Continent`, which is correct. 
 # df_old_test <- df_old %>% distinct(Region, Continent, .keep_all = T)
+
+
+## 
+f <- paste0(dir.results, 'helper_industry.csv'); f
+helper_industry <- readr::read_csv(f, show_col_types = F)
+
+
+f <- paste0(dir.results, 'helper_com_iso3.csv'); f
+helper_com_iso3 <- readr::read_csv(f, show_col_types = F)
+
+
+f <- paste0(dir.results, 'company_list_fortune_2018_2019.csv'); f
+com_lss_ft <- readr::read_csv(f, show_col_types = F)
+
+
+f <- paste0(dir.results, 'com_final_fortune.csv'); f
+com_final <- readr::read_csv(f, show_col_types = F)
+
+
+## shapefiles 
+fname <- paste0(dir.results, 'grp.RData'); fname # `grp`, `shp`
+load(fname)
+
 ```
 
 
@@ -275,7 +303,7 @@ goal_cmt_by_com <- df %>%
   ungroup() %>% dplyr::group_by(Company) %>% tally() 
 sort(unique(goal_cmt_by_com$n))
 n_com_cmt_goal <- nrow(goal_cmt_by_com); n_com_cmt_goal
-cat('There are', percent(n_com_cmt_goal/total_com, accuracy = 0.1), 'of the 500 companies have info on SDGs.')
+cat('There are', scales::percent(n_com_cmt_goal/total_com, accuracy = 0.1), 'of the 500 companies have info on SDGs.')
 
 goal_cmt_by_com_spe <- df %>% 
   dplyr::filter(n_statement > n_threshold_countable) %>%
@@ -477,6 +505,9 @@ theme_ht <-
 
 #### - pct_com
 ```{r}
+
+library(classInt)
+
 levels(targ_n_com$goalname)
 hist(targ_n_com$count)
 hist(targ_n_com$pct)
@@ -485,7 +516,7 @@ hist(targ_n_com$pct)
 ### find the intervals for classifying the raw data
 ### jenks - will be very slow; quantile - better
 nclass = 5
-classint_qt <- classIntervals(targ_n_com$pct, n=nclass, style="quantile");
+classint_qt <- classInt::classIntervals(targ_n_com$pct, n=nclass, style="quantile");
 classint_qt
 ### look at the data distribution and cut location
 pal <- c("red", "blue") #'yellow', 
@@ -538,6 +569,7 @@ freq$colorlabel <- lb[1:n]
 
 
 ##### cumulative frequency
+
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 ### look at the data distribution and cut location
 pal <- c("lightblue", "blue") #'yellow', 
@@ -604,6 +636,8 @@ p_hist
 
 ##### heatmap (1c)
 ```{r}
+
+library(grid)
 
 summary(targ_n_com$pct)
 
@@ -753,13 +787,14 @@ label <- 'Frequency of commitments to the Goals (the same color scheme as Fig. 1
   # theme(plot.tag.position = c(0, 0.1))
   
 ht_goal
-# grid.text(label = label, x = unit(0, "npc"), y = unit(0.5, "npc"), rot = 90)
+# grid::grid.text(label = label, x = unit(0, "npc"), y = unit(0.5, "npc"), rot = 90)
 
 
 
 
 ### combine the two parts --------------------------------------------------
 library(ggpubr)
+
 fig1c_ht <- ggarrange(
   ht_goal + theme(legend.position = "none"), ## color bar  on the left
   ht_targ,                                   ## color bars on the right
@@ -769,7 +804,7 @@ fig1c_ht <- ggarrange(
   font("xy.text", size = 2, color = "gray")
 
 # fig1c_ht
-grid.text(label = label, x = unit(0, "npc"), y = unit(0.5, "npc"), rot = 90)
+grid::grid.text(label = label, x = unit(0, "npc"), y = unit(0.5, "npc"), rot = 90)
 
 
 # fname <- paste0(dir.figures, 'Fig1c', suffix, '_new.jpg'); fname
@@ -1179,6 +1214,7 @@ n_com_percountry <- n.com.country %>%
 
 
 #####-  map (SI_Fig_3)
+
 ```{r}
 sum(n.com.country$n)
 
@@ -1246,6 +1282,8 @@ dir.figures
 
 
 ### combine 
+f <- paste0(dir.results, 'fig_file_p.n.byCountry.RData'); f # `p.n.byCountry`
+load(f)
 ggarrange(p.n.byCountry, map.co, #heights = c(0.7, 1),
           nrow = 2, ncol = 1, align = 'v', labels = panel_labels, 
           common.legend = F) ## , legend = 'none'
@@ -1342,6 +1380,9 @@ str(cmt_mean_goal_brk_shp)
 names(cmt_mean_goal_brk_shp)
 
 
+
+library(purrr)
+
 cmt_mean_goal_brk_shp_map <- cmt_mean_goal_brk_shp %>% 
   # st_drop_geometry() %>%
   gather(key = 'goal', 'n_cmt_mean_class', SDG1:SDG17) %>%
@@ -1354,8 +1395,8 @@ cmt_mean_goal_brk_shp_map <- cmt_mean_goal_brk_shp %>%
     goal = factor(goal, levels = unique(goal))
     ) %>%
   dplyr::mutate(
-    lon = map_dbl(geometry, ~st_point_on_surface(.x)[[1]]),
-    lat = map_dbl(geometry, ~st_point_on_surface(.x)[[2]])) 
+    lon = purrr::map_dbl(geometry, ~st_point_on_surface(.x)[[1]]),
+    lat = purrr::map_dbl(geometry, ~st_point_on_surface(.x)[[2]])) 
 str(cmt_mean_goal_brk_shp_map)
 length(unique(cmt_mean_goal_brk_shp_map$iso3))
 names(cmt_mean_goal_brk_shp_map)
@@ -2012,7 +2053,7 @@ dev.off()
 #### - plot: region (3b.ext)
 ```{r}
 
-fname <- paste0(dir.figures, 'Extended Data Fig_3b_new.pdf')
+fname <- paste0(dir.figures, 'Extended Data Fig_3b_new_', ymd, '.pdf'); fname
 pdf(fname, width = (width_2col-3)/2.54, #paper = 'letter',
     height = (width_2col+2)/2.54)
 
@@ -2059,6 +2100,8 @@ Heatmap(matrix = mat1,
         show_heatmap_legend = T,
         heatmap_legend_param = legend_hmap
         )
+
+## add figure index (b)
 grid.text(label = 'b', x = unit(0.01, "npc"), y = unit(0.98, "npc"), rot = 0, gp = gpar(fontsize = 12, fontface = "bold"))
 
 
@@ -2163,8 +2206,13 @@ dev.off()
 
 
 ###  3.4 Industry compare
+
   which industry committed most to the goals overall?
+  
 ```{r include=FALSE}
+
+source('./code/_colors.R')
+
 cmt_ind <- df %>%
   dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
   dplyr::mutate(ind = ind_7sys) %>%
@@ -2402,7 +2450,9 @@ fname <- paste0(dir.figures, 'by industry - 8 sys - rank_2a.ext_new.png'); fname
 
 
 #### - 56 industry
+
 ```{r eval=FALSE, include=FALSE}
+
 cmt_goal_ind56 <- df %>%
   dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
   dplyr::group_by(Company, iso3, Region, ind, Industry, goal) %>% ## ADD Industry
@@ -2578,7 +2628,7 @@ S <- 17 ## here we assume the com should commit to all 17 SDGs, for those they d
 J <- H/log(S); 
 head(J)
 J.com <- J %>% as.data.frame() %>%
-  rownames_to_column(var = 'Company') 
+  tibble::rownames_to_column(var = 'Company') 
 names(J.com) <- c("Company", "evenness")
 
 J.com <- J.com %>%
@@ -2852,7 +2902,7 @@ evn <- H/log(richness); evn
   National SDG Index and goal performance from SDG Dashboard Report
   
 ```{r}
-dir.rpt <- 'G:/My Drive/_paper/SDGs/Refs/SDSN Reports/2018GlobalIndex-master'
+dir.rpt <- 'G:/Shared drives/gdrive/_paper/SDGs/Refs/SDSN Reports/2018GlobalIndex-master'
 xls <- list.files(path = dir.rpt, pattern = '2018GlobalIndexResults.xlsx',
                   all.files = T, full.names = T); xls
 
@@ -2942,7 +2992,9 @@ avg_pct_by_ctr <- pct_com_byctr %>%
 #### - compare -------------------------------------------------------
 data <- merge(x = avg_pct_by_ctr, y = rpt_overlap_ctr, by = 'iso3') %>%
   ## add the number of companies in each country
-  left_join(., n.com.country[, c('iso3', 'Continent', 'n')], by = 'iso3') %>%
+  left_join(x = ., 
+            y = n.com.country %>% select(any_of(c('iso3', 'Continent', 'n'))), 
+            by = 'iso3') %>%
   dplyr::mutate(n_com = n+1)
 names(data)
 str(data)
@@ -3559,6 +3611,16 @@ table.data <- data.frame(
   dplyr::select(-id)
 
 
+
+com_dt <- 
+  com_final %>%
+  merge(x = ., y = helper_industry, by.x = 'company_name', by.y = 'Company', all.x = T) %>%
+  dplyr::distinct(company_name, .keep_all = T) %>%
+  dplyr::mutate(ind = ind_7sys) %>%
+  ungroup() #%>%
+
+
+
 ### add the remaining companies, and provide full 500 list
 com_dt_no_cmt <- com_dt %>%
   dplyr::filter(!company_name %in% com_cmt_evenness_all$Company) %>%
@@ -3592,6 +3654,7 @@ table.dat$Country <- sprintf('![](http://flagpedia.net/data/flags/mini/%s.png)',
 ### save the rank as a table
 ### change industry level names --> shorter
 levels(table.dat$ind_7sys)
+ind_levels <- unique((table.dat$ind_7sys))
 ind_labels_short <- c(
   'Materials',
   'Manufacture',
@@ -3608,9 +3671,9 @@ table.s1 <- table.dat %>%
   arrange(desc(cmt_mean), iso3, Company) %>% ## desc(cmt_mean*evenness)
   dplyr::mutate(Commitment_mean = formatC(cmt_mean,2,format="f"),
                 Evenness        = formatC(evenness,2,format="f"),
-                Rank            = row_number()) %>%
+                Rank            = row_number()) #%>%
   dplyr::mutate(
-    Industry = factor(ind_7sys, levels = levels(ind_7sys), labels = ind_labels_short)) %>%
+    Industry = factor(ind_7sys, levels = ind_levels, labels = ind_labels_short)) %>%
   as.data.frame() %>%
   group_by(Industry) %>%
   dplyr::mutate(Rank_Industry   = row_number(),

@@ -22,26 +22,20 @@ editor_options:
 remove(list = ls())
 
 ## set work dir
-path <- rstudioapi::getSourceEditorContext()$path
-dir  <- dirname(rstudioapi::getSourceEditorContext()$path); dir
-setwd(dir)
-getwd()
-dirname(dir)
-setwd(dirname(dir))
 getwd()
 
 # directories for Yingjie
-  dir.reports <- './Data/data_TextMining/annual_reports/'
+  dir.reports <- './Data/data_tm/annual_reports/'
   dir.results <- './Data/data_results/'
-  dir.figures <- './Data/figures/'
-  dir.tm      <- './Data/data_TextMining/annual_reports/pdf_coded_human/'
+  dir.figures <- './figures/'
+  dir.tm      <- './Data/data_tm/annual_reports/pdf_coded_human/'
 
 # load packages
   source('./Code/_packages.R')
 
   library(tm)        # text mining: readPDF(), Corpus()
   library(tidyverse) # piping and wrangling
-  library(tabulizer) # importing PDFs
+  # library(tabulizer) # importing PDFs
   #library(remotes)  # installing from remote repositories
   library(metagear)  # for `effort_distribute()`
   
@@ -57,7 +51,7 @@ ymd   <- format(Sys.time(), "%Y%m%d"); ymd
 ## specify which round
 
 ```{r}
-gdrive <- "G:/My Drive/_paper/SDGs/SDGs_Corporations/data_TextMining_shared/"
+gdrive <- "G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_tm_validation/"
 
 nth_round <- 2
 
@@ -250,7 +244,7 @@ p2 <- dfs_acc %>%
   theme(legend.position = "none")
 p <- ggarrange(p1, p2, widths = c(1,3))
 
-fname <- paste0(dir.figures, 'Inspection_Accuracy.png');fname
+fname <- paste0(dir.figures, 'Inspection_Accuracy_', ymd, '.png'); fname
 ggsave(fname, plot = p, width = 6.5, height = 3.2, units = 'in', dpi = 300)  
 ```
 
@@ -284,7 +278,8 @@ p4 <- dfs_int %>%
   theme(legend.position = "none")
 p <- ggarrange(p3, p4, widths = c(1,3))
 
-fname <- paste0(dir.figures, 'Inspection_InterExpert.png');fname
+getwd()
+fname <- paste0(dir.figures, 'Inspection_InterExpert_', ymd, '.png');fname
 ggsave(fname, plot = p, width = 6.5, height = 3.2, units = 'in', dpi = 300)  
 ```
 
@@ -320,6 +315,7 @@ ggsave(fname, plot = p, width = 6.5, height = 3.2, units = 'in', dpi = 300)
 
 
 ## look into the difference in text
+
 ```{r}
 
 ## pull coder comments together and add to the compare table later
