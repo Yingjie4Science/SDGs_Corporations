@@ -23,6 +23,7 @@ remove(list = ls())
 getwd()
 
 dir.figures <- './figures/'
+dir.figures <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/figures/'
 
 library(sf)
 library(dplyr)
@@ -62,8 +63,8 @@ shp <- readRDS('./data/data_results/shp.rds')
 dir.coded <- 'G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_pdf_Edmund/DF_coded_comb/'
 
 ls_f <- list.files(path = dir.coded, pattern = 'RData$', full.names = T); ls_f
-tail(ls_f, n = 1)
-load(tail(ls_f, n = 1)) ## load the latest/last data
+head(ls_f, n = 1)
+load(head(ls_f, n = 1)) ## load the latest/last data
 
 dfs_m <- dfs %>% 
   dplyr::rename(target = coded_sdgs) %>%
@@ -84,7 +85,9 @@ cat('There are', com_ls %>% length(), 'companies.')
 df <- dfs_m %>%
   merge(x = ., 
         y = helper_com_iso3, 
-        by = 'Company', all.x = T) 
+        by = 'Company', all.x = T) %>%
+  dplyr::filter(year %in% c(2020, 2024)) %>%
+  as.data.frame()
 
 
 ```
@@ -157,7 +160,7 @@ goal_n_com <- df %>%
 ### how many times each goal was mentioned (in total, regardless unique company) ------------
 goal_n_cmt <- df %>% 
   dplyr::filter(!goal %in% c('noSDG', 'SDG')) %>%
-  dplyr::group_by(goal) %>% 
+  dplyr::group_by(goal, year) %>% 
   dplyr::summarise(n_cmt = sum(n_statement, na.rm = T)) %>%
   # dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
   dplyr::mutate(goal = factor(goal, levels = unique(goal))) %>%
@@ -165,14 +168,27 @@ goal_n_cmt <- df %>%
 
 (pgoal_n_cmt <- goal_n_cmt %>% 
     ggplot() +
-    geom_col(aes(x = reorder(goal, n_cmt), y = n_cmt)) +
-    coord_flip() +
+    geom_col(aes(x = reorder(goal, n_cmt), 
+                 y = n_cmt,
+                 fill = factor(year)),
+             position = "dodge"
+             ) +
+    # scale_fill_brewer(palette = "Greens")  +
+    scale_fill_manual(
+      values = c("2020" = "#bae4b3", 
+                 "2024" = "#31a354")) +
+    # coord_flip() +
+    xlab(NULL) + 
+    ylab('Number of commitments') +
+    labs(fill = "Year") + 
     theme_bw() + 
-    # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-    xlab(NULL) + ylab('Number of commitments')
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    theme(legend.position = c(0.1, 0.8))
 )
 
-
+getwd()
+fname <- paste0(dir.figures, 'ssfp_goal_year_', ymd, '-2.jpg'); fname
+ggsave(fname, plot = last_plot(), width = 6, height = 3, units = 'in', dpi = 400)
 ```
 
 
@@ -252,16 +268,16 @@ ggsave(fname, plot = last_plot(), width = 7, height = 3, units = 'in', dpi = 300
 
 names(df)
 cmt_mean_goal <- df %>%
-  dplyr::select(Company, iso3,
+  dplyr::select(Company, iso3, year,
                 goal, Target_id, n_statement) %>%
   dplyr::filter(!goal %in% c('SDG', 'noSDG')) %>%
   arrange(goal, Company, iso3) %>%
-  group_by(iso3, Company, goal) %>%
+  group_by(iso3, Company, year, goal) %>%
   ### the total number of commitment statement to each goal by each company
   dplyr::summarise(n_cmt = sum(n_statement, na.rm = T)) %>%
   ### the average number of commitment statement to each goal in each country
   ungroup() %>%
-  group_by(iso3, goal) %>%
+  group_by(iso3, goal, year) %>%
   dplyr::summarise(n_cmt_mean = mean(n_cmt, na.rm = T)) %>%
   arrange(iso3, goal)
 
@@ -269,6 +285,7 @@ cmt_mean_goal <- df %>%
 ### plot ----------------------------------------------------------------
 
 cmt_mean_goal_brk <- cmt_mean_goal %>% 
+  # dplyr::filter(year == yr) %>%
   spread(key = goal, value = n_cmt_mean) %>%
   as.data.frame()
 
@@ -301,7 +318,7 @@ cmt_mean_goal_brk_shp_map <- cmt_mean_goal_brk_shp %>%
 
 
 ## - Map of cmt number 
-```{r fig.height=7, fig.width=7}
+```{r eval=FALSE, fig.height=7, fig.width=7, include=FALSE}
 p2 <- 
   cmt_mean_goal_brk_shp_map %>%  
   ### plot
@@ -319,11 +336,166 @@ p2 <-
         strip.background = element_blank() )
 
 p2
-fname <- paste0(dir.figures, 'ssfp_map_cmt_by_goal_', ymd, '.jpg'); fname
+fname <- paste0(dir.figures, 'ssfp_map_cmt_by_goal_', yr, '_', ymd, '.jpg'); fname
 ggsave(fname, plot = p2,  width = 7, height = 7, units = 'in', dpi = 300)
 
 ```
 
 
+
+## - Map Goal 13
+
+```{r - facet}
+
+yr <- 2024
+goal_i <- 'SDG13'
+
+cmt_mean_goal_brk <- cmt_mean_goal %>% 
+  # dplyr::filter(year == yr) %>%
+  dplyr::filter(goal == goal_i) %>%
+  spread(key = year, value = n_cmt_mean) %>%
+  as.data.frame()
+
+
+### link the data to shapefile
+cmt_mean_goal_brk_shp <- 
+  merge(x = shp, 
+        y = cmt_mean_goal_brk, 
+        by.x='iso_a3', 
+        by.y = 'iso3', all.x = T) %>%
+  # st_drop_geometry() %>%
+  filter(name != 'Antarctica') %>%
+  dplyr::rename(iso3 = iso_a3)
+
+
+cmt_mean_goal_brk_shp_map <- cmt_mean_goal_brk_shp %>% 
+  # st_drop_geometry() %>%
+  gather(key = 'year', 'n_cmt_mean', `2020`:`2024`) %>%
+  # dplyr::filter(!is.na(goal)) %>%
+  dplyr::mutate(
+    n_cmt_mean = as.numeric(n_cmt_mean),
+    # goal = factor(goal, levels = unique(goal)) 
+    )
+
+
+p2 <- 
+  cmt_mean_goal_brk_shp_map %>%  
+  ### plot
+  ggplot(data = .) + 
+  geom_sf(aes(fill = n_cmt_mean),
+          color='gray70', size = 0.1) +
+  scale_fill_distiller('Average \ncommitments', palette = "YlGn", direction = 1, na.value = 'gray90') +
+  theme_bw() +
+  facet_wrap(~year, ncol = 1) +
+  theme_minimal() + 
+  theme(
+    # legend.position = c(0.05, 0.4), # 2 columns 
+    legend.position = c(0.12, 0.7), # 1 column
+        panel.grid = element_blank(),
+        axis.text  =element_blank(),
+        axis.ticks =element_blank(),
+        panel.spacing = unit(0, "mm"),        # reduces space between panels
+        # strip.text = element_text(hjust = 0.05, 
+        #                           size = 12),  # left-align facet labels
+        strip.text = element_blank(), 
+        plot.margin = margin(0, 0, 0, 0), 
+        strip.placement = "inside",
+        strip.background = element_blank() )
+
+# p2
+fname <- paste0(dir.figures, 'ssfp_map_cmt_', goal_i, '_', ymd, '-1colum.jpg'); fname
+ggsave(fname, plot = p2,  
+       # width = 12, height = 4, # 2 columns 
+       width = 6, height = 5, 
+       units = 'in', dpi = 600)
+```
+
+```{r - tmaps - tbd}
+library(tmap)
+library(dplyr)
+
+
+goal_i <- "SDG13"
+
+# Fix invalid geometries using sf package
+shp_fixed <- shp %>%
+  st_make_valid() %>%  # Repair invalid polygons
+  filter(name != "Antarctica")
+
+# Filter data for SDG13 and years 2020 and 2024
+cmt_mean_goal_brk <- cmt_mean_goal %>%
+  filter(goal == goal_i, year %in% c(2020, 2024)) %>%
+  mutate(n_cmt_mean = as.numeric(n_cmt_mean)) %>%
+  spread(key = year, value = n_cmt_mean)
+
+# Join with shapefile
+cmt_mean_goal_brk_shp <- shp_fixed %>%
+  left_join(cmt_mean_goal_brk, by = c("iso_a3" = "iso3")) %>%
+  filter(name != "Antarctica")  %>%
+  mutate(goal = goal_i) %>%
+  pivot_longer(names_to = 'year', values_to = 'n_cmt_mean', cols = `2020`:`2024`)
+
+
+# tmap plot with facets
+p2 <- 
+  tm_shape(cmt_mean_goal_brk_shp) +
+  tm_polygons(
+    # c('2020', '2024'),  
+    'n_cmt_mean',
+              palette = "YlGn",
+              title = "Avg commitments",
+              colorNA = "gray90",
+              border.col = "gray70") +
+  tm_facets(by = "year", ncol = 2) +
+  tm_layout(
+    legend.outside = TRUE, 
+    legend.outside.position = "right",
+    frame = FALSE,
+    title.size = 1.1
+  )
+
+fname <- paste0(dir.figures, 'ssfp_map_cmt_', goal_i, '_', yr, '_', ymd, '-tmap.jpg'); fname
+tmap_save(
+  tm = p2,                            # your tmap object
+  filename = fname,  # output path
+  width = 8, height = 5, units = "in", dpi = 300
+)
+
+```
+
+
+```{r - 2 maps - tbd}
+
+# Set tmap option to automatically fix invalid polygons
+tmap_options(check.and.fix = TRUE)
+
+# Step 1: Filter data for SDG13 and years 2020 and 2024
+cmt_mean_goal_brk <- cmt_mean_goal %>%
+  filter(goal == goal_i, year %in% c(2020, 2024)) %>%
+  mutate(n_cmt_mean = as.numeric(n_cmt_mean))
+
+# Step 2: Join with shapefile
+cmt_mean_goal_brk_shp <- shp %>%
+  left_join(cmt_mean_goal_brk, by = c("iso_a3" = "iso3")) %>%
+  filter(name != "Antarctica")
+
+# Step 3: tmap with facets - WITH POLYGON FIXING
+tm_shape(cmt_mean_goal_brk_shp) +
+  tm_polygons(
+    col = "n_cmt_mean",
+    palette = "YlGn",
+    title = "Avg commitments",
+    colorNA = "gray90",
+    border.col = "gray70"
+  ) +
+  tm_facets(by = "year", ncol = 2) +
+  tm_layout(
+    legend.outside = TRUE,
+    legend.outside.position = "right",
+    frame = FALSE,
+    title.size = 1.1
+  )
+
+```
 
 
