@@ -10,17 +10,16 @@ editor_options:
 
 ```{r setup}
 
-library(dplyr)
-library(readxl)
-library(purrr)
-library(stringr)
-library(ggplot2)
+# rm(list = ls())
 
 
-dir.code <- getwd()
+dir.code <- getwd(); dir.code
 ## set working directory
 setwd(dirname(dir.code))
 
+
+library(purrr)
+source('./code/_packages.R')
 
 # Load custom functions
 source("./code/function_expand_col_to_long.R") ## for expand the sdgdetector column
@@ -163,6 +162,8 @@ llm_sub_ <- llm_sub %>%
     'engagement_llm' = 'engagement_level_gpt'
   ) %>%
   # select(1:targets_nlp, targets_nlp2, everything()) %>%
+  
+  ## reformatted so coders see short, clear, standardized labels that minimize confusion or typos when they manually code.
   as.data.frame()
 ```
 
@@ -240,6 +241,12 @@ p.det <-
 library(cowplot)
 plot_combined <- plot_grid(p.gpt, p.det, ncol = 1, labels = 'auto', align = "v", axis = "tb")
 plot_combined
+
+ggsave(
+  filename = paste0("./figures/sdg_detected_distribution_", ymd, ".png"),
+  plot = plot_combined,
+  width = 7, height = 5, unit = 'in', dpi = 300
+)
 ```
 
 
@@ -400,13 +407,13 @@ sample_statements <- function(df,
 `rare_rate`: Proportion of sampled statements flagged as containing rare goals. 
   Why it matters: If your plan was to oversample rare goals with a multiplier (e.g., rare_boost = 3), this number should be higher than the rare-goal prevalence in the full dataset.
 
-```{r - Run sampling}
+```{r - run sampling}
 
 N_total_sample <- 400  # Total sample size
 
 
 # Run the sampling function
-result <- sample_statements(
+sample_result <- sample_statements(
   df = llm_sub_,
   N_total = N_total_sample,
   min_per_goal = 10,            # guarantee per-goal coverage up to this cap
@@ -419,25 +426,25 @@ result <- sample_statements(
 )
 
 
-sampled_df <- result$sample %>%
+sampled_df <- sample_result$sample %>%
   ##' creates this `stratum` column to
   ##'   Ensures coders see both common and rare targets, not just common ones
   ##'   Balanced coverage across engagement levels
   mutate(stratum = paste0(any_rare_goal, "_", engagement_llm)) 
   
   
-result$diagnostics$per_goal_sample_counts
-result$diagnostics$rare_rate
+sample_result$diagnostics$per_goal_sample_counts
+sample_result$diagnostics$rare_rate
 
 
 ##' Or rare_rule = "topk" with topk_common = 5 to define “common = top-5 most frequent; rest rare”.
 ##' 
 ##' Diversity check: Ensure filled_n is large enough to give variety beyond the guaranteed picks.
-result$diagnostics$filled_n
+sample_result$diagnostics$filled_n
 
 library(scales)
 
-pct_ensured <- (result$diagnostics$ensured_n) / N_total_sample ## Aim for ~20–35%. 
+pct_ensured <- (sample_result$diagnostics$ensured_n) / N_total_sample ## Aim for ~20–35%. 
 pct_ensured_str <- scales::percent(pct_ensured, accuracy = 0.1)
 pct_random_str  <- scales::percent(1 - pct_ensured, accuracy = 0.1)
 
@@ -455,8 +462,18 @@ cat(
 ```
 
 
-```{r - sample stats / plots}
 
+```{r - save sample data}
+
+f <- paste0(dir.assignments, 'sample_result.RData') ## `sample_result`, `sampled_df`
+save(sample_result, sampled_df, file = f)
+
+```
+
+
+
+
+```{r - sample stats / plots}
 
 # ---- Requirements ----
 library(dplyr)
@@ -467,11 +484,11 @@ library(ggplot2)
 library(scales)
 
 # df: full dataset with columns statement_id and goals_llm (semicolon-separated)
-# result: output from sample_statements(df, ...)
-#   - result$sample (sampled statements with primary_goal, any_rare_goal, etc.)
-#   - result$goal_frequency (goal-level frequency table with 'rarity' column)
+# sample_result: output from sample_statements(df, ...)
+#   - sample_result$sample (sampled statements with primary_goal, any_rare_goal, etc.)
+#   - sample_result$goal_frequency (goal-level frequency table with 'rarity' column)
 
-build_goal_distribution_plot <- function(df, result, label_percent_accuracy = 0.1) {
+build_goal_distribution_plot <- function(df, sample_result, label_percent_accuracy = 0.1) {
 
   # 1) Compute ORIGINAL per-statement primary_goal (match the sampler’s logic)
   orig_goals_long <- df %>%
@@ -487,13 +504,13 @@ build_goal_distribution_plot <- function(df, result, label_percent_accuracy = 0.
   original_counts <- orig_per_stmt %>%
     count(primary_goal, name = "count_original")
 
-  # 2) SAMPLED per-statement primary_goal (already present in result$sample)
-  sampled_counts <- result$sample %>%
+  # 2) SAMPLED per-statement primary_goal (already present in sample_result$sample)
+  sampled_counts <- sample_result$sample %>%
     filter(!is.na(primary_goal), primary_goal != "NA") %>%
     count(primary_goal, name = "count_sampled")
 
-  # 3) Merge + rarity from result$goal_frequency (goal-level rarity)
-  rarity_map <- result$goal_frequency %>%
+  # 3) Merge + rarity from sample_result$goal_frequency (goal-level rarity)
+  rarity_map <- sample_result$goal_frequency %>%
     transmute(primary_goal = goals_llm, rarity)
 
   df_counts <- full_join(original_counts, sampled_counts, by = "primary_goal") %>%
@@ -604,18 +621,11 @@ build_goal_distribution_plot <- function(df, result, label_percent_accuracy = 0.
 
 
 # After you run:
-#   result <- sample_statements(df, N_total = 800, min_per_goal = 10, rare_rule = "prevalence", rare_threshold = 0.05)
+#   sample_result <- sample_statements(df, N_total = 800, min_per_goal = 10, rare_rule = "prevalence", rare_threshold = 0.05)
 
-viz <- build_goal_distribution_plot(df = llm_sub_, result)
 
-# Show the plot
-print(viz$plot)
-
-ggsave(
-  filename = "./figures/sdg_goal_sampling_distribution.png",
-  plot = viz$plot,
-  width = 7, height = 5, unit = 'in', dpi = 300
-)
+# Build the plot -------------------------------------------------------------------------
+viz <- build_goal_distribution_plot(df = llm_sub_, sample_result)
 
 # Inspect the tidy table (counts + %)
 head(viz$table)
@@ -623,6 +633,14 @@ head(viz$table)
 # Which goals are rare AND oversampled?
 viz$oversampled_rare_goals
 
+# Show the plot
+print(viz$plot)
+
+ggsave(
+  filename = paste0("./figures/sdg_llm_sampling_distribution_", ymd, ".png"),
+  plot = viz$plot,
+  width = 7, height = 5, unit = 'in', dpi = 300
+)
 
 ```
 
@@ -630,19 +648,26 @@ viz$oversampled_rare_goals
 
 ## Assignment with double-coding
 
-  20% triples, rest doubles
+```{r - coder list}
 
-```{r - double-annotated}
 # INPUTS ---------------------------------------------------------------
 set.seed(2025)
 
-# annotators <- c("A01","A02","A03")  # 6–10 experts
 annotators <- c("A01","A02","A03", "A04", "A05", "A06")  # 6–10 experts
+
+```
+
+
+### Plan 1 - double only 
+  
+
+```{r - double-annotated}
+
 per_item_coders <- 2                                     # double-coding
-triple_share <- 0.20                                     # 20% triple-annotated
+triple_share <- 0.10                                     # 20% triple-annotated
 duplicate_rate <- 0.05                                   # 5% or 10% per coder
 
-# sampled_df: result$sample from your sampler (one row per statement)
+# sampled_df: sample_result$sample from your sampler (one row per statement)
 # Expected columns at minimum:
 #   statement_id, statement_text, stratum,
 #   llm_pred_target, llm_pred_engagement, primary_goal (optional)
@@ -686,11 +711,7 @@ assigned_pairs %>%
   pivot_longer(starts_with("coder_"), names_to = "slot", values_to = "coder_id") %>%
   count(coder_id, name = "items") %>%
   arrange(desc(items))
-```
 
-
-
-```{r}
 
 # 2) Convert wide (coder_1, coder_2) to long (one row per (statement, coder))
 # ---------------------------------------------------------------------------
@@ -699,40 +720,16 @@ assign_long <- assigned_pairs %>%
                names_to = "coder_slot", values_to = "coder_id") %>%
   mutate(is_duplicate = 0L,
          duplicate_group_id = NA_character_)
+```
+
+
+
+```{r - add salted duplicates}
+
 
 # 3) Add salted duplicates per coder (~duplicate_rate of their unique items)
 # ---------------------------------------------------------------------------
-inject_duplicates <- function(df_one_coder, dup_rate = 0.10) {
-  # Keep only originals first
-  base_rows <- df_one_coder %>%
-    dplyr::filter(is_duplicate == 0L) %>%
-    dplyr::arrange(statement_id) %>%               # or any stable order
-    dplyr::mutate(position_hint = dplyr::row_number())
-  
-  n_unique <- nrow(base_rows)
-  if (n_unique == 0L) return(df_one_coder)
-
-  n_dups <- max(1, floor(n_unique * dup_rate))
-  # Pick which statements to duplicate
-  to_dup_ids <- sample(base_rows$statement_id, size = min(n_dups, n_unique), replace = FALSE)
-
-  # Build duplicates *from* base_rows so we inherit position_hint
-  to_dup <- base_rows %>%
-    dplyr::filter(statement_id %in% to_dup_ids) %>%
-    dplyr::mutate(
-      is_duplicate = 1L,
-      duplicate_group_id = paste0("DUP_", coder_id, "_", statement_id),
-      # push duplicates roughly to the second half of the queue
-      position_hint = position_hint + ceiling(n_unique / 2)
-    )
-
-  # Combine and finalize order
-  out <- dplyr::bind_rows(base_rows, to_dup) %>%
-    dplyr::arrange(position_hint) %>%
-    dplyr::select(-position_hint)
-
-  out
-}
+source(here('code', 'function_inject_duplicates.R'))
 
 assignment_per_coder <- assign_long %>%
   group_split(coder_id) %>%
@@ -762,7 +759,11 @@ cat(
 ```
 
 
+### Plan 2 - double + triple
 
+  The pilot coding was conducted using this approach. 
+  
+  Then, we changed to Plan 3 based on group feedback and discussion. 
 
 ```{r - triple-annotated}
 
@@ -773,14 +774,13 @@ library(purrr)
 # -------------------------
 # Inputs
 # -------------------------
-set.seed(2025)
-annotators <- c("A01","A02","A03","A04","A05","A06")   # >= 3 coders needed
-stopifnot(length(annotators) >= 3)                     # need at least 3 for triples
+### >= 3 coders needed
+stopifnot(length(annotators) >= 3) # need at least 3 for triples
 
 
 # assignment knobs
 per_item_coders_default <- 2      # double-annotated baseline
-triple_share   <- 0.20            # 20% triple-annotated
+triple_share   <- 0.10            # 10% triple-annotated or 20% if you prefer
 duplicate_rate <- 0.05            # 5% salted duplicates per coder
 
 
@@ -863,17 +863,21 @@ per_coder_queues <- assigned_long %>%
 
 ## or if you’re not injecting duplicates immediately:
 # per_coder_queues <- assigned_long
+```
 
 
+```{r - export tasks}
 
 # ================================
 # 5) Exports: per-coder CSVs + master
 # ================================
+
 dir.create(dir.assignments, showWarnings = FALSE)
 
+
 # Per-coder queues ------
-## remove unnecessary columns 
 per_coder_queues_clean <- per_coder_queues %>%
+  ## remove unnecessary columns 
   select(-any_of(c("company", "year", "primary_goal", "goals", "any_rare_goal", "has_target", 
                    "weight", "triple_flag", "is_duplicate", "duplicate_group_id", 
                    "goals_llm",
@@ -889,64 +893,42 @@ per_coder_queues_clean <- per_coder_queues %>%
   ) %>%
   ## change the order of columns 
   select(coder_id, statement_id, statement, 
-         targets_nlp,	targets_llm,	targets_coder,	targets_rationale,
-         engagement_llm,	engagement_coder,	engagement_rationale,
+         targets_nlp,	
+         targets_llm,	   targets_coder,	   targets_rationale,
+         engagement_llm, engagement_coder, engagement_rationale,
          comments_coder, 
          everything()) 
 names(per_coder_queues_clean)
 
-## split the tasks and save as CSV / xlsx files
-per_coder_queues_clean %>%
-  group_by(coder_id) %>%
-  # group_walk(~ readr::write_csv(.x, file = file.path(dir.assignments, paste0(.y$coder_id[1], "_queue.csv"))))
-  group_walk(~ writexl::write_xlsx(.x, path = file.path(dir.assignments, paste0(.y$coder_id[1], "_queue.xlsx"))))
-
-
-
-## -------------------------
-library(openxlsx)
-
-per_coder_queues_clean %>%
-  group_by(coder_id) %>%
-  group_walk(~ {
-    # Create workbook
-    wb <- createWorkbook()
-    addWorksheet(wb, "Queue")
-    
-    # Write data
-    writeData(wb, "Queue", .x)
-    
-    # Set same width for all columns
-    setColWidths(wb, "Queue", cols = 1:ncol(.x), widths = 25)
-    
-    # # Optional: wrap text for readability
-    # openxlsx::wrapText(wb, "Queue", cols = 1:ncol(.x), rows = 1:(nrow(.x) + 1))
-    
-    # Create style with wrap text enabled
-    wrap_style <- createStyle(wrapText = TRUE, valign = "top")
-    
-    # Apply wrap style to all data cells
-    addStyle(
-      wb, "Queue", wrap_style,
-      rows = 1:(nrow(.x) + 1), cols = 1:ncol(.x),
-      gridExpand = TRUE
-    )
-    
-    
-    # Save workbook
-    saveWorkbook(wb, file.path(dir.assignments, paste0(.y$coder_id[1], "_queue-.xlsx")), overwrite = TRUE)
-  })
-
-## -------------------------
 
 # Master assignments (for tracking) ------
-assignment_master <- per_coder_queues %>%
+assignment_master <- per_coder_queues_clean %>%
   arrange(coder_id, statement_id)
-
 # readr::write_csv(assignment_master, file.path(dir.assignments, "master_assignments.csv"))
 
 
 
+## ===================================================== #
+## split the tasks and save as CSV / xlsx files
+## ===================================================== #
+
+##' 1. easy and quick CSV export
+# per_coder_queues_clean %>%
+#   group_by(coder_id) %>%
+#   # group_walk(~ readr::write_csv(.x, file = file.path(dir.assignments, paste0(.y$coder_id[1], "_queue.csv"))))
+#   group_walk(~ writexl::write_xlsx(.x, path = file.path(dir.assignments, paste0(.y$coder_id[1], "_queue.xlsx"))))
+
+
+##' 2. xlsx export with styles
+
+xlsx_postfix <- paste0("_queue_", 'YourFirstName',".xlsx"); xlsx_postfix
+# source('./code/helper_write_xlsx_with_style.R')
+
+```
+
+
+
+```{r - diagnostics summary}
 
 # -------------------------
 # Sanity checks
@@ -964,7 +946,7 @@ cat(
 pct_triple <- mean(sampled_marked$triple_flag)
 message("Triple-annotated share = ", scales::percent(pct_triple, accuracy = 0.1))
 
-pct_ensured <- (result$diagnostics$ensured_n) / N_total_sample
+pct_ensured <- (sample_result$diagnostics$ensured_n) / N_total_sample
 cat("Ensured stage share:", percent(pct_ensured, accuracy = 0.1), "\n")
 
 # No NAs in coder_id
@@ -982,42 +964,5 @@ print(table_triple)
 
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-```{r - adjudication, eval=FALSE, include=FALSE}
-# 5) Build an adjudication skeleton (to be filled after coding)
-#    One row per statement, final labels filled when coder A/B disagree.
-# ---------------------------------------------------------------------------
-adjudication_skeleton <- sampled_df %>%
-  transmute(
-    statement_id,
-    statement,
-    # stratum,
-    targets_llm,
-    engagement_llm,
-    triple_flag,
-    coderA_id = NA_character_, coderA_target = NA_character_, coderA_engagement = NA_character_,
-    coderB_id = NA_character_, coderB_target = NA_character_, coderB_engagement = NA_character_,
-    coderC_id = NA_character_, coderC_target = NA_character_, coderC_engagement = NA_character_,
-    adjudicator_id = NA_character_,
-    final_target = NA_character_,
-    final_engagement = NA_character_,
-    adjudication_notes = NA_character_
-  )
-
-# You’ll populate coderA/B fields by merging back the submitted annotations later.
-
-# readr::write_csv(adjudication_skeleton, file.path(dir.assignments, "adjudication_skeleton.csv"))
-```
 
 
