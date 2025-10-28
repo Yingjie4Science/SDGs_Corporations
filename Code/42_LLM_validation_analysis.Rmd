@@ -1,0 +1,1675 @@
+---
+title: "Text_mining"
+author: "Yingjie"
+date: "01/23/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+  This script aims to validate the LLM results. 
+  
+  **Before clicking Run All**
+  - update `nth_round` 
+  
+  
+
+# Directories and packages
+
+```{r include=FALSE}
+
+### To clear your environment
+remove(list = ls())
+
+## set work dir
+getwd()
+
+
+# load packages
+source('./Code/_packages.R')
+source('./code/_directories.R')
+
+library(here)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(tidyr)
+library(conflicted)
+
+# Fail loudly on ambiguous function names:
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag",    "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("slice",  "dplyr")
+conflict_prefer("summarise", "dplyr")   # or "summarize" if you use that alias
+conflict_prefer("arrange",   "dplyr")
+conflict_prefer("mutate",    "dplyr")
+conflict_prefer("distinct",  "dplyr")
+conflict_prefer("count",     "dplyr")
+
+
+ymd   <- format(Sys.time(), "%Y%m%d"); ymd
+
+
+## load functions 
+source(here('code', 'func_ggsave_nature.R'))
+```
+
+
+
+# Data in
+
+## load data - specify which round
+
+```{r}
+
+gdrive <- "G:/Shared drives/gdrive/_paper/SDGs/SDGs_Corporations_g/data/data_LLM_validation/"
+
+nth_round <- 1
+
+dir.task1 <- paste0(gdrive, "llm_R", nth_round); dir.task1
+
+cat('\n')
+
+
+
+# 1) List files
+fs <- list.files(path = dir.task1, pattern = "^B.*_task.*xlsx", full.names = T); fs
+
+```
+
+
+```{r}
+
+library(stringr)
+library(dplyr)
+
+#' Excel and R both use IEEE-754 doubles; numbers like 10.2 can’t be represented exactly in binary, so you sometimes see 10.199999999999999 when R prints the full precision.
+#' 
+#' preserve explicit trailing zeros like "16.10" while still fixing ugly long tails such as "10.199999999999999", use a conditional cleanup: only reformat when the decimal tail is obviously an artifact; otherwise leave the token as-is.
+#' 
+#' 
+
+# detect obvious long-tail artifacts (many trailing 9s/0s or very long decimals)
+needs_rounding <- function(s) {
+  m <- regexec("^([+-]?\\d+)\\.(\\d+)$", s)
+  z <- regmatches(s, m)
+  if (length(z) == 0 || length(z[[1]]) < 3) return(FALSE)
+  dec <- z[[1]][3]
+  nchar(dec) >= 8 || grepl("(9{4,}|0{4,})$", dec)
+}
+
+# Clean a mixed text column:
+# - trims tokens
+# - only rounds numeric-looking tokens with long-tail artifacts
+# - preserves tokens like "16.10" exactly
+clean_mixed_col <- function(x, digits = 3) {
+  x_trim <- trimws(x)
+  numish <- grepl("^[+-]?(\\d+\\.?|\\d*\\.\\d+)$", x_trim)
+
+  out <- x_trim
+  idx <- which(numish & vapply(x_trim, needs_rounding, logical(1)))
+
+  if (length(idx)) {
+    # round & then drop trailing zeros just for the artifacty ones
+    rounded <- sprintf(paste0("%.", digits, "f"), as.numeric(x_trim[idx]))
+    rounded <- sub("0+$", "", rounded)   # drop trailing zeros
+    rounded <- sub("\\.$", "", rounded)  # drop trailing dot if any
+    out[idx] <- rounded
+  }
+  out
+}
+
+
+```
+
+
+```{r message=FALSE}
+
+# 2) Vectorized coder IDs from filenames (e.g., "B01")
+coders <- str_extract(basename(fs), "^B\\d{2}")
+
+# 3) Fast read + bind all (adds coder + row index per file)
+# df <- map2_dfr(
+#   fs, coders,
+#   ~ read_excel(.x, col_types = "text") %>%
+#       mutate(coder = .y, index = row_number()) %>%
+#       # convert back to best types, but keep goals_llm as character:
+#       mutate(goals_llm = as.character(goals_llm)) #%>%
+#       # type_convert() # guess other columns ,-- this step is very slow
+# )
+
+
+df <- map2_dfr(
+  fs, coders,
+  ~ read_excel(.x) %>%  # Remove col_types = "text"
+      mutate(coder = .y, index = row_number()) %>%
+      mutate(goals_llm = as.character(goals_llm))
+) %>%
+  mutate(targets_coder = clean_mixed_col(targets_coder)) 
+
+```
+
+
+
+
+
+
+# Data stats
+
+
+## metrics 
+
+```{r - F1 vs Jaccard}
+```
+
+Because F1 and Jaccard are equivalent up to a transform, including both in the main text is usually unnecessary. A pragmatic approach:
+
+Main text: Per-label `F1` (pooled) with 95% CIs and support; overall micro/macro summaries; plus one prevalence-vs-performance figure.
+
+  `F1 = 2TP / (2TP+FP+FN)`
+
+Supplement: Provide `Jaccard` columns (or a simple note: `F1=2J/(1+J))` for completeness/sensitivity. Label-level Jaccard (IoU) across all statements
+
+  `J = TP / (TP+FP+FN)`
+
+
+Primary (recommended): Report per-label F1 (pooled/micro), because it’s the most familiar in multi-label classification, and pair it with support (how many statements contain that label in the consensus).
+
+Also acceptable: Report Jaccard instead of F1 if your audience resonates more with set similarity / IoU (e.g., some IR/segmentation communities). It reads naturally as “fraction of hits among all opportunities to be right.
+
+
+
+
+```{r - Precision vs Recall}
+```
+
+Precisionℓ = TPℓ / (TPℓ + FPℓ) — “when LLM predicts ℓ, how often is it right?”
+
+Recallℓ = TPℓ / (TPℓ + FNℓ) — “when ℓ is truly present, how often does LLM find it?”
+
+You can compute these either:
+
+Pooled over all statements for each label (recommended for stability), or
+
+Per statement and then average (rarely useful for precision/recall; more variance, odd edge cases).
+
+
+
+**Averaging schemes (what you average over)**
+Across labels (typical in multi-label)
+  
+  Macro_precision = meanℓ(Precisionℓ)
+  
+  Macro_recall = meanℓ(Recallℓ)
+  
+  Unweighted: treats rare and common labels equally (good to expose weak labels).
+  
+  Weighted-macro (optional): weight by label support (more stable if many rare labels).
+  
+  *Micro_precision / Micro_recall (pooled):*
+  Compute one global TP, FP, FN by summing across all labels and statements, then:
+  
+  micro_precision = ΣTP / (ΣTP + ΣFP)
+  
+  micro_recall = ΣTP / (ΣTP + ΣFN)
+  Micro averages are dominated by frequent labels and statements; they reflect overall performance under class imbalance.
+
+
+
+When they differ (and why it matters)
+
+*Macro vs Micro*
+
+  Macro highlights performance on rare labels (each label counts equally).
+  
+  Micro highlights performance on common labels (counts are pooled; frequent labels dominate).
+
+*Precision vs Recall trade-off*
+
+  High precision + low recall ⇒ conservative (few false alarms, more misses).
+
+  Low precision + high recall ⇒ aggressive (more hits, more false alarms).
+  
+  
+  
+## calculation 
+
+
+This multi-coder, duplicate-aware pipeline that:
+
+  parses labels robustly,
+  
+  handles repeated statement_id (reviewed by ≥2 coders),
+  
+  keeps within-coder duplicates for intra-coder reliability,
+  
+  builds an inter-coder consensus per statement (configurable threshold),
+  
+  compares LLM vs consensus and LLM vs each coder,
+  
+  returns per-statement, per-coder, and overall metrics.
+
+```{r - para + functions}
+# ==============================
+# Params you can tweak
+# ==============================
+MIN_VOTES <- 2        # consensus threshold (label present if >= MIN_VOTES coders picked it)
+BINWIDTH  <- 0.05     # for any histograms/plots later
+
+# ==============================
+# 1) Parsing helpers
+# ==============================
+
+#' Parse comma-separated numeric values from a string
+#'
+#' Takes a string containing comma-separated numbers and returns a numeric vector
+#' of unique values. Handles empty strings, whitespace, and NA values gracefully.
+#'
+#' @param x A character string containing comma-separated numeric values
+#'
+#' @return A numeric vector of unique values. Returns an empty numeric vector
+#'   if the input is NA, empty, or contains no valid numbers.
+#'
+#' @examples
+#' parse_vals("1, 2, 3")           # Returns: c(1, 2, 3)
+#' parse_vals("1, 2, 2, 3")        # Returns: c(1, 2, 3) (unique values)
+#' parse_vals("1, NA, 3")          # Returns: c(1, 3)
+#' parse_vals("")                  # Returns: numeric(0)
+#' parse_vals(NA)                  # Returns: numeric(0)
+#' parse_vals("  1 ,  2  ")        # Returns: c(1, 2) (trimmed whitespace)
+#'
+#' --- This function can only retain numbers but not string-like labels such as "13.a"
+# parse_vals <- function(x) {
+#   # Return empty vector if input is NA or empty string
+#   if (is.na(x) || trimws(x) == "") return(numeric(0))
+#   # Split string by commas
+#   xs <- str_split(x, ",")[[1]]
+#   # Remove leading/trailing whitespace from each element
+#   xs <- str_trim(xs)
+#   # Filter out empty strings and "NA" text
+#   xs <- xs[xs != "" & xs != "NA"]
+#   # Convert to numeric, suppress warnings for non-numeric values, return unique values
+#   suppressWarnings(unique(as.numeric(xs)))
+# }
+
+
+#' --- An updated function
+parse_vals <- function(x, 
+                       canonical_numeric = TRUE,
+                       squish_internal = TRUE) {
+  # Empty -> character(0) to allow mixed tokens downstream
+  if (is.na(x) || trimws(x) == "") return(character(0))
+  
+  
+  # 1) normalize whitespace (handles Unicode spaces), split, trim
+  x    <- str_replace_all(x, "[\\h\\v\\p{Z}]+", " ")
+  
+  # 1) split on commas
+  toks <- str_split(x, ",")[[1]]
+
+  # 2) trim leading/trailing whitespace for each token
+  toks <- str_trim(toks)
+  
+  # 3) (optional) collapse internal runs of spaces to a single space
+  if (squish_internal) toks <- str_squish(toks)
+  
+  # 4) drop empties and literal "NA"
+  toks <- toks[toks != "" & toks != "NA"]
+  if (!length(toks)) return(character(0))
+  
+  # Unique preserving first occurrence
+  unique(toks)
+}
+
+
+
+
+# turn a list-column of numeric vectors into a long binary table against a label universe
+make_binary_long <- function(df_list, id_cols, label_universe) {
+  df_list %>%
+    rowwise() %>%
+    mutate(all_labels = list(label_universe)) %>%
+    ungroup() %>%
+    tidyr::unnest_longer(all_labels, values_to = "label") %>%
+    mutate(y = map2_lgl(all_labels, labels, ~ .y %in% .x), .keep = "unused")
+}
+```
+
+
+```{r - stats}
+
+# ==============================
+# 2) Normalize inputs
+#    Expect columns: statement_id, coder_id, targets_coder, targets_llm
+# ==============================
+df_norm <- df %>%
+  dplyr::rename('coder_id' = 'coder') %>%
+  dplyr::mutate(
+    coder_id      = as.character(coder_id),
+    ## store sdg code in a vector format
+    labels_coder  = map(targets_coder, parse_vals),
+    labels_llm    = map(targets_llm,   parse_vals)
+  ) %>%
+  ## re-order columns
+  select(1:targets_coder, labels_llm, labels_coder, coder_id, everything())
+
+# one LLM set per statement: keep first non-empty; else empty
+# llm_by_stmt0 <- df_norm %>% ## --> warning message
+#   group_by(statement_id) %>%
+#   summarise(
+#     labels_llm = {
+#       # first non-empty list, else empty
+#       non_empty <- keep(labels_llm, ~ length(.x) > 0)
+#       if (length(non_empty)) non_empty[[1]] else numeric(0)
+#     },
+#     .groups = "drop"
+#   )
+
+
+
+llm_by_stmt <- df_norm %>%
+  group_by(statement_id) %>%
+  summarise(
+    labels_llm = {
+      non_empty <- purrr::keep(labels_llm, ~ length(.x) > 0)
+      list(if (length(non_empty)) non_empty[[1]] else numeric(0))
+    },
+    .groups = "drop"
+  )
+
+
+# ==============================
+# 3) Build a label universe per statement (coders ∪ LLM)
+# ==============================
+universe_by_stmt <- df_norm %>%
+  select(statement_id, labels_coder) %>%
+  group_by(statement_id) %>%
+  summarise(labels_union = list(sort(unique(unlist(labels_coder)))), .groups = "drop") %>%
+  left_join(llm_by_stmt, by = "statement_id") %>%
+  mutate(
+    label_universe = map2(labels_union, labels_llm, ~ sort(unique(c(.x, .y))))
+  ) %>%
+  select(statement_id, labels_llm, label_universe)
+
+
+# ==============================
+# 4) Inter-coder “votes” table (binary, per statement × coder × label)
+# ==============================
+coder_long <- df_norm %>%
+  select(statement_id, coder_id, labels_coder) %>%
+  left_join(universe_by_stmt %>% select(statement_id, label_universe), by = "statement_id") %>%
+  rowwise() %>%
+  mutate(
+    # expand across universe
+    tmp = list(tibble(
+      label = label_universe,
+      y_true = label %in% labels_coder
+    ))
+  ) %>%
+  ungroup() %>%
+  select(statement_id, coder_id, tmp) %>%
+  unnest(tmp)
+
+# ==============================
+# 5) Inter-coder consensus per statement (threshold MIN_VOTES)
+# ==============================
+consensus <- coder_long %>%
+  group_by(statement_id, label) %>%
+  summarise(votes = sum(y_true), n_coders = n(), .groups = "drop") %>%
+  group_by(statement_id) %>%
+  summarise(
+    labels_consensus = list(sort(unique(label[votes >= MIN_VOTES]))),
+    # diagnostics
+    support_tbl = list(tibble(label = label, votes = votes, n_coders = n_coders)),
+    .groups = "drop"
+  )
+
+# ==============================
+# 6) Intra-coder reliability (duplicates of same coder & statement)
+#    - If a coder coded the same statement multiple times, compare all pairs (Jaccard)
+# ==============================
+coder_sets <- df_norm %>%
+  select(statement_id, coder_id, labels_coder)
+
+intra_pairs <- coder_sets %>%
+  group_by(statement_id, coder_id) %>%
+  mutate(n_rows = n()) %>%
+  filter(n_rows > 1) %>%
+  mutate(row_id = row_number()) %>%
+  ungroup() %>%
+  # all pairs within coder×statement
+  group_by(statement_id, coder_id) %>%
+  tidyr::expand(row_id1 = row_id, row_id2 = row_id) %>%
+  filter(row_id1 < row_id2) %>%
+  left_join(coder_sets %>% group_by(statement_id, coder_id) %>% mutate(row_id = row_number()),
+            by = c("statement_id","coder_id","row_id1"="row_id")) %>%
+  rename(labels1 = labels_coder) %>%
+  left_join(coder_sets %>% group_by(statement_id, coder_id) %>% mutate(row_id = row_number()),
+            by = c("statement_id","coder_id","row_id2"="row_id")) %>%
+  rename(labels2 = labels_coder) %>%
+  ungroup() %>%
+  mutate(
+    inter_len = map2_int(labels1, labels2, ~ length(intersect(.x, .y))),
+    union_len = map2_int(labels1, labels2, ~ length(union(.x, .y))),
+    jaccard   = ifelse(union_len > 0, inter_len/union_len, NA_real_)
+  )
+
+intra_summary <- intra_pairs %>%
+  group_by(coder_id) %>%
+  summarise(
+    n_dup_pairs = n(),
+    mean_jaccard_dup = mean(jaccard, na.rm = TRUE),
+    median_jaccard_dup = median(jaccard, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# ==============================
+# 7) LLM vs CONSENSUS — per statement metrics
+# ==============================
+llm_vs_consensus <- universe_by_stmt %>%
+  left_join(consensus, by = "statement_id") %>%
+  mutate(
+    labels_consensus = map(labels_consensus, ~ .x %||% numeric(0)),
+    inter_len = map2_int(labels_llm, labels_consensus, ~ length(intersect(.x, .y))),
+    union_len = map2_int(labels_llm, labels_consensus, ~ length(union(.x, .y))),
+    tp = inter_len,
+    fp = map2_int(labels_llm, labels_consensus, ~ length(setdiff(.x, .y))),
+    fn = map2_int(labels_consensus, labels_llm, ~ length(setdiff(.x, .y))),
+    precision = ifelse(tp + fp > 0, tp/(tp+fp), NA_real_),
+    recall    = ifelse(tp + fn > 0, tp/(tp+fn), NA_real_),
+    f1        = ifelse(!is.na(precision + recall) & (precision + recall) > 0,
+                       2*precision*recall/(precision+recall), NA_real_),
+    jaccard   = ifelse(union_len > 0, inter_len/union_len, NA_real_),
+    exact_match = as.integer(jaccard == 1),
+    any_overlap = as.integer(inter_len > 0)
+  ) %>%
+  select(statement_id, precision, recall, f1, jaccard, exact_match, any_overlap, tp, fp, fn)
+
+# overall macro/micro for LLM vs consensus
+macro_consensus <- llm_vs_consensus %>%
+  summarise(
+    macro_precision = mean(precision, na.rm = TRUE),
+    macro_recall    = mean(recall,    na.rm = TRUE),
+    macro_f1        = mean(f1,        na.rm = TRUE),
+    mean_jaccard    = mean(jaccard,   na.rm = TRUE),
+    exact_match_rate= mean(exact_match, na.rm = TRUE),
+    any_overlap_rate= mean(any_overlap, na.rm = TRUE)
+  )
+
+
+micro_consensus <- llm_vs_consensus %>%
+  summarise(
+    tp = sum(tp), fp = sum(fp), fn = sum(fn)
+  ) %>%
+  mutate(
+    micro_precision = ifelse(tp + fp > 0, tp/(tp+fp), NA_real_),
+    micro_recall    = ifelse(tp + fn > 0, tp/(tp+fn), NA_real_),
+    micro_f1        = ifelse(!is.na(micro_precision + micro_recall) & (micro_precision + micro_recall) > 0,
+                             2*micro_precision*micro_recall/(micro_precision+micro_recall), NA_real_)
+  ) %>% select(micro_precision, micro_recall, micro_f1)
+
+# ==============================
+# 8) LLM vs EACH CODER — per-coder and overall
+# ==============================
+# Per row (coder×statement), compare LLM to that coder
+llm_vs_coder_row <- df_norm %>%
+  select(statement_id, coder_id, labels_coder) %>%
+  left_join(llm_by_stmt, by = "statement_id") %>%
+  mutate(
+    inter_len = map2_int(labels_llm, labels_coder, ~ length(intersect(.x, .y))),
+    union_len = map2_int(labels_llm, labels_coder, ~ length(union(.x, .y))),
+    tp = inter_len,
+    fp = map2_int(labels_llm, labels_coder, ~ length(setdiff(.x, .y))),
+    fn = map2_int(labels_coder, labels_llm, ~ length(setdiff(.x, .y))),
+    precision = ifelse(tp + fp > 0, tp/(tp+fp), NA_real_),
+    recall    = ifelse(tp + fn > 0, tp/(tp+fn), NA_real_),
+    f1        = ifelse(!is.na(precision + recall) & (precision + recall) > 0,
+                       2*precision*recall/(precision+recall), NA_real_),
+    jaccard   = ifelse(union_len > 0, inter_len/union_len, NA_real_)
+  )
+
+# Aggregate per coder
+llm_vs_coder_bycoder <- llm_vs_coder_row %>%
+  group_by(coder_id) %>%
+  summarise(
+    macro_precision = mean(precision, na.rm = TRUE),
+    macro_recall    = mean(recall,    na.rm = TRUE),
+    macro_f1        = mean(f1,        na.rm = TRUE),
+    mean_jaccard    = mean(jaccard,   na.rm = TRUE),
+    n_rows          = n(),
+    .groups = "drop"
+  ) %>%
+  left_join(intra_summary, by = "coder_id")  # attach intra-coder dup stats
+
+# Overall micro across all coder rows
+llm_vs_coder_micro <- llm_vs_coder_row %>%
+  summarise(tp = sum(tp), fp = sum(fp), fn = sum(fn)) %>%
+  mutate(
+    micro_precision = ifelse(tp + fp > 0, tp/(tp+fp), NA_real_),
+    micro_recall    = ifelse(tp + fn > 0, tp/(tp+fn), NA_real_),
+    micro_f1        = ifelse(!is.na(micro_precision + micro_recall) & (micro_precision + micro_recall) > 0,
+                             2*micro_precision*micro_recall/(micro_precision+micro_recall), NA_real_)
+  ) %>% select(micro_precision, micro_recall, micro_f1)
+
+# ==============================
+# 9) Inter-coder agreement diagnostics (optional)
+#    - label-level vote fractions per statement (helps find contentious labels)
+# ==============================
+vote_detail <- coder_long %>%
+  group_by(statement_id, label) %>%
+  summarise(vote_frac = mean(y_true), voters = n(), votes = sum(y_true), .groups = "drop")
+
+# ==============================
+# 10) Key outputs
+# ==============================
+# - llm_vs_consensus : per-statement metrics of LLM vs consensus
+# - macro_consensus, micro_consensus : overall metrics vs consensus
+# - llm_vs_coder_row : per (coder×statement) metrics of LLM vs that coder
+# - llm_vs_coder_bycoder : per-coder aggregates + intra-coder dup stats
+# - llm_vs_coder_micro : overall pooled metrics vs coders
+# - vote_detail : per statement×label vote fractions (useful for audits)
+# - intra_summary : duplicate consistency per coder
+
+
+```
+
+# Plot
+
+```{r}
+
+font_size_base = 10
+
+# Set theme default
+theme_set(theme_minimal(base_size = font_size_base))
+
+# # Or update theme defaults
+# theme_update(text = element_text(size = font_size_base))
+
+```
+
+
+## 1) Distribution of agreement (LLM vs consensus)
+
+**Why:** overall similarity signal; easy to cite.
+**What:** histogram (or density) of per-statement Jaccard; dashed mean.
+
+
+```{r}
+
+df_plot <- llm_vs_consensus |> filter(!is.na(jaccard))
+m <- mean(df_plot$jaccard, na.rm = TRUE)
+
+
+p_hist <-
+  ggplot(df_plot, aes(jaccard)) +
+  geom_histogram(binwidth = 0.05, color = "white") +
+  geom_vline(xintercept = m, linetype = "dashed") +
+  annotate("text", x = m, y = Inf, vjust = 1.4,
+           label = sprintf("Mean = %.2f", m)) +
+  # scale_x_continuous(limits = c(0,1), breaks = seq(0,1,0.2)) +
+  labs(x = "Jaccard similarity (LLM vs consensus)", y = "Count") 
+
+p_hist
+```
+
+
+
+## 2) Precision–Recall scatter per statement (LLM vs consensus)
+
+**Why:** separates over- vs under-prediction at the item level.
+**What:** scatter of precision vs recall; size by #labels in consensus; color by exact match.
+
+```{r}
+
+p_pr <- ggplot(
+  llm_vs_consensus, aes(precision, recall)) +
+  geom_point(aes(size = tp + fn, shape = factor(exact_match)), alpha = 0.7) +
+  coord_equal() +
+  scale_shape_discrete(name = "Exact match") +
+  scale_size_continuous(name = "Consensus labels") +
+  labs(x = "Precision", y = "Recall") 
+
+
+p_pr
+```
+
+
+
+---
+
+## 3) Per-coder performance bars (LLM vs each coder)
+
+**Why:** shows heterogeneity across coders; pairs well with intra-coder reliability.
+**What:** bar/point-range of macro-F1 (and Jaccard) per coder; overlay duplicate reliability.
+
+```{r}
+p_coder <- 
+  ggplot(llm_vs_coder_bycoder,
+         aes(x = reorder(coder_id, macro_f1), y = macro_f1)) +
+  geom_col(width = 0.6, alpha = 0.5) +
+  geom_point(aes(y = mean_jaccard_dup), shape = 21, stroke = 1, size = 3) +
+  geom_hline(yintercept = 0.5, linetype = 'dashed', colour = 'blue') + 
+  geom_hline(yintercept = 1,   linetype = 'dashed', colour = 'blue') + 
+  coord_flip() +
+  labs(x = "Coder", y = "Macro F1 (points = mean duplicate Jaccard)") 
+
+
+p_coder
+```
+
+
+
+## 4) Intra-coder duplicate reliability (per coder)
+
+**Why:** documents consistency within coder; reviewers love this.
+**What:** violin/box of duplicate-pair Jaccard by coder.
+
+```{r}
+
+# p_dup <- 
+  ggplot(intra_pairs, aes(x = reorder(coder_id, jaccard, FUN = mean), y = jaccard)) +
+  geom_violin(trim = T, alpha = .7) +
+  geom_boxplot(width = 0.15, colour = 'blue', outlier.shape = NA) +
+  coord_flip() +
+  labs(x = "Coder", y = "Jaccard across duplicate pairs") 
+
+
+```
+
+
+
+## ? 5) Label prevalence vs performance
+
+**Why:** performance usually tracks prevalence; highlights rare-label issues.
+**What:** for each label, plot support (coder votes or consensus count) on x vs F1/Jaccard on y.
+
+```{r eval=FALSE, include=FALSE}
+# Label support (how many statements include the label in consensus)
+label_support <- vote_detail |>
+  dplyr::group_by(label) |>
+  dplyr::summarise(consensus_support = sum(vote_frac >= 2/7), .groups="drop")
+
+# Label-wise performance (LLM vs consensus)
+by_label_perf <- llm_vs_coder_row |>
+  dplyr::group_by(label = NULL) # (if you compute label-level TP/FP/FN, join here)
+
+# Example using coder-level support vs LLM-vs-coder Jaccard mean
+lab_perf <- df_long |>
+  dplyr::group_by(label) |>
+  dplyr::summarise(support = sum(y_true), .groups="drop") |>
+  dplyr::left_join(
+    llm_vs_coder_row |>
+      dplyr::mutate(label_set = purrr::map2(labels_coder, labels_llm, ~intersect(.x,.y))) |>
+      tidyr::unnest_longer(label_set, values_to="label") |>
+      dplyr::group_by(label) |>
+      dplyr::summarise(mean_jaccard = mean(jaccard, na.rm=TRUE), .groups="drop"),
+    by = "label"
+  )
+
+ggplot(lab_perf, aes(support, mean_jaccard)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(x = "Label support (log scale)", y = "Mean Jaccard")
+```
+
+*(If you prefer, compute TP/FP/FN per label vs consensus and plot F1 instead.)*
+
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+
+# ---------------------------
+# 5) Label prevalence vs performance
+# ---------------------------
+# Goal:
+#  - For each label, compute its prevalence (support) in the CONSENSUS
+#  - Compute LLM performance vs CONSENSUS aggregated across all statements:
+#       TP = LLM & CONS
+#       FP = LLM & !CONS
+#       FN = !LLM & CONS
+#  - Derive Precision, Recall, F1, Jaccard per label
+#  - (Optional) Add coder vote-based prevalence diagnostics
+
+# Ensure 'labels_consensus' exists and replace NULL with empty numeric(0)
+cons_fix <- consensus %>%
+  mutate(labels_consensus = map(labels_consensus, ~ .x %||% numeric(0)))
+
+# Build long table over the label universe for each statement,
+# with booleans for "in LLM" and "in CONSENSUS"
+label_long <- universe_by_stmt %>%
+  # universe_by_stmt: statement_id, labels_llm, label_universe
+  left_join(cons_fix, by = "statement_id") %>%
+  tidyr::unnest_longer(label_universe, values_to = "label") %>%
+  mutate(
+    in_llm  = map2_lgl(labels_llm,       label, ~ .y %in% .x),
+    in_cons = map2_lgl(labels_consensus, label, ~ .y %in% .x)
+  )
+
+# Aggregate to label-level counts and metrics
+label_perf <- label_long %>%
+  group_by(label) %>%
+  summarise(
+    support   = sum(in_cons), # how many statements include this label in consensus
+    tp        = sum(in_llm  & in_cons),
+    fp        = sum(in_llm  & !in_cons),
+    fn        = sum(!in_llm & in_cons),
+    precision = ifelse(tp + fp > 0, tp / (tp + fp), NA_real_),
+    recall    = ifelse(tp + fn > 0, tp / (tp + fn), NA_real_),
+    f1        = ifelse(!is.na(precision + recall) & (precision + recall) > 0,
+                       2 * precision * recall / (precision + recall), NA_real_),
+    jaccard   = ifelse((tp + fp + fn) > 0, tp / (tp + fp + fn), NA_real_),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(support))
+
+
+label_perf %>%
+  ggplot(aes(x=f1, y = jaccard)) +
+  geom_point() +
+  labs(title = 'F1 vs Jaccard')
+
+
+#' (Optional) Add coder vote diagnostics: total votes and mean vote fraction per label
+#' The optional mean_vote_frac color scale helps reviewers see that rare & contentious labels (low vote fraction) typically have lower F1
+
+label_votes <- vote_detail %>%           # from earlier: statement_id, label, vote_frac, voters, votes
+  group_by(label) %>%
+  summarise(
+    total_votes    = sum(votes, na.rm = TRUE),
+    n_stmt_voted   = n(),                         # count of (statement,label) entries observed
+    mean_vote_frac = mean(vote_frac, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+label_perf <- label_perf %>%
+  left_join(label_votes, by = "label")
+
+# ---------------------------
+# Plots
+# ---------------------------
+
+# A) Support vs F1 (primary)
+ggplot(label_perf, aes(x = support, y = f1)) +
+  geom_point() +
+  # optional smoother if you like trend lines:
+  # geom_smooth(method = "loess", se = TRUE, formula = y ~ x, span = 0.75) +
+  scale_x_continuous(trans = "log10") +
+  labs(
+    x = "Label support in consensus (log scale)",
+    y = "F1 (LLM vs consensus)",
+    title = "Label prevalence vs performance"
+  ) +
+  theme_minimal()
+
+# B) Support vs Jaccard (alternative / supplement)
+ggplot(label_perf, aes(x = support, y = jaccard)) +
+  geom_point() +
+  scale_x_continuous(trans = "log10") +
+  labs(
+    x = "Label support in consensus (log scale)",
+    y = "Jaccard (LLM vs consensus)",
+    title = "Label prevalence vs Jaccard"
+  ) +
+  theme_minimal()
+
+# C) If you want to color by mean_vote_frac (how contentious a label is):
+ggplot(label_perf, aes(x = support, y = f1, color = mean_vote_frac)) +
+  geom_point() +
+  scale_x_continuous(trans = "log10") +
+  scale_color_viridis_c(option = "C", end = 0.9) +
+  labs(
+    x = "Label support in consensus (log scale)",
+    y = "F1 (LLM vs consensus)",
+    color = "Mean vote fraction",
+    title = "Label prevalence vs F1, colored by coder agreement"
+  ) +
+  theme_minimal()
+
+```
+```{r -boost-trap}
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+library(scales)
+
+
+
+# ---------------------------
+# Bootstrap CIs for F1 & Jaccard (per label)
+# ---------------------------
+set.seed(42)
+n_boot <- 1000  # adjust as needed
+
+all_stmts <- label_long %>% distinct(statement_id) %>% pull()
+
+boot_res <- map_dfr(seq_len(n_boot), function(i) {
+  samp_ids <- sample(all_stmts, length(all_stmts), replace = TRUE)
+
+  label_long %>%
+    filter(statement_id %in% samp_ids) %>%
+    group_by(label) %>%
+    summarise(
+      tp = sum(in_llm & in_cons),
+      fp = sum(in_llm & !in_cons),
+      fn = sum(!in_llm & in_cons),
+      f1_boot = {
+        prec <- ifelse(tp + fp > 0, tp / (tp + fp), NA_real_)
+        rec  <- ifelse(tp + fn > 0, tp / (tp + fn), NA_real_)
+        ifelse(!is.na(prec + rec) & (prec + rec) > 0, 2 * prec * rec / (prec + rec), NA_real_)
+      },
+      jacc_boot = ifelse((tp + fp + fn) > 0, tp / (tp + fp + fn), NA_real_),
+      .groups = "drop"
+    ) %>%
+    mutate(iter = i)
+})
+
+# Summarise bootstrap into CIs (95%)
+boot_ci <- boot_res %>%
+  group_by(label) %>%
+  summarise(
+    f1_lo    = quantile(f1_boot, 0.025, na.rm = TRUE),
+    f1_hi    = quantile(f1_boot, 0.975, na.rm = TRUE),
+    jacc_lo  = quantile(jacc_boot, 0.025, na.rm = TRUE),
+    jacc_hi  = quantile(jacc_boot, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+label_perf_ci <- label_perf %>%
+  left_join(boot_ci, by = "label")
+
+# ---------------------------
+# Ranked bar charts with CIs
+# ---------------------------
+
+# A) Labels ranked by F1, with 95% CI error bars; support shown as text
+plot_f1_ranked <- label_perf_ci %>%
+  arrange(desc(f1)) %>%
+  mutate(label = factor(label, levels = label)) %>%
+  ggplot(aes(x = label, y = f1)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = f1_lo, ymax = f1_hi), width = 0.2) +
+  geom_text(aes(y = pmax(f1_hi, f1, na.rm = TRUE) + 0.02,
+                label = paste0("n=", comma(support))),
+            size = 3, vjust = 0) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 1.05), breaks = seq(0, 1, 0.2)) +
+  labs(
+    x = "Label",
+    y = "F1 (LLM vs consensus)",
+    title = "Per-label performance ranked by F1",
+    subtitle = "Bars = F1; error bars = 95% bootstrap CI; text = consensus support"
+  ) +
+  theme_minimal()
+
+# B) Labels ranked by Jaccard, with 95% CI error bars; support shown as text
+plot_jacc_ranked <- label_perf_ci %>%
+  arrange(desc(jaccard)) %>%
+  mutate(label = factor(label, levels = label)) %>%
+  ggplot(aes(x = label, y = jaccard)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = jacc_lo, ymax = jacc_hi), width = 0.2) +
+  geom_text(aes(y = pmax(jacc_hi, jaccard, na.rm = TRUE) + 0.02,
+                label = paste0("n=", comma(support))),
+            size = 3, vjust = 0) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 1.05), breaks = seq(0, 1, 0.2)) +
+  labs(
+    x = "Label",
+    y = "Jaccard (LLM vs consensus)",
+    title = "Per-label performance ranked by Jaccard",
+    subtitle = "Bars = Jaccard; error bars = 95% bootstrap CI; text = consensus support"
+  ) +
+  theme_minimal()
+
+# Print (or ggsave) the plots
+plot_f1_ranked
+plot_jacc_ranked
+
+```
+
+
+---
+
+## 6) Vote-fraction heatmap (contentiousness map)
+
+**Why:** shows how much coders agree per statement × label; identifies ambiguous items.
+**What:** heatmap of `vote_frac` with statements (rows) clustered, labels (cols) ordered by prevalence.
+
+```{r}
+
+library(tidyr)
+library(forcats)
+
+mat_long <- vote_detail %>%
+  mutate(label = as.character(label)) %>%
+  group_by(label) %>%
+  mutate(label_count = n()) %>%
+  # mutate(label = forcats::fct_reorder(label, n(), .fun = sum)) %>%
+  ungroup() %>%
+  mutate(label = fct_reorder(label, label_count))
+
+p_heat <- 
+  ggplot(mat_long, 
+         aes(x = label, y = factor(statement_id),
+             fill = vote_frac)) +
+  geom_tile() +
+  scale_fill_viridis_c(limits = c(0,1), direction = -1) +
+  labs(x = "Label", y = "Statement", fill = "Vote fraction") +
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
+        )
+
+p_heat
+
+
+## save figure
+f <- file.path(dir.figures, 'llm_accuracy', paste0('Vote-fraction heatmap_', ymd, '.png'))
+func_ggsave_nature(path = f, column = 2)
+```
+
+---
+
+## 7) Error anatomy (TP/FP/FN) per label
+
+This script analyzes error patterns of an LLM's label predictions compared to a consensus (ground truth). Here's a breakdown:
+
+  *Purpose: Identifies how the LLM makes mistakes for each label:*
+
+  TP (True Positive):  LLM correctly predicted the label
+  FP (False Positive): LLM predicted the label when it shouldn't have
+  FN (False Negative): LLM missed the label when it should have predicted it
+
+```{r}
+
+# Build label-wise TP/FP/FN vs consensus
+lab_counts <- universe_by_stmt |>
+  # Joins LLM predictions with consensus labels
+  dplyr::left_join(consensus, by = "statement_id") |>
+  # Expands label_universe so each row = one statement-label combination
+  tidyr::unnest_longer(label_universe, values_to="label") |>
+  # Classify each label instance
+  dplyr::mutate(
+    in_llm  = purrr::map2_lgl(labels_llm, label, ~ .y %in% .x),
+    in_cons = purrr::map2_lgl(labels_consensus, label, ~ .y %in% (.x %||% numeric(0))),
+    cat = dplyr::case_when(in_llm & in_cons ~ "TP",  # LLM said yes, consensus said yes
+                           in_llm & !in_cons ~ "FP", # LLM said yes, consensus said no
+                           !in_llm & in_cons ~ "FN", # LLM said no, consensus said yes
+                           TRUE ~ "TN")              # LLM said no, consensus said no
+  ) |>
+  # Count and prepare for plotting
+  dplyr::count(label, cat) |>
+  dplyr::filter(cat != "TN") |>    # Remove True Negatives (not interesting)
+  dplyr::group_by(label) |>
+  dplyr::mutate(total = sum(n)) |> # Total errors per label
+  dplyr::ungroup() |>
+  dplyr::mutate(label = reorder(label, -total)) # Order by most errors
+
+# Colors = TP (correct), FP (over-labeled, or over-predict), FN (missed, or under-predict)
+# A label with mostly FP → LLM is too aggressive with this label
+# A label with mostly FN → LLM frequently misses this label
+# A label with mostly TP → LLM performs well on this label
+
+
+
+# Define clear colors for each category
+error_colors <- c(
+  "TP" = "#2ecc71",  # Green - correct predictions
+  "FP" = "#e74c3c",  # Red - over-predictions (Type I error)
+  "FN" = "#f39c12"   # Orange - missed predictions (Type II error)
+)
+
+
+p_err <-
+  ggplot(lab_counts, aes(label, n, fill = cat)) +
+  geom_col() +
+    
+  scale_fill_manual(
+  values = error_colors,
+  labels = c("TP" = "True Positive (Correct)",
+             "FP" = "False Positive (Over-labeled)", 
+             "FN" = "False Negative (Missed)")
+) +
+    
+  coord_flip() +
+  labs(x = "Label", y = "Count", fill = "Classification",
+       title = "Error Anatomy: LLM Performance by Label") +
+  theme(
+    legend.position = "top",
+    panel.grid.major.y = element_blank()
+  )
+p_err
+
+
+## save figure
+f <- file.path(dir.figures, 'llm_accuracy', paste0('LLM Performance by Label_', ymd, '.png'))
+func_ggsave_nature(plot = p_err, path = f, column = 2)
+```
+
+---
+
+## 8) Threshold sweep (consensus as ≥k votes)
+
+**Why:** shows robustness; reviewers may ask “what if consensus rule changes.”
+**What:** vary `k` (1…max coders) and plot macro-F1 (LLM vs consensus(k)).
+
+```{r}
+k_vals <- 1:7
+res_k <- purrr::map_dfr(k_vals, function(k) {
+  cons_k <- coder_long |>
+    dplyr::group_by(statement_id, label) |>
+    dplyr::summarise(votes = sum(y_true), .groups="drop") |>
+    dplyr::group_by(statement_id) |>
+    dplyr::summarise(labels_consensus = list(sort(unique(label[votes >= k]))), .groups="drop")
+
+  m <- universe_by_stmt |>
+    dplyr::left_join(cons_k, by="statement_id") |>
+    dplyr::mutate(
+      labels_consensus = purrr::map(labels_consensus, ~ .x %||% numeric(0)),
+      tp = purrr::map2_int(labels_llm, labels_consensus, ~ length(intersect(.x,.y))),
+      fp = purrr::map2_int(labels_llm, labels_consensus, ~ length(setdiff(.x,.y))),
+      fn = purrr::map2_int(labels_consensus, labels_llm, ~ length(setdiff(.x,.y))),
+      precision = ifelse(tp+fp>0, tp/(tp+fp), NA_real_),
+      recall    = ifelse(tp+fn>0, tp/(tp+fn), NA_real_),
+      f1        = ifelse(!is.na(precision+recall) & precision+recall>0, 
+                         2*precision*recall/(precision+recall), NA_real_)
+    ) |>
+    dplyr::summarise(macro_f1 = mean(f1, na.rm=TRUE), .groups="drop")
+
+  dplyr::tibble(k = k, macro_f1 = m$macro_f1)
+})
+
+
+## Consensus-threshold sweep (robustness)
+# p_k <- 
+ggplot(res_k, aes(k, macro_f1)) +
+  geom_line() + 
+  geom_point(size = 1.6) +
+  scale_x_continuous(breaks = k_vals) +
+  labs(x = "Consensus threshold (k votes)", y = "Macro F1 (LLM vs consensus)") 
+```
+
+---
+
+## ? 9) UpSet of label overlaps (LLM vs consensus vs coders)
+
+**Why:** compact view of intersection structure (which labels everyone agrees on).
+**What:** UpSet plot of sets {LLM}, {Consensus}, optionally {Coder A}, {Coder B}, …
+**Note:** use `{ComplexUpset}`:
+
+```{r}
+# install.packages("ComplexUpset")
+library(ComplexUpset)
+# build a long binary matrix across sets, then:
+ComplexUpset::upset(data_matrix, intersect = c("LLM","Consensus","Coder_A","Coder_B"))
+```
+
+---
+
+## 10) “Hard cases” gallery (auditable figure/table)
+
+**Why:** qualitative insight; great for supplements.
+**What:** table/figure listing the top N statements with lowest F1 (or zero overlap), showing LLM set, consensus set, vote fractions, and coder count.
+
+```{r}
+hard <- llm_vs_consensus |>
+  dplyr::arrange(dplyr::coalesce(f1, -Inf)) |>
+  dplyr::slice_head(n = 20) |>
+  dplyr::left_join(vote_detail |> dplyr::group_by(statement_id) |>
+                     dplyr::summarise(n_labels = dplyr::n(), .groups="drop"),
+                   by="statement_id")
+# then gt::gt(hard) for a nice table
+```
+
+
+
+
+
+
+
+
+
+# ----------------------
+
+* Design tips (so they look like a paper)
+
+* Use **consistent fonts** (e.g., `theme_minimal(base_family="Arial")` if available).
+* Prefer **color-blind safe** palettes (`scale_fill_brewer(palette="Set2")` or `viridis`).
+* Show **uncertainty** (IQR/CI) where possible, not just means.
+* Use **panel letters** (A, B, C) if figures combine multiple plots.
+* Put **key numbers in captions** (e.g., macro/micro F1, exact-match rate).
+
+If you tell me your target journal style (e.g., Nature Cities), I can format sizes, fonts, and export DPI accordingly, and bundle these into a single R script that saves ready-to-submit PNG/PDFs.
+
+
+
+
+
+
+
+
+
+
+
+
+
+## measure agreement between LLM and coder
+
+`binary overlap flag` -- overlap_any: 1 if any element in targets_llm is in targets_coder, else 0.
+
+`similarity score (Jaccard)` -- jaccard: 0–1 similarity; 1 means identical sets, 0 means no overlap. proportion/score (e.g. Jaccard)
+
+`exact-set match flag` exact_match: 1 if the two sets are exactly the same (ignores order/dups), else 0.
+
+```{r}
+names(dfs)
+
+unique(dfs$coder)
+
+
+library(dplyr)
+library(stringr)
+library(purrr)
+
+# helper: parse "5.5, 8.3" -> numeric c(5.5, 8.3); handle "NA", blanks
+parse_vals <- function(x) {
+  if (is.na(x) || trimws(x) == "") return(numeric(0))
+  xs <- str_split(x, ",")[[1]]        # split only on comma
+  xs <- str_trim(xs)                  # remove leading/trailing whitespace
+  xs <- xs[xs != "" & xs != "NA"]     # drop empties or "NA" strings
+  suppressWarnings(unique(as.numeric(xs)))
+}
+
+df_out <- dfs %>%
+  rowwise() %>%
+  mutate(
+    llm_vals   = list(parse_vals(targets_llm)),
+    coder_vals = list(parse_vals(targets_coder)),
+    inter_len  = length(intersect(llm_vals, coder_vals)),
+    union_len  = length(union(llm_vals, coder_vals)),
+    # 1) Binary: any overlap?
+    overlap_any = as.integer(inter_len > 0),
+    # 2) Similarity score: Jaccard = |A ∩ B| / |A ∪ B|
+    jaccard     = ifelse(union_len > 0, inter_len / union_len, NA_real_),
+    # 3) Exact set match (order ignored, duplicates ignored)
+    exact_match = as.integer(setequal(llm_vals, coder_vals))
+  ) %>%
+  ungroup() %>%
+  # select(-llm_vals, -coder_vals, -inter_len, -union_len) %>%
+  as.data.frame()
+
+```
+
+
+
+## compute agreement metrics at two levels:
+
+Row-level (per item): precision, recall, F1
+
+Dataset-level: macro- and micro-averages, plus class-wise performance
+
+
+  `per_row`: see which items disagree and why (low recall ⇒ LLM missed coder labels; low precision ⇒ extra labels predicted).
+  
+  `macro`: average performance across items (treats each row equally).
+  
+  `micro`: pooled performance over all items (weights rows by number of labels).
+  
+  `by_label`: which target numbers the LLM nails or struggles with.
+
+*Optional add-ons*
+
+  Thresholding/tolerance: if two numbers within ±0.02 should count as the same, replace the exact membership checks with the fuzzy functions I shared earlier.
+  
+  Diagnostics: inspect rows with f1 == 0 or is.na(precision) (often when LLM predicted nothing but coder had labels, or vice versa).
+  
+  Plots: histogram of jaccard; bar chart of label-wise F1 by support.
+
+```{r}
+
+library(dplyr)
+library(stringr)
+library(purrr)
+library(tidyr)
+
+# --- parser (from earlier, with trimming) ---
+parse_vals <- function(x) {
+  if (is.na(x) || trimws(x) == "") return(numeric(0))
+  xs <- str_split(x, ",")[[1]]
+  xs <- str_trim(xs)
+  xs <- xs[xs != "" & xs != "NA"]
+  suppressWarnings(unique(as.numeric(xs)))
+}
+
+# Assume df has columns: targets_llm, targets_coder
+df_parsed <- dfs %>%
+  mutate(row_id = row_number(),
+         llm   = map(targets_llm, parse_vals),
+         coder = map(targets_coder, parse_vals))
+
+# --- explode to long for confusion components per row/label ---
+df_long <- df_parsed %>%
+  rowwise() %>%
+  mutate(all_labels = list(sort(unique(c(llm, coder))))) %>%
+  ungroup() %>%
+  select(row_id, llm, coder, all_labels) %>%
+  tidyr::unnest_longer(all_labels, values_to = "label") %>%
+  group_by(row_id) %>%
+  mutate(
+    y_true = label %in% coder[[1]],
+    y_pred = label %in% llm[[1]]
+  ) %>%
+  ungroup()
+
+# --- per-row counts & metrics ---
+per_row <- df_long %>%
+  group_by(row_id) %>%
+  summarise(
+    tp = sum(y_true & y_pred),
+    fp = sum(!y_true & y_pred),
+    fn = sum(y_true & !y_pred),
+    precision = ifelse(tp + fp > 0, tp / (tp + fp), NA_real_),
+    recall    = ifelse(tp + fn > 0, tp / (tp + fn), NA_real_),
+    f1        = ifelse(!is.na(precision + recall) & precision + recall > 0,
+                       2 * precision * recall / (precision + recall), NA_real_)
+  ) %>%
+  ungroup()
+
+# --- add your earlier columns (overlap_any, jaccard, exact_match) if you created df_out ---
+# If you haven't, you can compute them quickly here:
+quick_overlap <- df_parsed %>%
+  mutate(
+    jaccard = map2_dbl(llm, coder, ~ {
+      inter <- length(intersect(.x, .y))
+      uni   <- length(union(.x, .y))
+      if (uni > 0) inter/uni else NA_real_
+    }),
+    overlap_any = as.integer(jaccard > 0),
+    exact_match = as.integer(jaccard == 1)
+  ) %>% select(row_id, overlap_any, jaccard, exact_match)
+
+per_row <- per_row %>% left_join(quick_overlap, by = "row_id")
+
+
+# --- dataset-level (macro & micro) ---
+macro <- per_row %>%
+  summarise(
+    macro_precision = mean(precision, na.rm = TRUE),
+    macro_recall    = mean(recall,    na.rm = TRUE),
+    macro_f1        = mean(f1,        na.rm = TRUE),
+    mean_jaccard    = mean(jaccard,   na.rm = TRUE),
+    exact_match_rate= mean(exact_match, na.rm = TRUE),
+    any_overlap_rate= mean(overlap_any, na.rm = TRUE)
+  )
+
+micro <- df_long %>%
+  summarise(
+    tp = sum(y_true & y_pred),
+    fp = sum(!y_true & y_pred),
+    fn = sum(y_true & !y_pred)
+  ) %>%
+  mutate(
+    micro_precision = ifelse(tp + fp > 0, tp / (tp + fp), NA_real_),
+    micro_recall    = ifelse(tp + fn > 0, tp / (tp + fn), NA_real_),
+    micro_f1        = ifelse(!is.na(micro_precision + micro_recall) &
+                               micro_precision + micro_recall > 0,
+                             2 * micro_precision * micro_recall /
+                               (micro_precision + micro_recall), NA_real_)
+  ) %>%
+  select(micro_precision, micro_recall, micro_f1)
+
+
+# --- class-wise performance (how each target number performs overall) ---
+by_label <- df_long %>%
+  group_by(label) %>%
+  summarise(
+    tp = sum(y_true & y_pred),
+    fp = sum(!y_true & y_pred),
+    fn = sum(y_true & !y_pred),
+    precision = ifelse(tp + fp > 0, tp / (tp + fp), NA_real_),
+    recall    = ifelse(tp + fn > 0, tp / (tp + fn), NA_real_),
+    f1        = ifelse(!is.na(precision + recall) & precision + recall > 0,
+                       2 * precision * recall / (precision + recall), NA_real_),
+    support   = sum(y_true)   # how often the coder used this label
+  ) %>%
+  arrange(desc(support)) %>%
+  ungroup()
+
+```
+
+
+
+
+```{r - plot - jaccard}
+
+library(dplyr)
+library(ggplot2)
+# per_row should contain a numeric column `jaccard` from the previous step
+
+df_plot <- per_row %>% filter(!is.na(jaccard))
+m <- mean(df_plot$jaccard, na.rm = TRUE)
+
+# get a reasonable y for the label (top of the histogram)
+h <- hist(df_plot$jaccard, breaks = seq(0, 1, by = 0.05), plot = FALSE)
+y_top <- max(h$counts, na.rm = TRUE)
+
+df_lab <- data.frame(jaccard = m, y = y_top)
+
+ggplot(df_plot, aes(x = jaccard)) +
+  geom_histogram(binwidth = 0.05, boundary = 0, closed = "left", color = "white") +
+  geom_vline(xintercept = m, linetype = "dashed") +
+  geom_text(data = df_lab, aes(x = jaccard, y = y, label = sprintf("Mean = %.2f", jaccard)),
+            vjust = -0.3, inherit.aes = FALSE) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.1)) +
+  labs(x = "Jaccard similarity", y = "Count",
+       title = "Distribution of Jaccard similarity (LLM vs. Coder)") +
+  theme_minimal()
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+## unify the checking result to "0, 1, NA" only ------------------------------------------
+ds0 <- dfs %>%
+  dplyr::mutate(coder = gsub(pattern = '.*_', '', coder)) %>%                    ## clean coder name
+  dplyr::mutate(correct_or_not = gsub(pattern = '\\*', '', correct_or_not)) %>%  ## clean coder's response
+  dplyr::mutate(correct = case_when(correct_or_not == "1" ~ 1,
+                                    correct_or_not == "0" ~ 0,
+                                    is.na(correct_or_not) ~ NA_real_,
+                                    grepl("^Y", correct_or_not) ~ 1,
+                                    TRUE                  ~ 0)) %>%
+  dplyr::select(coder, correct, correct_or_not, everything()) 
+
+
+ds1 <- ds0 %>%
+  arrange(correct_or_not)
+
+
+
+## to check the alignment across coders --------------------------------------------------
+ds2 <- ds1 %>%
+  dplyr::select(coder, correct, company, index) %>%
+  ## only analyze rows being checked
+  # dplyr::filter(!is.na(correct)) %>%
+  spread(key = coder, value = correct) %>%
+  dplyr::mutate(same12 = ifelse(MC == VF, 1, 0),
+                same13 = ifelse(MC == YL, 1, 0),
+                same14 = ifelse(MC == YZ, 1, 0),
+                same23 = ifelse(VF == YL, 1, 0),
+                same24 = ifelse(VF == YZ, 1, 0),
+                same34 = ifelse(YL == YZ, 1, 0),
+                same3  = ifelse(MC == YL & YZ == YL, 1, 0),
+                same4  = ifelse(MC == YL & YZ == YL & VF == YL, 1, 0)) %>%
+  as.data.frame()
+```
+
+
+
+## how good TM is
+```{r}
+
+names(ds2)
+
+### The accuracy of our SDGdetector judged by SDG experts
+ds_accuracy <- ds2 %>%
+  dplyr::select(company, index, MC, VF, YL, YZ) %>%
+  gather(key = 'coder', value = "value", 3:ncol(.)) %>%
+  dplyr::group_by(coder) %>%
+  dplyr::summarise(accuracy = sum(value, na.rm = T)/nrow(ds2)) %>%
+  dplyr::mutate(id = row.names(.)) %>% dplyr::select(id, everything())
+ds_accuracy
+
+
+### test code
+# (sum(ds2$MC, na.rm = T)/nrow(ds2)) %>% 
+#   scales::percent() %>% 
+#   cat('accuracy by MC:', .)
+```
+
+
+
+
+
+
+## check the alignment across coders
+```{r}
+names(ds2)
+
+### The inter-expert reliability 
+ds_intercoder <- ds2 %>%
+  dplyr::select(company, index, same12, same13, same14, same23, same24, same34) %>%
+  gather(key = 'pair', value = "value", 3:ncol(.)) %>%
+  dplyr::group_by(pair) %>%
+  dplyr::summarise(alignment = sum(value, na.rm = T)/nrow(ds2))
+
+ds_intercoder
+```
+
+
+## save result in xlsx
+```{r}
+## save to XLSX for easy read
+f <- paste0(dirname(dir.task1), '/', 'results_accuracy_',   basename(dir.task1), '.xlsx'); f
+writexl::write_xlsx(ds_accuracy, path = f)
+
+f <- paste0(dirname(dir.task1), '/', 'results_intercoder_', basename(dir.task1), '.xlsx'); f
+writexl::write_xlsx(ds_intercoder, path = f)
+```
+
+
+
+```{r read in results}
+## for accuracy 
+ind <- 'results_accuracy_'
+fs <- list.files(path = dirname(dir.task1), pattern = ind, full.names = T)
+# f <- fs[1]
+dfs_acc <- data.frame()
+
+for (f in fs) {
+  # print(f)
+  round_id <- f %>%
+    basename(.) %>%
+    gsub(ind, '', .) %>%
+    gsub('task1_|_done.xlsx', '', .)
+  # print(round_id)
+  
+  acc <- readxl::read_excel(f) %>%
+    dplyr::mutate(round_id = round_id)
+  dfs_acc <- rbind(dfs_acc, acc)
+}
+
+
+
+## for intercoder
+ind <- 'results_intercoder_'
+fs <- list.files(path = dirname(dir.task1), pattern = ind, full.names = T)
+# f <- fs[1]
+dfs_int <- data.frame()
+
+for (f in fs) {
+  # print(f)
+  round_id <- f %>%
+    basename(.) %>%
+    gsub(ind, '', .) %>%
+    gsub('task1_|_done.xlsx', '', .)
+  # print(round_id)
+  
+  int <- readxl::read_excel(f) %>%
+    dplyr::mutate(round_id = round_id)
+  dfs_int <- rbind(dfs_int, int)
+}
+```
+
+
+```{r plot acc}
+## plot ----------------------------------------------------------------------------------
+
+mean(dfs_acc$accuracy)
+fun_mean <- function(x){
+  return(data.frame(y=mean(x),label=round(mean(x,na.rm=T), digits = 2)))}
+
+p1 <- dfs_acc %>%
+  ggplot(aes(x = 1, y = accuracy)) +
+  geom_boxplot(fill = 'gray', show.legend = F, varwidth = .5) + # , fill = round_id
+  stat_summary(fun =mean, geom="point", shape=15, size=3, alpha = 0.6, color="red", fill="red") +
+  stat_summary(fun.data = fun_mean, geom="text", vjust=.5, hjust = -0.2, color="red") +
+  scale_y_continuous(limits = c(0.7, .85)) +
+  geom_jitter(color="black", shape = 1, size=2, alpha=0.6, width = .05) +
+  xlab('Overall') +
+  ylab('Accuracy') +
+  theme_bw() +
+  theme(panel.grid = element_blank(), 
+        axis.text.x = element_text(colour='transparent'), 
+        axis.ticks = element_blank(), 
+        legend.position = "none")
+p2 <- dfs_acc %>%
+  ggplot(aes(x = round_id, y = accuracy)) + # , fill = round_id
+  geom_boxplot(alpha = .8) + # 
+  scale_y_continuous(limits = c(0.7, .85)) +
+  geom_jitter(color="black", shape = 1, size=2, alpha=0.6, width = .05) +
+  xlab('Each Round of Inspection') +
+  ylab('') +
+  theme_bw() +
+  theme(legend.position = "none")
+p <- ggarrange(p1, p2, widths = c(1,3))
+
+fname <- paste0(dir.figures, 'Inspection_Accuracy_', ymd, '.png'); fname
+ggsave(fname, plot = p, width = 6.5, height = 3.2, units = 'in', dpi = 300)  
+```
+
+
+```{r plot inter-coder}
+
+p3 <- dfs_int %>%
+  ggplot(aes(x = 1, y = alignment)) +
+  geom_boxplot(fill = 'gray', show.legend = F, varwidth = .5) + # , fill = round_id
+  stat_summary(fun =mean, geom="point", shape=15, size=3, alpha = 0.6, color="red", fill="red") +
+  stat_summary(fun.data = fun_mean, geom="text", vjust=.7, hjust = -0.3, color="red") +
+  scale_y_continuous(limits = c(0.7, .9)) +
+  geom_jitter(color="black", shape = 1, size=2, alpha=0.6, width = .05) +
+  xlab('Overall') +
+  ylab('Inter-expert Reliability') +
+  theme_bw() +
+  theme(panel.grid = element_blank(), 
+        axis.text.x = element_text(colour='transparent'), 
+        axis.ticks = element_blank(), 
+        legend.position = "none")
+
+
+p4 <- dfs_int %>%
+  ggplot(aes(x = round_id, y = alignment)) + # , fill = round_id
+  geom_boxplot(alpha = .8) + # 
+  scale_y_continuous(limits = c(0.7, .9)) +
+  geom_jitter(color="black", shape = 1, size=2, alpha=0.6, width = .05) +
+  xlab('Each Round of Inspection') +
+  ylab('') +
+  theme_bw() +
+  theme(legend.position = "none")
+p <- ggarrange(p3, p4, widths = c(1,3))
+
+getwd()
+fname <- paste0(dir.figures, 'Inspection_InterExpert_', ymd, '.png');fname
+ggsave(fname, plot = p, width = 6.5, height = 3.2, units = 'in', dpi = 300)  
+```
+
+
+  *Test code
+```{r}
+
+# (sum(ds2$same3, na.rm = T)/nrow(ds2)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between MC-YL-YZ:', .)
+# 
+# (sum(ds2$same4, na.rm = T)/nrow(ds2)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between 4 ppl:', .)
+
+
+
+
+## only look at the rows inspected by all of us ------------------------------------------
+# ds4 <- ds2 %>%
+#   dplyr::filter(!is.na(YZ))
+# 
+# (sum(ds4$same3, na.rm = T)/nrow(ds4)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between MC-YL-YZ:', ., '(when only count rows being inspected by all)')
+# 
+# (sum(ds4$same4, na.rm = T)/nrow(ds4)) %>% 
+#   scales::percent() %>% 
+#   cat('Alignment between 4 ppl:', ., '(when only count rows being inspected by all)')
+```
+
+
+
+
+## look into the difference in text
+
+```{r}
+
+## pull coder comments together and add to the compare table later
+dsnote <- ds0 %>% dplyr::select(coder, company, index, 
+                                # statement, 
+                                # target_by_machine, 
+                                coder_notes) %>%
+  # dplyr::mutate(id_order = row.names(.)) %>%
+  # ungroup() %>% 
+  group_by(coder) %>%
+  as.data.frame() %>%
+  # tidyr::pivot_wider(id_cols = c(company, index), names_from = coder, values_from = coder_notes) %>%
+  tidyr::spread(key = coder, value = coder_notes) %>%
+  as.data.frame()
+  
+dsnote1 <- d %>%
+  dplyr::select(index, statement, target_by_machine) %>%
+  left_join(., dsnote, by = 'index')
+  
+## the comparison table
+dsdiff <- ds2 %>%
+  dplyr::select(1:6, same13, same23, same34, same4) %>%
+  left_join(x =., 
+            y = dsnote1, 
+            by = c('company', 'index')) %>%
+  # arrange(same4) %>%
+  arrange(index) %>%
+  as.data.frame()
+
+dsdiff[, 13:16] <- sapply(dsdiff[, 13:16], function(col) ifelse(is.na(col), ' ', col))
+
+## save to XLSX for easy read
+f <- paste0(dirname(dir.task1), '/', basename(dir.task1), '_analysis.xlsx'); f
+writexl::write_xlsx(dsdiff, path = f)
+
+```
+
+
+
+
+# Process of evaluate the inspection results
+
+  1. Compare the difference between `YL` and others Based on the file "taskx_Rx_done_analysis.xlsx".
+  
+  2. Read each notes (either from the above xlsx or individual xlsx) to understand the difference. 
+  
+  3. Edit "SDG keywords for Text Mining Codebook" according to the notes and comments. 
+  
+  4. Add the controversial ones to the Appendix of "SDG_TM_Inspection_Protocol" for further discussion. 
+  
