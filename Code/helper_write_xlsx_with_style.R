@@ -16,9 +16,9 @@ engagement_allowed <- c("0 - NA", "1 - Symbolic", "2 - Strategic", "3 - Substant
 per_coder_queues_export <- per_coder_queues_clean %>%
   mutate(
     engagement_llm = case_when(
-      engagement_llm == "Symbolic Alignment" ~ "1 - Symbolic",
-      engagement_llm == "Strategic Commitment" ~ "2 - Strategic",
-      engagement_llm == "Substantive Implementation" ~ "3 - Substantive",
+      engagement_llm %in% c("Symbolic Alignment", "1 - Symbolic") ~ "1 - Symbolic",
+      engagement_llm %in% c("Strategic Commitment", "2 - Strategic") ~ "2 - Strategic",
+      engagement_llm %in% c("Substantive Implementation", "3 - Substantive") ~ "3 - Substantive",
       TRUE ~ NA_character_
     )
   )
