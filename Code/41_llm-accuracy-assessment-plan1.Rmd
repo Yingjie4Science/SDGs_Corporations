@@ -184,6 +184,68 @@ llm_sub_l_nlp <- llm_sub_ %>%
   expand_col_to_long(data = ., target_col = "targets_nlp", sep_list = c(", ")) %>%
   as.data.frame()
 ```
+```{r engagement levels}
+
+names(llm_sub_l_gpt)
+
+
+llm_sub_l_gpt_summ <- llm_sub_l_gpt %>%
+  filter(!goals_llm %in% c(NA, 'NA')) %>%
+  group_by(goals_llm, engagement_llm) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  mutate(
+    engagement_llm = factor(
+      engagement_llm,
+      levels = c(
+        "Symbolic Alignment",
+        "Strategic Commitment",
+        "Substantive Implementation"
+      )
+    ),
+    # sdg as ordered factor 1–17
+    goals_llm = factor(goals_llm, levels = 1:17, ordered = TRUE)
+  )
+
+
+unique(llm_sub_l_gpt_summ$engagement_llm)
+
+
+# 2. Plot with ggplot (grouped bar chart)
+llm_sub_l_gpt_summ %>%
+  ggplot(.,
+         aes(x = goals_llm,
+                        y = n,
+                        fill = engagement_llm)) +
+  # geom_col(position = "fill") + # position = "dodge"
+  geom_col() +
+  
+  scale_fill_manual(
+    # name  = "Engagement level",
+    values = c(
+      "Symbolic Alignment"         = "#e0f3db",  # light
+      "Strategic Commitment"       = "#a8ddb5",  # medium
+      "Substantive Implementation" = "#43a2ca"   # dark
+    ) ) + 
+  
+  labs(
+    x = "SDG",
+    y = "Count",
+    # fill = "Engagement level",
+    fill = "",
+    title = "Engagement level by SDG"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1), 
+    legend.position = c(0.2, 0.8)
+  )
+
+ggsave(
+  filename = paste0("./figures/engagement_level_", ymd, ".png"),
+  plot = last_plot(),
+  width = 8, height = 5, unit = 'in', dpi = 300
+)
+```
 
 
 ```{r plot}
@@ -226,6 +288,7 @@ p.gpt <-
   geom_col(fill = "steelblue") +
   geom_text(aes(label = paste0(round(percent, 1), "%")),
             vjust = -0.5, size = 3) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
   labs(x = "SDG Goal", y = "Count", title = "Distribution of SDG Goals detected by LLM") +
   theme_minimal()
 
@@ -234,6 +297,7 @@ p.det <-
   geom_col(fill = "steelblue") +
   geom_text(aes(label = paste0(round(percent, 1), "%")),
             vjust = -0.5, size = 3) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
   labs(x = "SDG Goal", y = "Count", title = "Distribution of SDG Goals detected by SDGdetector") +
   theme_minimal()
 
@@ -245,7 +309,7 @@ plot_combined
 ggsave(
   filename = paste0("./figures/sdg_detected_distribution_", ymd, ".png"),
   plot = plot_combined,
-  width = 7, height = 5, unit = 'in', dpi = 300
+  width = 7, height = 6, unit = 'in', dpi = 300
 )
 ```
 
